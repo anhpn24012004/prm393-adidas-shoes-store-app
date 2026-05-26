@@ -1,17 +1,54 @@
-# adidas_shoes_store_app
+# Adidas Shoes Store App
 
-A new Flutter project.
+## 1. Project Name
+Adidas Shoes Store Mobile Application
 
-## Getting Started
+## 2. Description
+This is a mobile application for selling Adidas shoes. Users can register, log in, browse Adidas shoes, view product details, add products to cart, place orders, request returns/refunds, and use an AI assistant to choose suitable shoes and sizes.
 
-This project is a starting point for a Flutter application.
+## 3. Main Features
 
-A few resources to get you started if this is your first Flutter project:
+### User Features
+- Register
+- Login
+- View Adidas shoes
+- Search and filter products
+- View product details
+- Add products to cart
+- Checkout
+- View order history
+- View order detail
+- Request return/refund
+- View refund status
+- AI shoe recommendation assistant
+- Manage profile
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+### Admin Features
+- Manage products
+- Manage categories
+- Manage users
+- Manage orders
+- Approve or reject return requests
+- Manage refund status
+- View revenue statistics
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## 4. Technologies
+- Frontend: Flutter + Dart
+- Platform: Android and iOS
+- Backend: ASP.NET Core Web API
+- Database: SQL Server
+- API style: RESTful API
+
+## 5. Design Phase Status
+- Flutter project initialized
+- Folder structure created
+- Main screens created
+- Navigation implemented
+- UI layout designed
+- Database design completed
+- Screen flow documented
+
+## 6. Current Branch Workflow
+- main: stable source code
+- develop: integration branch
+- feature/flutter-ui: Flutter UI design branch
