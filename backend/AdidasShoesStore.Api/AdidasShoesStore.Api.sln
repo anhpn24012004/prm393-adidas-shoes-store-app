@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.37216.2 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AdidasShoesStore.Api", "AdidasShoesStore.Api.csproj", "{58616E25-5B18-2938-5C07-8398533E8370}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{58616E25-5B18-2938-5C07-8398533E8370}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{58616E25-5B18-2938-5C07-8398533E8370}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{58616E25-5B18-2938-5C07-8398533E8370}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{58616E25-5B18-2938-5C07-8398533E8370}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {196FF39C-6344-45E9-9136-6CF2E33A99F5}
+	EndGlobalSection
+EndGlobal
