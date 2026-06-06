@@ -3,21 +3,28 @@ using AdidasShoesStore.Api.Helpers;
 using AdidasShoesStore.Api.Services.Implementations;
 using AdidasShoesStore.Api.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using System.Text;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Configuration;
 using Microsoft.OpenApi.Models;
-using System;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllers();
 
+// CORS for Flutter Web
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFlutterWeb", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
+// Swagger + JWT
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -92,6 +99,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// CORS should be before Authentication/Authorization
+app.UseCors("AllowFlutterWeb");
 
 // Authentication must be before Authorization
 app.UseAuthentication();
