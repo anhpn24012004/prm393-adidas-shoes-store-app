@@ -4,6 +4,7 @@ import '../../models/product_model.dart';
 import '../../services/product_service.dart';
 import 'admin_product_form_screen.dart';
 import 'admin_variant_list_screen.dart';
+import 'admin_product_image_list_screen.dart';
 
 class AdminProductListScreen extends StatefulWidget {
   const AdminProductListScreen({super.key});
@@ -124,6 +125,19 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
     });
   }
 
+  Future<void> _goToImages(ProductModel product) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AdminProductImageListScreen(product: product),
+      ),
+    );
+
+    setState(() {
+      _loadProducts();
+    });
+  }
+
   void _goToCategories() {
     Navigator.pushNamed(context, '/admin/categories');
   }
@@ -178,6 +192,11 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
         trailing: Wrap(
           spacing: 4,
           children: [
+            IconButton(
+              tooltip: 'Manage images',
+              icon: const Icon(Icons.image),
+              onPressed: () => _goToImages(product),
+            ),
             IconButton(
               tooltip: 'Manage variants',
               icon: const Icon(Icons.inventory_2),

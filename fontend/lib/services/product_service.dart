@@ -218,4 +218,73 @@ class ProductService {
       throw Exception('Failed to delete variant: ${response.body}');
     }
   }
+
+  // =========================
+  // ADMIN PRODUCT IMAGE CRUD
+  // =========================
+
+  Future<List<ProductImageModel>> getImagesByProduct(int productId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/products/$productId/images'),
+    );
+
+    if (response.statusCode == 200) {
+      final List data = jsonDecode(response.body);
+      return data.map((item) => ProductImageModel.fromJson(item)).toList();
+    }
+
+    throw Exception('Failed to load images: ${response.body}');
+  }
+
+  Future<void> createProductImage({
+    required int productId,
+    required String imageUrl,
+    required bool isMain,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/products/$productId/images'),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'imageUrl': imageUrl,
+        'isMain': isMain,
+      }),
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Failed to create product image: ${response.body}');
+    }
+  }
+
+  Future<void> updateProductImage({
+    required int imageId,
+    required String imageUrl,
+    required bool isMain,
+  }) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/productimages/$imageId'),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'imageUrl': imageUrl,
+        'isMain': isMain,
+      }),
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      throw Exception('Failed to update product image: ${response.body}');
+    }
+  }
+
+  Future<void> deleteProductImage(int imageId) async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/productimages/$imageId'),
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      throw Exception('Failed to delete product image: ${response.body}');
+    }
+  }
 }
