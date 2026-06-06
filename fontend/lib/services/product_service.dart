@@ -54,4 +54,77 @@ class ProductService {
 
     throw Exception('Failed to load products by category');
   }
+
+  Future<void> createProduct({
+    required String productName,
+    String? description,
+    required double basePrice,
+    required int categoryId,
+    String? brand,
+    String? gender,
+    String? material,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/products'),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'productName': productName,
+        'description': description,
+        'basePrice': basePrice,
+        'categoryId': categoryId,
+        'brand': brand ?? 'Adidas',
+        'gender': gender,
+        'material': material,
+      }),
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Failed to create product: ${response.body}');
+    }
+  }
+
+  Future<void> updateProduct({
+    required int productId,
+    required String productName,
+    String? description,
+    required double basePrice,
+    required int categoryId,
+    String? brand,
+    String? gender,
+    String? material,
+    required bool isActive,
+  }) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/products/$productId'),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'productName': productName,
+        'description': description,
+        'basePrice': basePrice,
+        'categoryId': categoryId,
+        'brand': brand ?? 'Adidas',
+        'gender': gender,
+        'material': material,
+        'isActive': isActive,
+      }),
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      throw Exception('Failed to update product: ${response.body}');
+    }
+  }
+
+  Future<void> deleteProduct(int productId) async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/products/$productId'),
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      throw Exception('Failed to delete product: ${response.body}');
+    }
+  }
 }
