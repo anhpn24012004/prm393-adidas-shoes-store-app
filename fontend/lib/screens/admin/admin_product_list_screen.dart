@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/product_model.dart';
 import '../../services/product_service.dart';
 import 'admin_product_form_screen.dart';
+import 'admin_variant_list_screen.dart';
 
 class AdminProductListScreen extends StatefulWidget {
   const AdminProductListScreen({super.key});
@@ -110,6 +111,19 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
     }
   }
 
+  Future<void> _goToVariants(ProductModel product) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AdminVariantListScreen(product: product),
+      ),
+    );
+
+    setState(() {
+      _loadProducts();
+    });
+  }
+
   void _goToCategories() {
     Navigator.pushNamed(context, '/admin/categories');
   }
@@ -164,6 +178,11 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
         trailing: Wrap(
           spacing: 4,
           children: [
+            IconButton(
+              tooltip: 'Manage variants',
+              icon: const Icon(Icons.inventory_2),
+              onPressed: () => _goToVariants(product),
+            ),
             IconButton(
               tooltip: 'Edit product',
               icon: const Icon(Icons.edit),
