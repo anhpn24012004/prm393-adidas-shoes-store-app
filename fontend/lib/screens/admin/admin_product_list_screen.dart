@@ -36,7 +36,9 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
       builder: (context) {
         return AlertDialog(
           title: const Text('Delete product'),
-          content: Text('Are you sure you want to delete ${product.productName}?'),
+          content: Text(
+            'Are you sure you want to delete "${product.productName}"?',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -59,7 +61,9 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Product deleted successfully')),
+        const SnackBar(
+          content: Text('Product deleted successfully'),
+        ),
       );
 
       setState(() {
@@ -69,7 +73,9 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+        SnackBar(
+          content: Text('Error: $e'),
+        ),
       );
     }
   }
@@ -102,6 +108,10 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
         _loadProducts();
       });
     }
+  }
+
+  void _goToCategories() {
+    Navigator.pushNamed(context, '/admin/categories');
   }
 
   Widget _buildImage(String? imageUrl) {
@@ -141,19 +151,26 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
           product.productName,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
         ),
         subtitle: Text(
-          '${formatPrice(product.basePrice)}\n${product.categoryName ?? 'No category'}',
+          '${formatPrice(product.basePrice)}\n'
+              '${product.categoryName ?? 'No category'}\n'
+              'Status: ${product.isActive ? 'Active' : 'Inactive'}',
         ),
         isThreeLine: true,
         trailing: Wrap(
           spacing: 4,
           children: [
             IconButton(
+              tooltip: 'Edit product',
               icon: const Icon(Icons.edit),
               onPressed: () => _goToEdit(product),
             ),
             IconButton(
+              tooltip: 'Delete product',
               icon: const Icon(Icons.delete),
               onPressed: () => _deleteProduct(product),
             ),
@@ -168,7 +185,9 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
       future: _productsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
         }
 
         if (snapshot.hasError) {
@@ -183,15 +202,24 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
         final products = snapshot.data ?? [];
 
         if (products.isEmpty) {
-          return const Center(child: Text('No products found'));
+          return const Center(
+            child: Text('No products found'),
+          );
         }
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(12),
-          itemCount: products.length,
-          itemBuilder: (context, index) {
-            return _buildProductItem(products[index]);
+        return RefreshIndicator(
+          onRefresh: () async {
+            setState(() {
+              _loadProducts();
+            });
           },
+          child: ListView.builder(
+            padding: const EdgeInsets.all(12),
+            itemCount: products.length,
+            itemBuilder: (context, index) {
+              return _buildProductItem(products[index]);
+            },
+          ),
         );
       },
     );
@@ -202,6 +230,13 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Admin Product Management'),
+        actions: [
+          IconButton(
+            tooltip: 'Manage Categories',
+            icon: const Icon(Icons.category),
+            onPressed: _goToCategories,
+          ),
+        ],
       ),
       body: _buildBody(),
       floatingActionButton: FloatingActionButton(
