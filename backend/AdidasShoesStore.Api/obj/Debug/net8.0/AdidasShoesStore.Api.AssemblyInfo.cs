@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("AdidasShoesStore.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+91297a02ebd2d0d8a383376bb788a55135c86bfe")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+5847b42f0651a2ae13be15ccde31544ca5b7eb26")]
 [assembly: System.Reflection.AssemblyProductAttribute("AdidasShoesStore.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("AdidasShoesStore.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
