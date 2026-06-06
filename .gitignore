@@ -52,4 +52,6 @@ app.*.map.json
 *.sln.docstates
 
 **/bin/
-**/obj/
+**/obj/.vs/
+bin/
+obj/
