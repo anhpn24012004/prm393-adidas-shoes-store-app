@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.26" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.0">
@@ -28,6 +29,21 @@
   </ItemGroup>
 
   <ItemGroup>
+<<<<<<< HEAD
+    <Folder Include="Common\" />
+    <Folder Include="DTOs\AI\" />
+    <Folder Include="DTOs\Carts\" />
+    <Folder Include="DTOs\Categories\" />
+    <Folder Include="DTOs\Orders\" />
+    <Folder Include="DTOs\Payments\" />
+    <Folder Include="DTOs\Products\" />
+    <Folder Include="DTOs\Refunds\" />
+    <Folder Include="DTOs\Returns\" />
+    <Folder Include="DTOs\Reviews\" />
+    <Folder Include="DTOs\UserAddresses\" />
+    <Folder Include="DTOs\Users\" />
+    <Folder Include="Middleware\" />
+=======
     <Folder Include="DTOs\Auth\" />
     <Folder Include="DTOs\Categories\" />
     <Folder Include="DTOs\Carts\" />
@@ -45,6 +61,7 @@
     <Folder Include="Middleware\" />
     <Folder Include="Services\Interfaces\" />
     <Folder Include="Services\Implementations\" />
+>>>>>>> origin/develop
   </ItemGroup>
 
 </Project>
