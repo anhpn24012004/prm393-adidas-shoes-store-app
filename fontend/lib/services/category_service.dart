@@ -14,6 +14,57 @@ class CategoryService {
       return data.map((item) => CategoryModel.fromJson(item)).toList();
     }
 
-    throw Exception('Failed to load categories');
+    throw Exception('Failed to load categories: ${response.body}');
+  }
+
+  Future<void> createCategory({
+    required String categoryName,
+    String? description,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/categories'),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'categoryName': categoryName,
+        'description': description,
+      }),
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Failed to create category: ${response.body}');
+    }
+  }
+
+  Future<void> updateCategory({
+    required int categoryId,
+    required String categoryName,
+    String? description,
+  }) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/categories/$categoryId'),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'categoryName': categoryName,
+        'description': description,
+      }),
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      throw Exception('Failed to update category: ${response.body}');
+    }
+  }
+
+  Future<void> deleteCategory(int categoryId) async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/categories/$categoryId'),
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      throw Exception('Failed to delete category: ${response.body}');
+    }
   }
 }

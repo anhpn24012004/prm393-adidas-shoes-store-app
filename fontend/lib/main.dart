@@ -15,7 +15,7 @@ import 'screens/ai/ai_assistant_screen.dart';
 import 'screens/category/category_list_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/admin/admin_product_list_screen.dart';
-
+import 'screens/admin/admin_category_list_screen.dart';
 void main() {
   runApp(const AdidasShoesStoreApp());
 }
@@ -44,6 +44,7 @@ class AdidasShoesStoreApp extends StatelessWidget {
         '/ai-assistant': (context) => const AiAssistantScreen(),
         '/profile': (context) => const ProfileScreen(),
         '/admin/products': (context) => const AdminProductListScreen(),
+        '/admin/categories': (context) => const AdminCategoryListScreen(),
       },
     );
   }
