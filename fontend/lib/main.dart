@@ -12,6 +12,7 @@ import 'screens/order/order_detail_screen.dart';
 import 'screens/refund/refund_request_screen.dart';
 import 'screens/refund/refund_status_screen.dart';
 import 'screens/ai/ai_assistant_screen.dart';
+import 'screens/category/category_list_screen.dart';
 import 'screens/profile/profile_screen.dart';
 
 void main() {
@@ -26,13 +27,13 @@ class AdidasShoesStoreApp extends StatelessWidget {
     return MaterialApp(
       title: 'Adidas Shoes Store',
       debugShowCheckedModeBanner: false,
-      initialRoute: '/login',
+      initialRoute: '/products',
       routes: {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
         '/home': (context) => const HomeScreen(),
+        '/categories': (context) => CategoryListScreen(),
         '/products': (context) => const ProductListScreen(),
-        '/product-detail': (context) => const ProductDetailScreen(),
         '/cart': (context) => const CartScreen(),
         '/checkout': (context) => const CheckoutScreen(),
         '/orders': (context) => const OrderHistoryScreen(),
