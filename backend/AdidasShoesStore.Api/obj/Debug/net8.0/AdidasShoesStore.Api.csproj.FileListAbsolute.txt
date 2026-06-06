@@ -140,3 +140,4 @@ D:\Learn\FPT\FULearning-Summer26\PRM393\Project-adidas-shoes-store-app\prm393-ad
 D:\Learn\FPT\FULearning-Summer26\PRM393\Project-adidas-shoes-store-app\prm393-adidas-shoes-store-app\backend\AdidasShoesStore.Api\obj\Debug\net8.0\AdidasShoesStore.Api.pdb
 D:\Learn\FPT\FULearning-Summer26\PRM393\Project-adidas-shoes-store-app\prm393-adidas-shoes-store-app\backend\AdidasShoesStore.Api\obj\Debug\net8.0\AdidasShoesStore.Api.genruntimeconfig.cache
 D:\Learn\FPT\FULearning-Summer26\PRM393\Project-adidas-shoes-store-app\prm393-adidas-shoes-store-app\backend\AdidasShoesStore.Api\obj\Debug\net8.0\ref\AdidasShoesStore.Api.dll
+D:\Learn\FPT\FULearning-Summer26\PRM393\Project-adidas-shoes-store-app\prm393-adidas-shoes-store-app\backend\AdidasShoesStore.Api\bin\Debug\net8.0\BCrypt-Net-Next.dll
