@@ -28,7 +28,7 @@ class AdidasShoesStoreApp extends StatelessWidget {
     return MaterialApp(
       title: 'Adidas Shoes Store',
       debugShowCheckedModeBanner: false,
-      initialRoute: '/products',
+      initialRoute: '/ai-assistant',
       routes: {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
