@@ -61,6 +61,7 @@ builder.Services.AddDbContext<AdidasShoesStoreContext>(options =>
 // Register custom services
 builder.Services.AddScoped<JwtHelper>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddHttpClient<IAiAssistantService, AiAssistantService>();
 
 // Configure JWT Authentication
 builder.Services.AddAuthentication(options =>
