@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../models/product_detail_model.dart';
 import '../../services/product_service.dart';
+import '../../services/cart_service.dart';
+import '../../services/wishlist_service.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final int productId;
@@ -17,10 +19,14 @@ class ProductDetailScreen extends StatefulWidget {
 
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   final ProductService _productService = ProductService();
+  final CartService _cartService = CartService();
+  final WishlistService _wishlistService = WishlistService();
 
   late Future<ProductDetailModel> _productFuture;
 
   ProductVariantModel? selectedVariant;
+
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -100,7 +106,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  void _addToCart() {
+  Future<void> _addToCart() async {
     if (selectedVariant == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -110,26 +116,60 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       return;
     }
 
-    if (selectedVariant!.stockQuantity <= 0) {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      await _cartService.addToCart(
+        userId: 2,
+        variantId: selectedVariant!.variantId,
+        quantity: 1,
+      );
+
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('This variant is out of stock'),
+          content: Text('Added to cart successfully'),
         ),
       );
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Selected variant ID: ${selectedVariant!.variantId}',
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
         ),
-      ),
-    );
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
-    // Sau này nối Cart API:
-    // POST /api/cart/items
-    // body: { "variantId": selectedVariant!.variantId, "quantity": 1 }
+  Future<void> _addToWishlist() async {
+    try {
+      await _wishlistService.addWishlist(
+        userId: 2,
+        productId: widget.productId,
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Added to wishlist'),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+        ),
+      );
+    }
   }
 
   @override
@@ -164,6 +204,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         return Scaffold(
           appBar: AppBar(
             title: Text(product.productName),
+            actions: [
+              IconButton(
+                icon: const Icon(
+                  Icons.favorite_border,
+                ),
+                onPressed: _addToWishlist,
+              ),
+            ],
           ),
           body: SingleChildScrollView(
             child: Column(
@@ -264,9 +312,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   child: SizedBox(
                     width: double.infinity,
                     height: 48,
-                    child: ElevatedButton(
-                      onPressed: _addToCart,
-                      child: const Text('Add to Cart'),
+                    child: ElevatedButton.icon(
+                      onPressed: _isLoading
+                          ? null
+                          : _addToCart,
+                      icon: const Icon(Icons.shopping_cart),
+                      label: Text(
+                        _isLoading
+                            ? 'Adding...'
+                            : 'Add To Cart',
+                      ),
                     ),
                   ),
                 ),

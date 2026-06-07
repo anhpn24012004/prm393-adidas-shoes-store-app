@@ -29,10 +29,8 @@
   </ItemGroup>
 
   <ItemGroup>
-<<<<<<< HEAD
     <Folder Include="Common\" />
     <Folder Include="DTOs\AI\" />
-    <Folder Include="DTOs\Carts\" />
     <Folder Include="DTOs\Categories\" />
     <Folder Include="DTOs\Orders\" />
     <Folder Include="DTOs\Payments\" />
@@ -43,10 +41,8 @@
     <Folder Include="DTOs\UserAddresses\" />
     <Folder Include="DTOs\Users\" />
     <Folder Include="Middleware\" />
-=======
     <Folder Include="DTOs\Auth\" />
     <Folder Include="DTOs\Categories\" />
-    <Folder Include="DTOs\Carts\" />
     <Folder Include="DTOs\AI\" />
     <Folder Include="DTOs\Reviews\" />
     <Folder Include="DTOs\Refunds\" />
@@ -61,7 +57,6 @@
     <Folder Include="Middleware\" />
     <Folder Include="Services\Interfaces\" />
     <Folder Include="Services\Implementations\" />
->>>>>>> origin/develop
   </ItemGroup>
 
 </Project>
