@@ -44,7 +44,10 @@ namespace AdidasShoesStore.Api.Controllers
                 return BadRequest(new { message = result.Error });
             }
 
-            return Ok(result.Data);
+            return Ok(new
+            {
+                paymentUrl = result.Data!.PaymentUrl
+            });
         }
 
         [AllowAnonymous]
@@ -58,7 +61,34 @@ namespace AdidasShoesStore.Api.Controllers
 
             var result = await _paymentService.ProcessVnPayReturnAsync(queryParameters);
 
-            return Ok(result);
+            return Ok(new
+            {
+                success = result.Success,
+                orderCode = result.OrderCode,
+                message = result.Message
+            });
+        }
+
+        [Authorize]
+        [HttpGet("order/{orderId:int}/status")]
+        public async Task<IActionResult> GetPaymentStatus(int orderId)
+        {
+            if (!TryGetUserId(out var userId))
+            {
+                return Unauthorized(new { message = "Invalid token" });
+            }
+
+            var status = await _paymentService.GetPaymentStatusAsync(
+                userId,
+                orderId
+            );
+
+            if (status == null)
+            {
+                return NotFound(new { message = "Payment not found" });
+            }
+
+            return Ok(status);
         }
 
         private bool TryGetUserId(out int userId)

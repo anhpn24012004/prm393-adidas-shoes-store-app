@@ -25,7 +25,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
             _emailService = emailService;
         }
 
-        public async Task<PaymentServiceResult<VnPayPaymentUrlDto>> CreateVnPayPaymentUrlAsync(
+        public async Task<PaymentServiceResult<VnPayPaymentResponseDto>> CreateVnPayPaymentUrlAsync(
             int userId,
             CreateVnPayPaymentDto dto,
             string ipAddress)
@@ -34,7 +34,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
 
             if (config == null)
             {
-                return PaymentServiceResult<VnPayPaymentUrlDto>.Fail("VNPay configuration is missing");
+                return PaymentServiceResult<VnPayPaymentResponseDto>.Fail("VNPay configuration is missing");
             }
 
             var order = await _context.Orders
@@ -46,7 +46,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
 
             if (order == null)
             {
-                return PaymentServiceResult<VnPayPaymentUrlDto>.Fail(
+                return PaymentServiceResult<VnPayPaymentResponseDto>.Fail(
                     "Order not found",
                     "NotFound"
                 );
@@ -54,16 +54,23 @@ namespace AdidasShoesStore.Api.Services.Implementations
 
             if (order.Status != "PendingPayment")
             {
-                return PaymentServiceResult<VnPayPaymentUrlDto>.Fail(
+                return PaymentServiceResult<VnPayPaymentResponseDto>.Fail(
                     "Only pending payment orders can be paid with VNPay"
                 );
             }
 
             if (order.Payment == null)
             {
-                return PaymentServiceResult<VnPayPaymentUrlDto>.Fail(
+                return PaymentServiceResult<VnPayPaymentResponseDto>.Fail(
                     "Payment not found",
                     "NotFound"
+                );
+            }
+
+            if (!string.Equals(order.Payment.PaymentMethod, "VNPAY", StringComparison.OrdinalIgnoreCase))
+            {
+                return PaymentServiceResult<VnPayPaymentResponseDto>.Fail(
+                    "Payment method must be VNPAY"
                 );
             }
 
@@ -89,20 +96,20 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 parameters
             );
 
-            return PaymentServiceResult<VnPayPaymentUrlDto>.Ok(new VnPayPaymentUrlDto
+            return PaymentServiceResult<VnPayPaymentResponseDto>.Ok(new VnPayPaymentResponseDto
             {
                 PaymentUrl = paymentUrl
             });
         }
 
-        public async Task<VnPayReturnResultDto> ProcessVnPayReturnAsync(
+        public async Task<VnPayPaymentResponseDto> ProcessVnPayReturnAsync(
             IReadOnlyDictionary<string, string> queryParameters)
         {
             var config = GetVnPayConfig();
 
             if (config == null)
             {
-                return new VnPayReturnResultDto
+                return new VnPayPaymentResponseDto
                 {
                     Success = false,
                     Message = "VNPay configuration is missing"
@@ -126,7 +133,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
 
             if (order == null || order.Payment == null)
             {
-                return new VnPayReturnResultDto
+                return new VnPayPaymentResponseDto
                 {
                     Success = false,
                     Message = "Order or payment not found"
@@ -143,10 +150,9 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 await _context.SaveChangesAsync();
                 await _emailService.SendInvoiceEmailAsync(order);
 
-                return new VnPayReturnResultDto
+                return new VnPayPaymentResponseDto
                 {
                     Success = true,
-                    OrderId = order.OrderId,
                     OrderCode = order.OrderCode,
                     Message = "Payment successful"
                 };
@@ -155,13 +161,37 @@ namespace AdidasShoesStore.Api.Services.Implementations
             order.Payment.Status = "Failed";
             await _context.SaveChangesAsync();
 
-            return new VnPayReturnResultDto
+            return new VnPayPaymentResponseDto
             {
                 Success = false,
-                OrderId = order.OrderId,
                 OrderCode = order.OrderCode,
                 Message = isValidHash ? "Payment failed" : "Invalid payment signature"
             };
+        }
+
+        public async Task<PaymentStatusDto?> GetPaymentStatusAsync(
+            int userId,
+            int orderId)
+        {
+            return await _context.Orders
+                .AsNoTracking()
+                .Where(o =>
+                    o.OrderId == orderId &&
+                    o.UserId == userId)
+                .Select(o => o.Payment == null
+                    ? null
+                    : new PaymentStatusDto
+                    {
+                        OrderId = o.OrderId,
+                        OrderCode = o.OrderCode,
+                        OrderStatus = o.Status,
+                        PaymentMethod = o.Payment.PaymentMethod,
+                        PaymentStatus = o.Payment.Status,
+                        Amount = o.Payment.Amount,
+                        TransactionCode = o.Payment.TransactionCode,
+                        PaidAt = o.Payment.PaidAt
+                    })
+                .FirstOrDefaultAsync();
         }
 
         private VnPayConfig? GetVnPayConfig()

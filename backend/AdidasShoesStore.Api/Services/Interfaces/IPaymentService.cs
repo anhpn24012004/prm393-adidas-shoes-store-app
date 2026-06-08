@@ -36,14 +36,19 @@ namespace AdidasShoesStore.Api.Services.Interfaces
 
     public interface IPaymentService
     {
-        Task<PaymentServiceResult<VnPayPaymentUrlDto>> CreateVnPayPaymentUrlAsync(
+        Task<PaymentServiceResult<VnPayPaymentResponseDto>> CreateVnPayPaymentUrlAsync(
             int userId,
             CreateVnPayPaymentDto dto,
             string ipAddress
         );
 
-        Task<VnPayReturnResultDto> ProcessVnPayReturnAsync(
+        Task<VnPayPaymentResponseDto> ProcessVnPayReturnAsync(
             IReadOnlyDictionary<string, string> queryParameters
+        );
+
+        Task<PaymentStatusDto?> GetPaymentStatusAsync(
+            int userId,
+            int orderId
         );
     }
 }
