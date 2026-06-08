@@ -64,6 +64,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddHttpClient<IAiAssistantService, AiAssistantService>();
 builder.Services.AddScoped<IReviewService, ReviewService>();
 builder.Services.AddScoped<IReturnRequestService, ReturnRequestService>();
+builder.Services.AddScoped<IRefundService, RefundService>();
 
 // Configure JWT Authentication
 builder.Services.AddAuthentication(options =>
