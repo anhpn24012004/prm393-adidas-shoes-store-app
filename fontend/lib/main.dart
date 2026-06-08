@@ -16,6 +16,7 @@ import 'screens/category/category_list_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/admin/admin_product_list_screen.dart';
 import 'screens/admin/admin_category_list_screen.dart';
+import 'screens/review/create_review_screen.dart';
 void main() {
   runApp(const AdidasShoesStoreApp());
 }
@@ -28,7 +29,7 @@ class AdidasShoesStoreApp extends StatelessWidget {
     return MaterialApp(
       title: 'Adidas Shoes Store',
       debugShowCheckedModeBanner: false,
-      initialRoute: '/ai-assistant',
+      initialRoute: '/create-review',
       routes: {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
@@ -45,6 +46,7 @@ class AdidasShoesStoreApp extends StatelessWidget {
         '/profile': (context) => const ProfileScreen(),
         '/admin/products': (context) => const AdminProductListScreen(),
         '/admin/categories': (context) => const AdminCategoryListScreen(),
+        '/create-review': (context) => const CreateReviewScreen(),
       },
     );
   }
