@@ -6,6 +6,7 @@ import 'screens/home/home_screen.dart';
 import 'screens/product/product_list_screen.dart';
 import 'screens/product/product_detail_screen.dart';
 import 'screens/cart/cart_screen.dart';
+import 'screens/wishlist/wishlist_screen.dart';
 import 'screens/order/checkout_screen.dart';
 import 'screens/order/order_history_screen.dart';
 import 'screens/order/order_detail_screen.dart';
@@ -36,6 +37,7 @@ class AdidasShoesStoreApp extends StatelessWidget {
         '/categories': (context) => CategoryListScreen(),
         '/products': (context) => const ProductListScreen(),
         '/cart': (context) => const CartScreen(),
+        '/wishlist': (context) => const WishlistScreen(),
         '/checkout': (context) => const CheckoutScreen(),
         '/orders': (context) => const OrderHistoryScreen(),
         '/order-detail': (context) => const OrderDetailScreen(),

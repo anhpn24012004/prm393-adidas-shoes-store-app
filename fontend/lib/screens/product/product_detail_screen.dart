@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../config/app_config.dart';
 import '../../models/product_detail_model.dart';
+import '../../providers/badge_notifier.dart';
 import '../../services/product_service.dart';
 import '../../services/cart_service.dart';
 import '../../services/wishlist_service.dart';
+import '../../widgets/cart_wishlist_badges.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final int productId;
@@ -32,6 +35,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   void initState() {
     super.initState();
     _productFuture = _productService.getProductById(widget.productId);
+    BadgeNotifier.instance.refreshCounts();
   }
 
   String formatPrice(double price) {
@@ -121,17 +125,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         _isLoading = true;
       });
 
-      await _cartService.addToCart(
-        userId: 2,
+      final totalItems = await _cartService.addToCart(
+        userId: AppConfig.currentUserId,
         variantId: selectedVariant!.variantId,
         quantity: 1,
       );
 
+      BadgeNotifier.instance.setCartCount(totalItems);
+
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Added to cart successfully'),
+        SnackBar(
+          content: Text('Added to cart ($totalItems items)'),
         ),
       );
     } catch (e) {
@@ -151,16 +157,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   Future<void> _addToWishlist() async {
     try {
-      await _wishlistService.addWishlist(
-        userId: 2,
+      final totalItems = await _wishlistService.addWishlist(
+        userId: AppConfig.currentUserId,
         productId: widget.productId,
       );
+
+      BadgeNotifier.instance.setWishlistCount(totalItems);
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Added to wishlist'),
+        SnackBar(
+          content: Text('Added to wishlist ($totalItems items)'),
         ),
       );
     } catch (e) {
@@ -204,13 +212,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         return Scaffold(
           appBar: AppBar(
             title: Text(product.productName),
-            actions: [
-              IconButton(
-                icon: const Icon(
-                  Icons.favorite_border,
-                ),
-                onPressed: _addToWishlist,
-              ),
+            actions: const [
+              CartWishlistBadges(),
             ],
           ),
           body: SingleChildScrollView(
@@ -309,20 +312,32 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
                 Padding(
                   padding: const EdgeInsets.all(16),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton.icon(
-                      onPressed: _isLoading
-                          ? null
-                          : _addToCart,
-                      icon: const Icon(Icons.shopping_cart),
-                      label: Text(
-                        _isLoading
-                            ? 'Adding...'
-                            : 'Add To Cart',
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 48,
+                          child: OutlinedButton.icon(
+                            onPressed: _addToWishlist,
+                            icon: const Icon(Icons.favorite_border),
+                            label: const Text('Wishlist'),
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: SizedBox(
+                          height: 48,
+                          child: ElevatedButton.icon(
+                            onPressed: _isLoading ? null : _addToCart,
+                            icon: const Icon(Icons.shopping_cart),
+                            label: Text(
+                              _isLoading ? 'Adding...' : 'Add To Cart',
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
