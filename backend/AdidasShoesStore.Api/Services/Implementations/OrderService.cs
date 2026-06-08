@@ -227,7 +227,6 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 {
                     OrderId = o.OrderId,
                     OrderCode = o.OrderCode,
-                    UserId = o.UserId,
                     CustomerName = o.User.FullName,
                     CustomerEmail = o.User.Email,
                     ReceiverName = o.ReceiverName,
