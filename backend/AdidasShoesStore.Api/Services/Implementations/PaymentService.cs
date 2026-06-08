@@ -11,15 +11,18 @@ namespace AdidasShoesStore.Api.Services.Implementations
         private readonly AdidasShoesStoreContext _context;
         private readonly IConfiguration _configuration;
         private readonly VnPayHelper _vnPayHelper;
+        private readonly IEmailService _emailService;
 
         public PaymentService(
             AdidasShoesStoreContext context,
             IConfiguration configuration,
-            VnPayHelper vnPayHelper)
+            VnPayHelper vnPayHelper,
+            IEmailService emailService)
         {
             _context = context;
             _configuration = configuration;
             _vnPayHelper = vnPayHelper;
+            _emailService = emailService;
         }
 
         public async Task<PaymentServiceResult<VnPayPaymentUrlDto>> CreateVnPayPaymentUrlAsync(
@@ -117,6 +120,8 @@ namespace AdidasShoesStore.Api.Services.Implementations
 
             var order = await _context.Orders
                 .Include(o => o.Payment)
+                .Include(o => o.User)
+                .Include(o => o.OrderItems)
                 .FirstOrDefaultAsync(o => o.OrderCode == orderCode);
 
             if (order == null || order.Payment == null)
@@ -136,6 +141,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 order.Status = "Paid";
 
                 await _context.SaveChangesAsync();
+                await _emailService.SendInvoiceEmailAsync(order);
 
                 return new VnPayReturnResultDto
                 {

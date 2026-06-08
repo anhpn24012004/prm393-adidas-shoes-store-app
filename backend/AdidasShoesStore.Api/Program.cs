@@ -66,6 +66,7 @@ builder.Services.AddScoped<
     IOrderService,
     OrderService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
 
 // Configure JWT Authentication
 builder.Services.AddAuthentication(options =>
