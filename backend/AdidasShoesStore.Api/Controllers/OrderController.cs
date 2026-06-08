@@ -78,6 +78,32 @@ namespace AdidasShoesStore.Api.Controllers
             return Ok(order);
         }
 
+        [HttpPut("{id:int}/cancel")]
+        public async Task<IActionResult> CancelOrder(int id)
+        {
+            if (!TryGetUserId(out var userId))
+            {
+                return Unauthorized(new { message = "Invalid token" });
+            }
+
+            var result = await _orderService.CancelOrderAsync(
+                userId,
+                id
+            );
+
+            if (!result.Success)
+            {
+                if (result.ErrorType == "NotFound")
+                {
+                    return NotFound(new { message = result.Error });
+                }
+
+                return BadRequest(new { message = result.Error });
+            }
+
+            return Ok(result.Data);
+        }
+
         private bool TryGetUserId(out int userId)
         {
             var value = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;

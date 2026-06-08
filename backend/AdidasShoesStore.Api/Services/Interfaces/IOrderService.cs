@@ -8,6 +8,8 @@ namespace AdidasShoesStore.Api.Services.Interfaces
 
         public string? Error { get; set; }
 
+        public string? ErrorType { get; set; }
+
         public T? Data { get; set; }
 
         public static OrderServiceResult<T> Ok(T data)
@@ -19,12 +21,15 @@ namespace AdidasShoesStore.Api.Services.Interfaces
             };
         }
 
-        public static OrderServiceResult<T> Fail(string error)
+        public static OrderServiceResult<T> Fail(
+            string error,
+            string errorType = "BadRequest")
         {
             return new OrderServiceResult<T>
             {
                 Success = false,
-                Error = error
+                Error = error,
+                ErrorType = errorType
             };
         }
     }
@@ -39,6 +44,11 @@ namespace AdidasShoesStore.Api.Services.Interfaces
         Task<List<OrderListDto>> GetMyOrdersAsync(int userId);
 
         Task<OrderDetailDto?> GetOrderDetailAsync(
+            int userId,
+            int orderId
+        );
+
+        Task<OrderServiceResult<OrderDetailDto>> CancelOrderAsync(
             int userId,
             int orderId
         );

@@ -69,54 +69,80 @@ namespace AdidasShoesStore.Api.Services.Implementations
 
             await using var transaction = await _context.Database.BeginTransactionAsync();
 
-            var totalAmount = cart.CartItems.Sum(i => i.Variant.Price * i.Quantity);
-            var finalAmount = totalAmount + ShippingFee - DiscountAmount;
-            var createdAt = DateTime.Now;
-
-            var order = new Order
+            try
             {
-                UserId = userId,
-                OrderCode = GenerateOrderCode(),
-                TotalAmount = totalAmount,
-                ShippingFee = ShippingFee,
-                DiscountAmount = DiscountAmount,
-                FinalAmount = finalAmount,
-                Status = "PendingPayment",
-                ShippingAddress = BuildShippingAddress(address),
-                ReceiverName = address.ReceiverName,
-                ReceiverPhone = address.Phone,
-                Note = dto.Note,
-                CreatedAt = createdAt,
-                Payment = new Payment
+                foreach (var item in cart.CartItems)
                 {
-                    PaymentMethod = dto.PaymentMethod.Trim(),
-                    Amount = finalAmount,
-                    Status = "Pending"
+                    if (item.Variant.StockQuantity == null ||
+                        item.Variant.StockQuantity < item.Quantity)
+                    {
+                        var productLabel = $"{item.Variant.Product.ProductName} - Size {item.Variant.Size}, Color {item.Variant.Color}";
+
+                        await transaction.RollbackAsync();
+
+                        return OrderServiceResult<OrderDetailDto>.Fail(
+                            $"Insufficient stock for {productLabel}"
+                        );
+                    }
                 }
-            };
 
-            foreach (var item in cart.CartItems)
-            {
-                order.OrderItems.Add(new OrderItem
+                var totalAmount = cart.CartItems.Sum(i => i.Variant.Price * i.Quantity);
+                var finalAmount = totalAmount + ShippingFee - DiscountAmount;
+                var createdAt = DateTime.Now;
+
+                var order = new Order
                 {
-                    VariantId = item.VariantId,
-                    ProductName = item.Variant.Product.ProductName,
-                    Size = item.Variant.Size,
-                    Color = item.Variant.Color,
-                    Quantity = item.Quantity,
-                    UnitPrice = item.Variant.Price
-                });
+                    UserId = userId,
+                    OrderCode = GenerateOrderCode(),
+                    TotalAmount = totalAmount,
+                    ShippingFee = ShippingFee,
+                    DiscountAmount = DiscountAmount,
+                    FinalAmount = finalAmount,
+                    Status = "PendingPayment",
+                    ShippingAddress = BuildShippingAddress(address),
+                    ReceiverName = address.ReceiverName,
+                    ReceiverPhone = address.Phone,
+                    Note = dto.Note,
+                    CreatedAt = createdAt,
+                    Payment = new Payment
+                    {
+                        PaymentMethod = dto.PaymentMethod.Trim(),
+                        Amount = finalAmount,
+                        Status = "Pending"
+                    }
+                };
+
+                foreach (var item in cart.CartItems)
+                {
+                    order.OrderItems.Add(new OrderItem
+                    {
+                        VariantId = item.VariantId,
+                        ProductName = item.Variant.Product.ProductName,
+                        Size = item.Variant.Size,
+                        Color = item.Variant.Color,
+                        Quantity = item.Quantity,
+                        UnitPrice = item.Variant.Price
+                    });
+
+                    item.Variant.StockQuantity -= item.Quantity;
+                }
+
+                _context.Orders.Add(order);
+                _context.CartItems.RemoveRange(cart.CartItems);
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                var orderDetail = await GetOrderDetailAsync(userId, order.OrderId);
+
+                return OrderServiceResult<OrderDetailDto>.Ok(orderDetail!);
             }
+            catch
+            {
+                await transaction.RollbackAsync();
 
-            _context.Orders.Add(order);
-            _context.CartItems.RemoveRange(cart.CartItems);
-
-            await _context.SaveChangesAsync();
-            await transaction.CommitAsync();
-
-            var orderDetail = await GetOrderDetailAsync(userId, order.OrderId);
-
-            return OrderServiceResult<OrderDetailDto>.Ok(orderDetail!);
+                return OrderServiceResult<OrderDetailDto>.Fail("Could not create order");
+            }
         }
 
         public async Task<List<OrderListDto>> GetMyOrdersAsync(int userId)
@@ -181,6 +207,64 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     }).ToList()
                 })
                 .FirstOrDefaultAsync();
+        }
+
+        public async Task<OrderServiceResult<OrderDetailDto>> CancelOrderAsync(
+            int userId,
+            int orderId)
+        {
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                var order = await _context.Orders
+                    .Include(o => o.OrderItems)
+                        .ThenInclude(i => i.Variant)
+                    .Include(o => o.Payment)
+                    .FirstOrDefaultAsync(o =>
+                        o.OrderId == orderId &&
+                        o.UserId == userId);
+
+                if (order == null)
+                {
+                    await transaction.RollbackAsync();
+
+                    return OrderServiceResult<OrderDetailDto>.Fail(
+                        "Order not found",
+                        "NotFound"
+                    );
+                }
+
+                if (order.Status != "PendingPayment" &&
+                    order.Status != "Paid")
+                {
+                    await transaction.RollbackAsync();
+
+                    return OrderServiceResult<OrderDetailDto>.Fail(
+                        "Only pending payment or paid orders can be cancelled"
+                    );
+                }
+
+                foreach (var item in order.OrderItems)
+                {
+                    item.Variant.StockQuantity = (item.Variant.StockQuantity ?? 0) + item.Quantity;
+                }
+
+                order.Status = "Cancelled";
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                var detail = await GetOrderDetailAsync(userId, orderId);
+
+                return OrderServiceResult<OrderDetailDto>.Ok(detail!);
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+
+                return OrderServiceResult<OrderDetailDto>.Fail("Could not cancel order");
+            }
         }
 
         public async Task<List<AdminOrderListDto>> GetAdminOrdersAsync(
