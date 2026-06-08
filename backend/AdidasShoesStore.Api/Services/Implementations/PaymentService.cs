@@ -1,0 +1,196 @@
+using AdidasShoesStore.Api.Data;
+using AdidasShoesStore.Api.DTOs.Payment;
+using AdidasShoesStore.Api.Helpers;
+using AdidasShoesStore.Api.Services.Interfaces;
+using Microsoft.EntityFrameworkCore;
+
+namespace AdidasShoesStore.Api.Services.Implementations
+{
+    public class PaymentService : IPaymentService
+    {
+        private readonly AdidasShoesStoreContext _context;
+        private readonly IConfiguration _configuration;
+        private readonly VnPayHelper _vnPayHelper;
+
+        public PaymentService(
+            AdidasShoesStoreContext context,
+            IConfiguration configuration,
+            VnPayHelper vnPayHelper)
+        {
+            _context = context;
+            _configuration = configuration;
+            _vnPayHelper = vnPayHelper;
+        }
+
+        public async Task<PaymentServiceResult<VnPayPaymentUrlDto>> CreateVnPayPaymentUrlAsync(
+            int userId,
+            CreateVnPayPaymentDto dto,
+            string ipAddress)
+        {
+            var config = GetVnPayConfig();
+
+            if (config == null)
+            {
+                return PaymentServiceResult<VnPayPaymentUrlDto>.Fail("VNPay configuration is missing");
+            }
+
+            var order = await _context.Orders
+                .AsNoTracking()
+                .Include(o => o.Payment)
+                .FirstOrDefaultAsync(o =>
+                    o.OrderId == dto.OrderId &&
+                    o.UserId == userId);
+
+            if (order == null)
+            {
+                return PaymentServiceResult<VnPayPaymentUrlDto>.Fail(
+                    "Order not found",
+                    "NotFound"
+                );
+            }
+
+            if (order.Status != "PendingPayment")
+            {
+                return PaymentServiceResult<VnPayPaymentUrlDto>.Fail(
+                    "Only pending payment orders can be paid with VNPay"
+                );
+            }
+
+            if (order.Payment == null)
+            {
+                return PaymentServiceResult<VnPayPaymentUrlDto>.Fail(
+                    "Payment not found",
+                    "NotFound"
+                );
+            }
+
+            var parameters = new Dictionary<string, string>
+            {
+                ["vnp_Version"] = "2.1.0",
+                ["vnp_Command"] = "pay",
+                ["vnp_TmnCode"] = config.TmnCode,
+                ["vnp_Amount"] = ((long)Math.Round(order.FinalAmount * 100m)).ToString(),
+                ["vnp_CreateDate"] = DateTime.Now.ToString("yyyyMMddHHmmss"),
+                ["vnp_CurrCode"] = "VND",
+                ["vnp_IpAddr"] = ipAddress,
+                ["vnp_Locale"] = "vn",
+                ["vnp_OrderInfo"] = $"Payment for order {order.OrderCode}",
+                ["vnp_OrderType"] = "other",
+                ["vnp_ReturnUrl"] = config.ReturnUrl,
+                ["vnp_TxnRef"] = order.OrderCode
+            };
+
+            var paymentUrl = _vnPayHelper.CreatePaymentUrl(
+                config.BaseUrl,
+                config.HashSecret,
+                parameters
+            );
+
+            return PaymentServiceResult<VnPayPaymentUrlDto>.Ok(new VnPayPaymentUrlDto
+            {
+                PaymentUrl = paymentUrl
+            });
+        }
+
+        public async Task<VnPayReturnResultDto> ProcessVnPayReturnAsync(
+            IReadOnlyDictionary<string, string> queryParameters)
+        {
+            var config = GetVnPayConfig();
+
+            if (config == null)
+            {
+                return new VnPayReturnResultDto
+                {
+                    Success = false,
+                    Message = "VNPay configuration is missing"
+                };
+            }
+
+            var isValidHash = _vnPayHelper.ValidateSecureHash(
+                config.HashSecret,
+                queryParameters
+            );
+
+            queryParameters.TryGetValue("vnp_TxnRef", out var orderCode);
+            queryParameters.TryGetValue("vnp_ResponseCode", out var responseCode);
+            queryParameters.TryGetValue("vnp_TransactionNo", out var transactionNo);
+
+            var order = await _context.Orders
+                .Include(o => o.Payment)
+                .FirstOrDefaultAsync(o => o.OrderCode == orderCode);
+
+            if (order == null || order.Payment == null)
+            {
+                return new VnPayReturnResultDto
+                {
+                    Success = false,
+                    Message = "Order or payment not found"
+                };
+            }
+
+            if (isValidHash && responseCode == "00")
+            {
+                order.Payment.Status = "Success";
+                order.Payment.TransactionCode = transactionNo;
+                order.Payment.PaidAt = DateTime.Now;
+                order.Status = "Paid";
+
+                await _context.SaveChangesAsync();
+
+                return new VnPayReturnResultDto
+                {
+                    Success = true,
+                    OrderId = order.OrderId,
+                    OrderCode = order.OrderCode,
+                    Message = "Payment successful"
+                };
+            }
+
+            order.Payment.Status = "Failed";
+            await _context.SaveChangesAsync();
+
+            return new VnPayReturnResultDto
+            {
+                Success = false,
+                OrderId = order.OrderId,
+                OrderCode = order.OrderCode,
+                Message = isValidHash ? "Payment failed" : "Invalid payment signature"
+            };
+        }
+
+        private VnPayConfig? GetVnPayConfig()
+        {
+            var tmnCode = _configuration["VnPay:TmnCode"];
+            var hashSecret = _configuration["VnPay:HashSecret"];
+            var baseUrl = _configuration["VnPay:BaseUrl"];
+            var returnUrl = _configuration["VnPay:ReturnUrl"];
+
+            if (string.IsNullOrWhiteSpace(tmnCode) ||
+                string.IsNullOrWhiteSpace(hashSecret) ||
+                string.IsNullOrWhiteSpace(baseUrl) ||
+                string.IsNullOrWhiteSpace(returnUrl))
+            {
+                return null;
+            }
+
+            return new VnPayConfig
+            {
+                TmnCode = tmnCode,
+                HashSecret = hashSecret,
+                BaseUrl = baseUrl,
+                ReturnUrl = returnUrl
+            };
+        }
+
+        private class VnPayConfig
+        {
+            public string TmnCode { get; set; } = null!;
+
+            public string HashSecret { get; set; } = null!;
+
+            public string BaseUrl { get; set; } = null!;
+
+            public string ReturnUrl { get; set; } = null!;
+        }
+    }
+}
