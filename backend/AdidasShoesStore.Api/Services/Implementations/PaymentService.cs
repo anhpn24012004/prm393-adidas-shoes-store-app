@@ -148,13 +148,23 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 order.Status = "Paid";
 
                 await _context.SaveChangesAsync();
-                await _emailService.SendInvoiceEmailAsync(order);
+
+                var message = "Payment successful";
+
+                try
+                {
+                    await _emailService.SendInvoiceEmailAsync(order);
+                }
+                catch
+                {
+                    message = "Payment successful, but invoice email could not be sent";
+                }
 
                 return new VnPayPaymentResponseDto
                 {
                     Success = true,
                     OrderCode = order.OrderCode,
-                    Message = "Payment successful"
+                    Message = message
                 };
             }
 

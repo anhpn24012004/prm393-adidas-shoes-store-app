@@ -59,7 +59,9 @@ namespace AdidasShoesStore.Api.Services.Implementations
             builder.AppendLine("<p>Thank you for your payment.</p>");
             builder.AppendLine("<h3>Shipping information</h3>");
             builder.AppendLine("<table cellpadding=\"6\" cellspacing=\"0\">");
+            builder.AppendLine($"<tr><td><strong>Customer</strong></td><td>{WebUtility.HtmlEncode(order.User.FullName)}</td></tr>");
             builder.AppendLine($"<tr><td><strong>Receiver</strong></td><td>{WebUtility.HtmlEncode(order.ReceiverName)}</td></tr>");
+            builder.AppendLine($"<tr><td><strong>Receiver phone</strong></td><td>{WebUtility.HtmlEncode(order.ReceiverPhone)}</td></tr>");
             builder.AppendLine($"<tr><td><strong>Shipping address</strong></td><td>{WebUtility.HtmlEncode(order.ShippingAddress)}</td></tr>");
             builder.AppendLine($"<tr><td><strong>Payment method</strong></td><td>{WebUtility.HtmlEncode(order.Payment?.PaymentMethod ?? string.Empty)}</td></tr>");
             builder.AppendLine($"<tr><td><strong>Paid date</strong></td><td>{WebUtility.HtmlEncode(order.Payment?.PaidAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? string.Empty)}</td></tr>");
@@ -89,6 +91,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
             builder.AppendLine("<table cellpadding=\"6\" cellspacing=\"0\">");
             builder.AppendLine($"<tr><td><strong>Total amount</strong></td><td align=\"right\">{FormatMoney(order.TotalAmount)}</td></tr>");
             builder.AppendLine($"<tr><td><strong>Shipping fee</strong></td><td align=\"right\">{FormatMoney(order.ShippingFee ?? 0m)}</td></tr>");
+            builder.AppendLine($"<tr><td><strong>Discount amount</strong></td><td align=\"right\">{FormatMoney(order.DiscountAmount ?? 0m)}</td></tr>");
             builder.AppendLine($"<tr><td><strong>Final amount</strong></td><td align=\"right\">{FormatMoney(order.FinalAmount)}</td></tr>");
             builder.AppendLine("</table>");
             builder.AppendLine("</body></html>");
