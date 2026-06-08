@@ -55,6 +55,31 @@ public class ReviewService : IReviewService
             return null;
         }
 
+        var hasPurchased = await _context.Orders
+            .AnyAsync(o =>
+                o.UserId == dto.UserId &&
+                (o.Status == "Delivered" || o.Status == "Completed") &&
+                o.OrderItems.Any(oi =>
+                    oi.Variant.ProductId == dto.ProductId
+                )
+            );
+
+        if (!hasPurchased)
+        {
+            return null;
+        }
+
+        var alreadyReviewed = await _context.Reviews
+            .AnyAsync(r =>
+                r.UserId == dto.UserId &&
+                r.ProductId == dto.ProductId
+            );
+
+        if (alreadyReviewed)
+        {
+            return null;
+        }
+
         var review = new Review
         {
             UserId = dto.UserId,
