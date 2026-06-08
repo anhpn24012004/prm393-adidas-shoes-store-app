@@ -42,5 +42,21 @@ namespace AdidasShoesStore.Api.Services.Interfaces
             int userId,
             int orderId
         );
+
+        Task<List<AdminOrderListDto>> GetAdminOrdersAsync(
+            string? status,
+            DateTime? fromDate,
+            DateTime? toDate,
+            string? keyword
+        );
+
+        Task<AdminOrderDetailDto?> GetAdminOrderDetailAsync(int orderId);
+
+        Task<OrderServiceResult<AdminOrderDetailDto>> UpdateOrderStatusAsync(
+            int orderId,
+            UpdateOrderStatusDto dto
+        );
+
+        Task<RevenueSummaryDto> GetRevenueSummaryAsync();
     }
 }
