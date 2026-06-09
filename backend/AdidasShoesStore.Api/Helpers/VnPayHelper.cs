@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -12,12 +11,12 @@ namespace AdidasShoesStore.Api.Helpers
             string hashSecret,
             IDictionary<string, string> parameters)
         {
+            var normalizedParameters = NormalizeParameters(parameters);
+            var query = BuildQueryString(normalizedParameters);
             var secureHash = CreateSecureHash(
                 hashSecret,
-                parameters
+                query
             );
-
-            var query = BuildQueryString(parameters);
 
             return $"{baseUrl}?{query}&vnp_SecureHash={secureHash}";
         }
@@ -32,16 +31,11 @@ namespace AdidasShoesStore.Api.Helpers
                 return false;
             }
 
-            var data = parameters
-                .Where(p =>
-                    !string.Equals(p.Key, "vnp_SecureHash", StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(p.Key, "vnp_SecureHashType", StringComparison.OrdinalIgnoreCase) &&
-                    !string.IsNullOrWhiteSpace(p.Value))
-                .ToDictionary(p => p.Key, p => p.Value);
-
+            var normalizedParameters = NormalizeParameters(parameters);
+            var query = BuildQueryString(normalizedParameters);
             var calculatedHash = CreateSecureHash(
                 hashSecret,
-                data
+                query
             );
 
             return string.Equals(
@@ -53,11 +47,10 @@ namespace AdidasShoesStore.Api.Helpers
 
         private static string CreateSecureHash(
             string hashSecret,
-            IDictionary<string, string> parameters)
+            string query)
         {
-            var hashData = BuildQueryString(parameters);
             var keyBytes = Encoding.UTF8.GetBytes(hashSecret);
-            var inputBytes = Encoding.UTF8.GetBytes(hashData);
+            var inputBytes = Encoding.UTF8.GetBytes(query);
 
             using var hmac = new HMACSHA512(keyBytes);
             var hashBytes = hmac.ComputeHash(inputBytes);
@@ -65,14 +58,31 @@ namespace AdidasShoesStore.Api.Helpers
             return Convert.ToHexString(hashBytes).ToLower(CultureInfo.InvariantCulture);
         }
 
-        private static string BuildQueryString(IDictionary<string, string> parameters)
+        private static SortedDictionary<string, string> NormalizeParameters(
+            IEnumerable<KeyValuePair<string, string>> parameters)
+        {
+            return new SortedDictionary<string, string>(
+                parameters
+                    .Where(p =>
+                        p.Key.StartsWith("vnp_", StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(p.Key, "vnp_SecureHash", StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(p.Key, "vnp_SecureHashType", StringComparison.OrdinalIgnoreCase) &&
+                        !string.IsNullOrWhiteSpace(p.Value))
+                    .ToDictionary(
+                        p => p.Key,
+                        p => p.Value,
+                        StringComparer.Ordinal
+                    ),
+                StringComparer.Ordinal
+            );
+        }
+
+        private static string BuildQueryString(IEnumerable<KeyValuePair<string, string>> parameters)
         {
             return string.Join(
                 "&",
-                parameters
-                    .Where(p => !string.IsNullOrWhiteSpace(p.Value))
-                    .OrderBy(p => p.Key, StringComparer.Ordinal)
-                    .Select(p => $"{WebUtility.UrlEncode(p.Key)}={WebUtility.UrlEncode(p.Value)}")
+                parameters.Select(p =>
+                    $"{Uri.EscapeDataString(p.Key)}={Uri.EscapeDataString(p.Value)}")
             );
         }
     }

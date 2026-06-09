@@ -3,6 +3,7 @@ using AdidasShoesStore.Api.DTOs.Payment;
 using AdidasShoesStore.Api.Helpers;
 using AdidasShoesStore.Api.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 
 namespace AdidasShoesStore.Api.Services.Implementations
 {
@@ -34,7 +35,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
 
             if (config == null)
             {
-                return PaymentServiceResult<VnPayPaymentResponseDto>.Fail("VNPay configuration is missing");
+                return PaymentServiceResult<VnPayPaymentResponseDto>.Fail("VNPay configuration is missing or invalid");
             }
 
             var order = await _context.Orders
@@ -79,7 +80,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 ["vnp_Version"] = "2.1.0",
                 ["vnp_Command"] = "pay",
                 ["vnp_TmnCode"] = config.TmnCode,
-                ["vnp_Amount"] = ((long)Math.Round(order.FinalAmount * 100m)).ToString(),
+                ["vnp_Amount"] = ((long)(order.FinalAmount * 100m)).ToString(CultureInfo.InvariantCulture),
                 ["vnp_CreateDate"] = DateTime.Now.ToString("yyyyMMddHHmmss"),
                 ["vnp_CurrCode"] = "VND",
                 ["vnp_IpAddr"] = ipAddress,
@@ -112,7 +113,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 return new VnPayPaymentResponseDto
                 {
                     Success = false,
-                    Message = "VNPay configuration is missing"
+                    Message = "VNPay configuration is missing or invalid"
                 };
             }
 
@@ -214,7 +215,9 @@ namespace AdidasShoesStore.Api.Services.Implementations
             if (string.IsNullOrWhiteSpace(tmnCode) ||
                 string.IsNullOrWhiteSpace(hashSecret) ||
                 string.IsNullOrWhiteSpace(baseUrl) ||
-                string.IsNullOrWhiteSpace(returnUrl))
+                string.IsNullOrWhiteSpace(returnUrl) ||
+                tmnCode.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase) ||
+                hashSecret.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase))
             {
                 return null;
             }

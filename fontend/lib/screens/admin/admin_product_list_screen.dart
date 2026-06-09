@@ -63,9 +63,7 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Product deleted successfully'),
-        ),
+        const SnackBar(content: Text('Product deleted successfully')),
       );
 
       setState(() {
@@ -74,20 +72,16 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
   Future<void> _goToCreate() async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const AdminProductFormScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const AdminProductFormScreen()),
     );
 
     if (result == true) {
@@ -142,6 +136,10 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
     Navigator.pushNamed(context, '/admin/categories');
   }
 
+  void _goToShipments() {
+    Navigator.pushNamed(context, '/admin/shipments');
+  }
+
   Widget _buildImage(String? imageUrl) {
     if (imageUrl == null || imageUrl.isEmpty) {
       return Container(
@@ -179,14 +177,12 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
           product.productName,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         subtitle: Text(
           '${formatPrice(product.basePrice)}\n'
-              '${product.categoryName ?? 'No category'}\n'
-              'Status: ${product.isActive ? 'Active' : 'Inactive'}',
+          '${product.categoryName ?? 'No category'}\n'
+          'Status: ${product.isActive ? 'Active' : 'Inactive'}',
         ),
         isThreeLine: true,
         trailing: Wrap(
@@ -223,9 +219,7 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
       future: _productsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
+          return const Center(child: CircularProgressIndicator());
         }
 
         if (snapshot.hasError) {
@@ -240,9 +234,7 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
         final products = snapshot.data ?? [];
 
         if (products.isEmpty) {
-          return const Center(
-            child: Text('No products found'),
-          );
+          return const Center(child: Text('No products found'));
         }
 
         return RefreshIndicator(
@@ -273,6 +265,11 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
             tooltip: 'Manage Categories',
             icon: const Icon(Icons.category),
             onPressed: _goToCategories,
+          ),
+          IconButton(
+            tooltip: 'Shipment Management',
+            icon: const Icon(Icons.local_shipping),
+            onPressed: _goToShipments,
           ),
         ],
       ),
