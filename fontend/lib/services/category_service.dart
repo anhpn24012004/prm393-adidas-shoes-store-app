@@ -2,12 +2,13 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../models/category_model.dart';
+import 'api_client.dart';
 
 class CategoryService {
-  static const String baseUrl = 'http://localhost:5209/api';
-
   Future<List<CategoryModel>> getCategories() async {
-    final response = await http.get(Uri.parse('$baseUrl/categories'));
+    final response = await http.get(
+      Uri.parse('${ApiClient.baseUrl}/categories'),
+    );
 
     if (response.statusCode == 200) {
       final List data = jsonDecode(response.body);
@@ -22,10 +23,8 @@ class CategoryService {
     String? description,
   }) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/categories'),
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      Uri.parse('${ApiClient.baseUrl}/categories'),
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'categoryName': categoryName,
         'description': description,
@@ -43,10 +42,8 @@ class CategoryService {
     String? description,
   }) async {
     final response = await http.put(
-      Uri.parse('$baseUrl/categories/$categoryId'),
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      Uri.parse('${ApiClient.baseUrl}/categories/$categoryId'),
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'categoryName': categoryName,
         'description': description,
@@ -60,7 +57,7 @@ class CategoryService {
 
   Future<void> deleteCategory(int categoryId) async {
     final response = await http.delete(
-      Uri.parse('$baseUrl/categories/$categoryId'),
+      Uri.parse('${ApiClient.baseUrl}/categories/$categoryId'),
     );
 
     if (response.statusCode != 200 && response.statusCode != 204) {

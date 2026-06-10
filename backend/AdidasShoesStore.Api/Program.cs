@@ -60,11 +60,21 @@ builder.Services.AddDbContext<AdidasShoesStoreContext>(options =>
 
 // Register custom services
 builder.Services.AddScoped<JwtHelper>();
+builder.Services.AddScoped<VnPayHelper>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+<<<<<<< HEAD
 builder.Services.AddHttpClient<IAiAssistantService, AiAssistantService>();
 builder.Services.AddScoped<IReviewService, ReviewService>();
 builder.Services.AddScoped<IReturnRequestService, ReturnRequestService>();
 builder.Services.AddScoped<IRefundService, RefundService>();
+=======
+builder.Services.AddScoped<
+    IOrderService,
+    OrderService>();
+builder.Services.AddScoped<IShipmentService, ShipmentService>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
+>>>>>>> origin/develop
 
 // Configure JWT Authentication
 builder.Services.AddAuthentication(options =>
