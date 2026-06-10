@@ -3,16 +3,15 @@ import 'package:http/http.dart' as http;
 
 import '../models/product_model.dart';
 import '../models/product_detail_model.dart';
+import 'api_client.dart';
 
 class ProductService {
-  static const String baseUrl = 'http://localhost:5209/api';
-
   // =========================
   // PRODUCT USER API
   // =========================
 
   Future<List<ProductModel>> getProducts() async {
-    final response = await http.get(Uri.parse('$baseUrl/products'));
+    final response = await http.get(Uri.parse('${ApiClient.baseUrl}/products'));
 
     if (response.statusCode == 200) {
       final List data = jsonDecode(response.body);
@@ -23,7 +22,9 @@ class ProductService {
   }
 
   Future<ProductDetailModel> getProductById(int id) async {
-    final response = await http.get(Uri.parse('$baseUrl/products/$id'));
+    final response = await http.get(
+      Uri.parse('${ApiClient.baseUrl}/products/$id'),
+    );
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -35,7 +36,7 @@ class ProductService {
 
   Future<List<ProductModel>> searchProducts(String keyword) async {
     final response = await http.get(
-      Uri.parse('$baseUrl/products/search?keyword=$keyword'),
+      Uri.parse('${ApiClient.baseUrl}/products/search?keyword=$keyword'),
     );
 
     if (response.statusCode == 200) {
@@ -48,7 +49,7 @@ class ProductService {
 
   Future<List<ProductModel>> getProductsByCategory(int categoryId) async {
     final response = await http.get(
-      Uri.parse('$baseUrl/products/category/$categoryId'),
+      Uri.parse('${ApiClient.baseUrl}/products/category/$categoryId'),
     );
 
     if (response.statusCode == 200) {
@@ -73,10 +74,8 @@ class ProductService {
     String? material,
   }) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/products'),
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      Uri.parse('${ApiClient.baseUrl}/products'),
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'productName': productName,
         'description': description,
@@ -105,10 +104,8 @@ class ProductService {
     required bool isActive,
   }) async {
     final response = await http.put(
-      Uri.parse('$baseUrl/products/$productId'),
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      Uri.parse('${ApiClient.baseUrl}/products/$productId'),
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'productName': productName,
         'description': description,
@@ -128,7 +125,7 @@ class ProductService {
 
   Future<void> deleteProduct(int productId) async {
     final response = await http.delete(
-      Uri.parse('$baseUrl/products/$productId'),
+      Uri.parse('${ApiClient.baseUrl}/products/$productId'),
     );
 
     if (response.statusCode != 200 && response.statusCode != 204) {
@@ -142,7 +139,7 @@ class ProductService {
 
   Future<List<ProductVariantModel>> getVariantsByProduct(int productId) async {
     final response = await http.get(
-      Uri.parse('$baseUrl/products/$productId/variants'),
+      Uri.parse('${ApiClient.baseUrl}/products/$productId/variants'),
     );
 
     if (response.statusCode == 200) {
@@ -162,10 +159,8 @@ class ProductService {
     String? sku,
   }) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/products/$productId/variants'),
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      Uri.parse('${ApiClient.baseUrl}/products/$productId/variants'),
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'size': size,
         'color': color,
@@ -190,10 +185,8 @@ class ProductService {
     required bool isActive,
   }) async {
     final response = await http.put(
-      Uri.parse('$baseUrl/productvariants/$variantId'),
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      Uri.parse('${ApiClient.baseUrl}/productvariants/$variantId'),
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'size': size,
         'color': color,
@@ -211,7 +204,7 @@ class ProductService {
 
   Future<void> deleteVariant(int variantId) async {
     final response = await http.delete(
-      Uri.parse('$baseUrl/productvariants/$variantId'),
+      Uri.parse('${ApiClient.baseUrl}/productvariants/$variantId'),
     );
 
     if (response.statusCode != 200 && response.statusCode != 204) {
@@ -225,7 +218,7 @@ class ProductService {
 
   Future<List<ProductImageModel>> getImagesByProduct(int productId) async {
     final response = await http.get(
-      Uri.parse('$baseUrl/products/$productId/images'),
+      Uri.parse('${ApiClient.baseUrl}/products/$productId/images'),
     );
 
     if (response.statusCode == 200) {
@@ -242,14 +235,9 @@ class ProductService {
     required bool isMain,
   }) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/products/$productId/images'),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({
-        'imageUrl': imageUrl,
-        'isMain': isMain,
-      }),
+      Uri.parse('${ApiClient.baseUrl}/products/$productId/images'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'imageUrl': imageUrl, 'isMain': isMain}),
     );
 
     if (response.statusCode != 200 && response.statusCode != 201) {
@@ -263,14 +251,9 @@ class ProductService {
     required bool isMain,
   }) async {
     final response = await http.put(
-      Uri.parse('$baseUrl/productimages/$imageId'),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({
-        'imageUrl': imageUrl,
-        'isMain': isMain,
-      }),
+      Uri.parse('${ApiClient.baseUrl}/productimages/$imageId'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'imageUrl': imageUrl, 'isMain': isMain}),
     );
 
     if (response.statusCode != 200 && response.statusCode != 204) {
@@ -280,7 +263,7 @@ class ProductService {
 
   Future<void> deleteProductImage(int imageId) async {
     final response = await http.delete(
-      Uri.parse('$baseUrl/productimages/$imageId'),
+      Uri.parse('${ApiClient.baseUrl}/productimages/$imageId'),
     );
 
     if (response.statusCode != 200 && response.statusCode != 204) {
