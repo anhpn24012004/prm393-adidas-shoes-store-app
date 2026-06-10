@@ -55,3 +55,20 @@ app.*.map.json
 **/obj/.vs/
 bin/
 obj/
+
+# Flutter
+fontend/build/
+**/build/
+
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+
+android/.gradle/
+android/app/debug/
+android/app/profile/
+android/app/release/
+
+*.apk
+*.aab

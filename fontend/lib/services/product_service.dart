@@ -7,11 +7,8 @@ import '../models/product_detail_model.dart';
 import 'api_client.dart';
 
 class ProductService {
-<<<<<<< HEAD
   String get baseUrl => AppConfig.apiBaseUrl;
 
-=======
->>>>>>> origin/develop
   // =========================
   // PRODUCT USER API
   // =========================

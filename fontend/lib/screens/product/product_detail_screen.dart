@@ -127,7 +127,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-<<<<<<< HEAD
         SnackBar(
           content: Text('Added to cart ($totalItems items)'),
         ),
@@ -170,16 +169,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ),
       );
     }
-=======
-        const SnackBar(content: Text('This variant is out of stock')),
-      );
-      return;
-    }
 
     // Sau này nối Cart API:
     // POST /api/cart/items
     // body: { "variantId": selectedVariant!.variantId, "quantity": 1 }
->>>>>>> origin/develop
   }
 
   @override
@@ -210,16 +203,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         final displayPrice = selectedVariant?.price ?? product.basePrice;
 
         return Scaffold(
-<<<<<<< HEAD
           appBar: AppBar(
             title: Text(product.productName),
             actions: const [
               CartWishlistBadges(),
             ],
           ),
-=======
-          appBar: AppBar(title: Text(product.productName)),
->>>>>>> origin/develop
           body: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

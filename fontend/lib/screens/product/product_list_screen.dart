@@ -239,11 +239,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Adidas Products'),
-<<<<<<< HEAD
-        actions: const [
-          CartWishlistBadges(),
-=======
-        actions: [
+        actions:[
           IconButton(
             tooltip: 'Cart',
             icon: const Icon(Icons.shopping_cart),
@@ -259,7 +255,6 @@ class _ProductListScreenState extends State<ProductListScreen> {
             icon: const Icon(Icons.person),
             onPressed: () => Navigator.pushNamed(context, '/profile'),
           ),
->>>>>>> origin/develop
         ],
       ),
       body: Column(
