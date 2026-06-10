@@ -11,10 +11,7 @@ import '../../widgets/cart_wishlist_badges.dart';
 class ProductDetailScreen extends StatefulWidget {
   final int productId;
 
-  const ProductDetailScreen({
-    super.key,
-    required this.productId,
-  });
+  const ProductDetailScreen({super.key, required this.productId});
 
   @override
   State<ProductDetailScreen> createState() => _ProductDetailScreenState();
@@ -60,9 +57,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         height: 280,
         width: double.infinity,
         color: Colors.grey.shade200,
-        child: const Center(
-          child: Icon(Icons.image, size: 64),
-        ),
+        child: const Center(child: Icon(Icons.image, size: 64)),
       );
     }
 
@@ -76,9 +71,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           height: 280,
           width: double.infinity,
           color: Colors.grey.shade200,
-          child: const Center(
-            child: Icon(Icons.broken_image, size: 64),
-          ),
+          child: const Center(child: Icon(Icons.broken_image, size: 64)),
         );
       },
     );
@@ -101,10 +94,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           onSelected: variant.stockQuantity <= 0
               ? null
               : (_) {
-            setState(() {
-              selectedVariant = variant;
-            });
-          },
+                  setState(() {
+                    selectedVariant = variant;
+                  });
+                },
         );
       }).toList(),
     );
@@ -113,9 +106,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   Future<void> _addToCart() async {
     if (selectedVariant == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select size and color'),
-        ),
+        const SnackBar(content: Text('Please select size and color')),
       );
       return;
     }
@@ -136,6 +127,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
+<<<<<<< HEAD
         SnackBar(
           content: Text('Added to cart ($totalItems items)'),
         ),
@@ -178,6 +170,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ),
       );
     }
+=======
+        const SnackBar(content: Text('This variant is out of stock')),
+      );
+      return;
+    }
+
+    // Sau này nối Cart API:
+    // POST /api/cart/items
+    // body: { "variantId": selectedVariant!.variantId, "quantity": 1 }
+>>>>>>> origin/develop
   }
 
   @override
@@ -187,9 +189,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
+            body: Center(child: CircularProgressIndicator()),
           );
         }
 
@@ -210,12 +210,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         final displayPrice = selectedVariant?.price ?? product.basePrice;
 
         return Scaffold(
+<<<<<<< HEAD
           appBar: AppBar(
             title: Text(product.productName),
             actions: const [
               CartWishlistBadges(),
             ],
           ),
+=======
+          appBar: AppBar(title: Text(product.productName)),
+>>>>>>> origin/develop
           body: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -269,10 +273,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   padding: EdgeInsets.symmetric(horizontal: 16),
                   child: Text(
                     'Select Size & Color',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                 ),
 
@@ -286,9 +287,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Text(
                       'Stock: ${selectedVariant!.stockQuantity}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w500,
-                      ),
+                      style: const TextStyle(fontWeight: FontWeight.w500),
                     ),
                   ),
 
@@ -298,10 +297,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   padding: EdgeInsets.symmetric(horizontal: 16),
                   child: Text(
                     'Description',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                 ),
 

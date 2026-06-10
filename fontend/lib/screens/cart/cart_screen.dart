@@ -10,7 +10,12 @@ import '../../widgets/cart_wishlist_badges.dart';
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
 
+  void _goToCheckout(BuildContext context) {
+    Navigator.pushNamed(context, '/checkout');
+  }
+
   @override
+<<<<<<< HEAD
   State<CartScreen> createState() => _CartScreenState();
 }
 
@@ -207,10 +212,33 @@ class _CartScreenState extends State<CartScreen> {
               icon: const Icon(Icons.delete_outline, color: Colors.red),
             ),
           ],
+=======
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Cart')),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Cart Screen'),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => _goToCheckout(context),
+                  child: const Text('Checkout'),
+                ),
+              ),
+            ],
+          ),
+>>>>>>> origin/develop
         ),
       ),
     );
   }
+<<<<<<< HEAD
 
   @override
   Widget build(BuildContext context) {
@@ -329,4 +357,6 @@ class _CartScreenState extends State<CartScreen> {
       ),
     );
   }
+=======
+>>>>>>> origin/develop
 }

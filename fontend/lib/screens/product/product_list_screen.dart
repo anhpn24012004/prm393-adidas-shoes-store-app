@@ -86,9 +86,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const SizedBox(
             height: 48,
-            child: Center(
-              child: CircularProgressIndicator(),
-            ),
+            child: Center(child: CircularProgressIndicator()),
           );
         }
 
@@ -135,9 +133,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
     if (imageUrl == null || imageUrl.isEmpty) {
       return Container(
         color: Colors.grey.shade200,
-        child: const Center(
-          child: Icon(Icons.image, size: 48),
-        ),
+        child: const Center(child: Icon(Icons.image, size: 48)),
       );
     }
 
@@ -148,9 +144,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
       errorBuilder: (context, error, stackTrace) {
         return Container(
           color: Colors.grey.shade200,
-          child: const Center(
-            child: Icon(Icons.broken_image, size: 48),
-          ),
+          child: const Center(child: Icon(Icons.broken_image, size: 48)),
         );
       },
     );
@@ -165,18 +159,14 @@ class _ProductListScreenState extends State<ProductListScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: _buildProductImage(product.mainImageUrl),
-            ),
+            Expanded(child: _buildProductImage(product.mainImageUrl)),
             Padding(
               padding: const EdgeInsets.all(8),
               child: Text(
                 product.productName,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
             Padding(
@@ -195,10 +185,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
                 product.categoryName ?? 'No category',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: Colors.grey.shade600,
-                  fontSize: 12,
-                ),
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
               ),
             ),
           ],
@@ -212,9 +199,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
       future: _productsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
+          return const Center(child: CircularProgressIndicator());
         }
 
         if (snapshot.hasError) {
@@ -229,9 +214,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
         final products = snapshot.data ?? [];
 
         if (products.isEmpty) {
-          return const Center(
-            child: Text('No products found'),
-          );
+          return const Center(child: Text('No products found'));
         }
 
         return GridView.builder(
@@ -256,8 +239,27 @@ class _ProductListScreenState extends State<ProductListScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Adidas Products'),
+<<<<<<< HEAD
         actions: const [
           CartWishlistBadges(),
+=======
+        actions: [
+          IconButton(
+            tooltip: 'Cart',
+            icon: const Icon(Icons.shopping_cart),
+            onPressed: () => Navigator.pushNamed(context, '/cart'),
+          ),
+          IconButton(
+            tooltip: 'My Orders',
+            icon: const Icon(Icons.receipt_long),
+            onPressed: () => Navigator.pushNamed(context, '/orders'),
+          ),
+          IconButton(
+            tooltip: 'Profile',
+            icon: const Icon(Icons.person),
+            onPressed: () => Navigator.pushNamed(context, '/profile'),
+          ),
+>>>>>>> origin/develop
         ],
       ),
       body: Column(
@@ -281,9 +283,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
             ),
           ),
           _buildCategoryFilter(),
-          Expanded(
-            child: _buildBody(),
-          ),
+          Expanded(child: _buildBody()),
         ],
       ),
     );
