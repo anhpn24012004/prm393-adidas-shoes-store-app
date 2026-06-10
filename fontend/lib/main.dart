@@ -17,10 +17,14 @@ import 'screens/category/category_list_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/admin/admin_product_list_screen.dart';
 import 'screens/admin/admin_category_list_screen.dart';
+<<<<<<< HEAD
+import 'screens/review/create_review_screen.dart';
+=======
 import 'screens/admin/admin_shipment_list_screen.dart';
 import 'screens/admin/admin_shipment_detail_screen.dart';
 import 'screens/admin/admin_shipment_form_screen.dart';
 
+>>>>>>> origin/develop
 void main() {
   runApp(const AdidasShoesStoreApp());
 }
@@ -33,7 +37,7 @@ class AdidasShoesStoreApp extends StatelessWidget {
     return MaterialApp(
       title: 'Adidas Shoes Store',
       debugShowCheckedModeBanner: false,
-      initialRoute: '/products',
+      initialRoute: '/create-review',
       routes: {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
@@ -57,11 +61,15 @@ class AdidasShoesStoreApp extends StatelessWidget {
         '/profile': (context) => const ProfileScreen(),
         '/admin/products': (context) => const AdminProductListScreen(),
         '/admin/categories': (context) => const AdminCategoryListScreen(),
+<<<<<<< HEAD
+        '/create-review': (context) => const CreateReviewScreen(),
+=======
         '/admin/shipments': (context) => const AdminShipmentListScreen(),
         '/admin/shipments/detail': (context) =>
             const AdminShipmentDetailScreen(),
         '/admin/shipments/create': (context) =>
             const AdminShipmentFormScreen(createMode: true),
+>>>>>>> origin/develop
       },
     );
   }
