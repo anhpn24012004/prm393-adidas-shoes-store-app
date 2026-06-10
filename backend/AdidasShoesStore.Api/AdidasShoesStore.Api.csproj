@@ -30,14 +30,17 @@
 
   <ItemGroup>
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
     <Folder Include="Common\" />
     <Folder Include="DTOs\AI\" />
     <Folder Include="DTOs\AIRecommend\" />
+>>>>>>> origin/develop
 =======
 
+>>>>>>> origin/develop
     <Folder Include="Common\" />
     <Folder Include="DTOs\AI\" />
-    <Folder Include="DTOs\Carts\" />
     <Folder Include="DTOs\Categories\" />
     <Folder Include="DTOs\Orders\" />
     <Folder Include="DTOs\Payments\" />
@@ -50,11 +53,17 @@
     <Folder Include="Middleware\" />
 >>>>>>> origin/develop
     <Folder Include="DTOs\Auth\" />
+<<<<<<< HEAD
+    <Folder Include="DTOs\Categories\" />
+    <Folder Include="DTOs\AI\" />
+    <Folder Include="DTOs\Reviews\" />
+=======
     <Folder Include="DTOs\Carts\" />
     <Folder Include="DTOs\Categories\" />
     <Folder Include="DTOs\Orders\" />
     <Folder Include="DTOs\Payments\" />
     <Folder Include="DTOs\Products\" />
+>>>>>>> origin/develop
     <Folder Include="DTOs\Refunds\" />
     <Folder Include="DTOs\Returns\" />
     <Folder Include="DTOs\Reviews\" />

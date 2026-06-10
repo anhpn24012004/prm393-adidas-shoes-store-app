@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../config/app_config.dart';
 import '../../models/product_detail_model.dart';
+import '../../providers/badge_notifier.dart';
 import '../../services/product_service.dart';
+import '../../services/cart_service.dart';
+import '../../services/wishlist_service.dart';
+import '../../widgets/cart_wishlist_badges.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final int productId;
@@ -14,15 +19,20 @@ class ProductDetailScreen extends StatefulWidget {
 
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   final ProductService _productService = ProductService();
+  final CartService _cartService = CartService();
+  final WishlistService _wishlistService = WishlistService();
 
   late Future<ProductDetailModel> _productFuture;
 
   ProductVariantModel? selectedVariant;
 
+  bool _isLoading = false;
+
   @override
   void initState() {
     super.initState();
     _productFuture = _productService.getProductById(widget.productId);
+    BadgeNotifier.instance.refreshCounts();
   }
 
   String formatPrice(double price) {
@@ -93,7 +103,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  void _addToCart() {
+  Future<void> _addToCart() async {
     if (selectedVariant == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select size and color')),
@@ -101,8 +111,66 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       return;
     }
 
-    if (selectedVariant!.stockQuantity <= 0) {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      final totalItems = await _cartService.addToCart(
+        userId: AppConfig.currentUserId,
+        variantId: selectedVariant!.variantId,
+        quantity: 1,
+      );
+
+      BadgeNotifier.instance.setCartCount(totalItems);
+
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
+<<<<<<< HEAD
+        SnackBar(
+          content: Text('Added to cart ($totalItems items)'),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _addToWishlist() async {
+    try {
+      final totalItems = await _wishlistService.addWishlist(
+        userId: AppConfig.currentUserId,
+        productId: widget.productId,
+      );
+
+      BadgeNotifier.instance.setWishlistCount(totalItems);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Added to wishlist ($totalItems items)'),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+        ),
+      );
+    }
+=======
         const SnackBar(content: Text('This variant is out of stock')),
       );
       return;
@@ -111,6 +179,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     // Sau này nối Cart API:
     // POST /api/cart/items
     // body: { "variantId": selectedVariant!.variantId, "quantity": 1 }
+>>>>>>> origin/develop
   }
 
   @override
@@ -141,7 +210,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         final displayPrice = selectedVariant?.price ?? product.basePrice;
 
         return Scaffold(
+<<<<<<< HEAD
+          appBar: AppBar(
+            title: Text(product.productName),
+            actions: const [
+              CartWishlistBadges(),
+            ],
+          ),
+=======
           appBar: AppBar(title: Text(product.productName)),
+>>>>>>> origin/develop
           body: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -230,13 +308,32 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
                 Padding(
                   padding: const EdgeInsets.all(16),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: _addToCart,
-                      child: const Text('Add to Cart'),
-                    ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 48,
+                          child: OutlinedButton.icon(
+                            onPressed: _addToWishlist,
+                            icon: const Icon(Icons.favorite_border),
+                            label: const Text('Wishlist'),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: SizedBox(
+                          height: 48,
+                          child: ElevatedButton.icon(
+                            onPressed: _isLoading ? null : _addToCart,
+                            icon: const Icon(Icons.shopping_cart),
+                            label: Text(
+                              _isLoading ? 'Adding...' : 'Add To Cart',
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],

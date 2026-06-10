@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../models/product_model.dart';
 import '../../models/category_model.dart';
+import '../../providers/badge_notifier.dart';
 import '../../services/product_service.dart';
 import '../../services/category_service.dart';
+import '../../widgets/cart_wishlist_badges.dart';
 import 'product_detail_screen.dart';
 
 class ProductListScreen extends StatefulWidget {
@@ -28,6 +30,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
     super.initState();
     _productsFuture = _productService.getProducts();
     _categoriesFuture = _categoryService.getCategories();
+    BadgeNotifier.instance.refreshCounts();
   }
 
   @override
@@ -236,6 +239,10 @@ class _ProductListScreenState extends State<ProductListScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Adidas Products'),
+<<<<<<< HEAD
+        actions: const [
+          CartWishlistBadges(),
+=======
         actions: [
           IconButton(
             tooltip: 'Cart',
@@ -252,6 +259,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
             icon: const Icon(Icons.person),
             onPressed: () => Navigator.pushNamed(context, '/profile'),
           ),
+>>>>>>> origin/develop
         ],
       ),
       body: Column(

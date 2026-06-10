@@ -1,11 +1,17 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+import '../config/app_config.dart';
 import '../models/product_model.dart';
 import '../models/product_detail_model.dart';
 import 'api_client.dart';
 
 class ProductService {
+<<<<<<< HEAD
+  String get baseUrl => AppConfig.apiBaseUrl;
+
+=======
+>>>>>>> origin/develop
   // =========================
   // PRODUCT USER API
   // =========================
