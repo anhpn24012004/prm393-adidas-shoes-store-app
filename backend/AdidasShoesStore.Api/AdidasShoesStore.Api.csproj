@@ -7,6 +7,21 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="DTOs\AI\**" />
+    <Compile Remove="DTOs\Orders\**" />
+    <Compile Remove="DTOs\Payments\**" />
+    <Content Remove="DTOs\AI\**" />
+    <Content Remove="DTOs\Orders\**" />
+    <Content Remove="DTOs\Payments\**" />
+    <EmbeddedResource Remove="DTOs\AI\**" />
+    <EmbeddedResource Remove="DTOs\Orders\**" />
+    <EmbeddedResource Remove="DTOs\Payments\**" />
+    <None Remove="DTOs\AI\**" />
+    <None Remove="DTOs\Orders\**" />
+    <None Remove="DTOs\Payments\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.26" />
@@ -30,10 +45,7 @@
 
   <ItemGroup>
     <Folder Include="Common\" />
-    <Folder Include="DTOs\AI\" />
     <Folder Include="DTOs\Categories\" />
-    <Folder Include="DTOs\Orders\" />
-    <Folder Include="DTOs\Payments\" />
     <Folder Include="DTOs\Products\" />
     <Folder Include="DTOs\Refunds\" />
     <Folder Include="DTOs\Returns\" />
@@ -43,12 +55,9 @@
     <Folder Include="Middleware\" />
     <Folder Include="DTOs\Auth\" />
     <Folder Include="DTOs\Categories\" />
-    <Folder Include="DTOs\AI\" />
     <Folder Include="DTOs\Reviews\" />
     <Folder Include="DTOs\Carts\" />
     <Folder Include="DTOs\Categories\" />
-    <Folder Include="DTOs\Orders\" />
-    <Folder Include="DTOs\Payments\" />
     <Folder Include="DTOs\Products\" />
     <Folder Include="DTOs\Refunds\" />
     <Folder Include="DTOs\Returns\" />
