@@ -50,10 +50,7 @@ class _BadgeIconButton extends StatelessWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        IconButton(
-          icon: Icon(icon),
-          onPressed: onPressed,
-        ),
+        IconButton(icon: Icon(icon), onPressed: onPressed),
         if (count > 0)
           Positioned(
             right: 6,
@@ -64,10 +61,7 @@ class _BadgeIconButton extends StatelessWidget {
                 color: Colors.red,
                 borderRadius: BorderRadius.circular(10),
               ),
-              constraints: const BoxConstraints(
-                minWidth: 18,
-                minHeight: 18,
-              ),
+              constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
               child: Text(
                 count > 99 ? '99+' : '$count',
                 textAlign: TextAlign.center,

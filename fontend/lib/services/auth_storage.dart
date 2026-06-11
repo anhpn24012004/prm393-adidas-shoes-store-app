@@ -24,7 +24,48 @@ class AuthStorage {
     return null;
   }
 
+  Future<void> saveSession({
+    required String token,
+    required int userId,
+    required String fullName,
+    required String email,
+    required String role,
+  }) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString('token', token);
+    await preferences.setInt('userId', userId);
+    await preferences.setString('fullName', fullName);
+    await preferences.setString('email', email);
+    await preferences.setString('role', role);
+  }
+
+  Future<int?> getUserId() async {
+    final preferences = await SharedPreferences.getInstance();
+    return preferences.getInt('userId');
+  }
+
+  Future<String?> getFullName() async {
+    final preferences = await SharedPreferences.getInstance();
+    return preferences.getString('fullName');
+  }
+
+  Future<String?> getEmail() async {
+    final preferences = await SharedPreferences.getInstance();
+    return preferences.getString('email');
+  }
+
+  Future<void> clear() async {
+    final preferences = await SharedPreferences.getInstance();
+    for (final key in [..._tokenKeys, 'userId', 'fullName', 'email', 'role']) {
+      await preferences.remove(key);
+    }
+  }
+
   Future<String?> getRole() async {
+    final preferences = await SharedPreferences.getInstance();
+    final savedRole = preferences.getString('role');
+    if (savedRole != null && savedRole.isNotEmpty) return savedRole;
+
     final token = await getToken();
 
     if (token == null) {

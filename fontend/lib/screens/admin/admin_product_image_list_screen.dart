@@ -8,10 +8,7 @@ import 'admin_product_image_form_screen.dart';
 class AdminProductImageListScreen extends StatefulWidget {
   final ProductModel product;
 
-  const AdminProductImageListScreen({
-    super.key,
-    required this.product,
-  });
+  const AdminProductImageListScreen({super.key, required this.product});
 
   @override
   State<AdminProductImageListScreen> createState() =>
@@ -31,16 +28,17 @@ class _AdminProductImageListScreenState
   }
 
   void _loadImages() {
-    _imagesFuture = _productService.getImagesByProduct(widget.product.productId);
+    _imagesFuture = _productService.getImagesByProduct(
+      widget.product.productId,
+    );
   }
 
   Future<void> _goToCreate() async {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => AdminProductImageFormScreen(
-          productId: widget.product.productId,
-        ),
+        builder: (_) =>
+            AdminProductImageFormScreen(productId: widget.product.productId),
       ),
     );
 
@@ -98,9 +96,7 @@ class _AdminProductImageListScreenState
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Image deleted successfully'),
-        ),
+        const SnackBar(content: Text('Image deleted successfully')),
       );
 
       setState(() {
@@ -109,11 +105,9 @@ class _AdminProductImageListScreenState
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
@@ -186,9 +180,7 @@ class _AdminProductImageListScreenState
       future: _imagesFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
+          return const Center(child: CircularProgressIndicator());
         }
 
         if (snapshot.hasError) {
@@ -203,9 +195,7 @@ class _AdminProductImageListScreenState
         final images = snapshot.data ?? [];
 
         if (images.isEmpty) {
-          return const Center(
-            child: Text('No images found'),
-          );
+          return const Center(child: Text('No images found'));
         }
 
         return RefreshIndicator(
@@ -229,9 +219,7 @@ class _AdminProductImageListScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Images - ${widget.product.productName}'),
-      ),
+      appBar: AppBar(title: Text('Images - ${widget.product.productName}')),
       body: _buildBody(),
       floatingActionButton: FloatingActionButton(
         onPressed: _goToCreate,

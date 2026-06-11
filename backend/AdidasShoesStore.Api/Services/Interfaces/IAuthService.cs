@@ -1,11 +1,18 @@
 ﻿using AdidasShoesStore.Api.DTOs.Auth;
-using System.Threading.Tasks;
 
-namespace AdidasShoesStore.Api.Services.Interfaces
+namespace AdidasShoesStore.Api.Services.Interfaces;
+
+public interface IAuthService
 {
-    public interface IAuthService
-    {
-        Task<AuthResponseDto?> RegisterAsync(RegisterRequestDto request);
-        Task<AuthResponseDto?> LoginAsync(LoginRequestDto request);
-    }
+    Task<AuthResponseDto?> RegisterAsync(RegisterRequestDto request);
+
+    Task<AuthResponseDto?> LoginAsync(LoginRequestDto request);
+
+    Task<AuthResponseDto?> GoogleLoginAsync(GoogleLoginRequestDto request);
+
+    Task<bool> ChangePasswordAsync(int userId, ChangePasswordDto request);
+
+    Task<bool> ForgotPasswordAsync(string email);
+
+    Task<bool> ResetPasswordAsync(ResetPasswordDto request);
 }

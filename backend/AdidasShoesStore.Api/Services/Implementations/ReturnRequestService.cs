@@ -15,6 +15,23 @@ public class ReturnRequestService : IReturnRequestService
         _context = context;
     }
 
+    public async Task<List<ReturnRequestDto>> GetAllAsync()
+    {
+        return await _context.ReturnRequests
+            .OrderByDescending(r => r.RequestedAt)
+            .Select(r => new ReturnRequestDto
+            {
+                ReturnRequestId = r.ReturnRequestId,
+                OrderId = r.OrderId,
+                UserId = r.UserId,
+                Reason = r.Reason,
+                Status = r.Status,
+                RequestedAt = r.RequestedAt,
+                AdminNote = r.AdminNote
+            })
+            .ToListAsync();
+    }
+
     public async Task<List<ReturnRequestDto>> GetByUserIdAsync(int userId)
     {
         return await _context.ReturnRequests

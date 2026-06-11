@@ -55,8 +55,14 @@ public partial class AdidasShoesStoreContext : DbContext
     public virtual DbSet<Wishlist> Wishlists { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-        => optionsBuilder.UseSqlServer("Server=.;Database=AdidasShoesStore;Trusted_Connection=True;TrustServerCertificate=True;");
+    {
+        if (!optionsBuilder.IsConfigured)
+        {
+            optionsBuilder.UseSqlServer(
+                "Server=localhost;Database=AdidasShoesStore;Trusted_Connection=True;TrustServerCertificate=True;"
+            );
+        }
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -362,6 +368,8 @@ public partial class AdidasShoesStoreContext : DbContext
             entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.PasswordHash).HasMaxLength(255);
             entity.Property(e => e.Phone).HasMaxLength(20);
+            entity.Property(e => e.ResetPasswordOtp).HasMaxLength(6);
+            entity.Property(e => e.ResetPasswordOtpExpiredAt).HasColumnType("datetime");
             entity.Property(e => e.ResetPasswordToken).HasMaxLength(255);
             entity.Property(e => e.ResetPasswordTokenExpires).HasColumnType("datetime");
 

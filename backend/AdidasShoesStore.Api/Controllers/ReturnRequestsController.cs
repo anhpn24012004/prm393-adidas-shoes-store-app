@@ -1,6 +1,7 @@
 using AdidasShoesStore.Api.DTOs.Returns;
 using AdidasShoesStore.Api.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 
 namespace AdidasShoesStore.Api.Controllers;
 
@@ -13,6 +14,14 @@ public class ReturnRequestsController : ControllerBase
     public ReturnRequestsController(IReturnRequestService returnRequestService)
     {
         _returnRequestService = returnRequestService;
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpGet]
+    public async Task<IActionResult> GetAll()
+    {
+        var result = await _returnRequestService.GetAllAsync();
+        return Ok(result);
     }
 
     [HttpGet("user/{userId}")]

@@ -14,9 +14,7 @@ class CartService {
   }) async {
     final response = await http.post(
       Uri.parse(baseUrl),
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'userId': userId,
         'variantId': variantId,
@@ -33,9 +31,7 @@ class CartService {
   }
 
   Future<CartModel> getCart(int userId) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/user/$userId'),
-    );
+    final response = await http.get(Uri.parse('$baseUrl/user/$userId'));
 
     if (response.statusCode != 200) {
       throw Exception(response.body);
@@ -45,9 +41,7 @@ class CartService {
   }
 
   Future<int> getCartCount(int userId) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/user/$userId/count'),
-    );
+    final response = await http.get(Uri.parse('$baseUrl/user/$userId/count'));
 
     if (response.statusCode != 200) {
       throw Exception(response.body);
@@ -60,12 +54,8 @@ class CartService {
   Future<int> updateQuantity(int cartItemId, int quantity) async {
     final response = await http.put(
       Uri.parse('$baseUrl/item/$cartItemId'),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({
-        'quantity': quantity,
-      }),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'quantity': quantity}),
     );
 
     if (response.statusCode != 200) {
@@ -77,9 +67,7 @@ class CartService {
   }
 
   Future<int> deleteItem(int cartItemId) async {
-    final response = await http.delete(
-      Uri.parse('$baseUrl/item/$cartItemId'),
-    );
+    final response = await http.delete(Uri.parse('$baseUrl/item/$cartItemId'));
 
     if (response.statusCode != 200 && response.statusCode != 204) {
       throw Exception(response.body);
@@ -94,9 +82,7 @@ class CartService {
   }
 
   Future<int> clearCart(int userId) async {
-    final response = await http.delete(
-      Uri.parse('$baseUrl/user/$userId'),
-    );
+    final response = await http.delete(Uri.parse('$baseUrl/user/$userId'));
 
     if (response.statusCode != 200 && response.statusCode != 204) {
       throw Exception(response.body);

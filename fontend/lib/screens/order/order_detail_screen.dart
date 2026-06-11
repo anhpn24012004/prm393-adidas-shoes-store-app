@@ -293,6 +293,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             icon: const Icon(Icons.refresh),
             label: const Text('Refresh Payment Status'),
           ),
+          if (order.status == 'Delivered' || order.status == 'Completed') ...[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => Navigator.pushNamed(
+                context,
+                '/refund-request',
+                arguments: order.orderId,
+              ),
+              icon: const Icon(Icons.assignment_return_outlined),
+              label: const Text('Request Return'),
+            ),
+          ],
           if (canCancel) ...[
             const SizedBox(height: 8),
             ElevatedButton.icon(

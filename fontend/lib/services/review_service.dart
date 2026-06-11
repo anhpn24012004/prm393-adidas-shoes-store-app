@@ -1,18 +1,15 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/review_model.dart';
+import 'api_client.dart';
 
 class ReviewService {
-  static const String baseUrl = 'http://localhost:5209';
-
   Future<ReviewResponse> createReview(CreateReviewRequest request) async {
-    final url = Uri.parse('$baseUrl/api/Reviews');
+    final url = Uri.parse('${ApiClient.baseUrl}/reviews');
 
     final response = await http.post(
       url,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode(request.toJson()),
     );
 
@@ -24,7 +21,7 @@ class ReviewService {
   }
 
   Future<List<ReviewResponse>> getReviewsByProductId(int productId) async {
-    final url = Uri.parse('$baseUrl/api/Reviews/product/$productId');
+    final url = Uri.parse('${ApiClient.baseUrl}/reviews/product/$productId');
 
     final response = await http.get(url);
 

@@ -7,19 +7,11 @@ import '../models/wishlist_model.dart';
 class WishlistService {
   final String baseUrl = '${AppConfig.apiBaseUrl}/wishlist';
 
-  Future<int> addWishlist({
-    required int userId,
-    required int productId,
-  }) async {
+  Future<int> addWishlist({required int userId, required int productId}) async {
     final response = await http.post(
       Uri.parse(baseUrl),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({
-        'userId': userId,
-        'productId': productId,
-      }),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'userId': userId, 'productId': productId}),
     );
 
     if (response.statusCode != 200 && response.statusCode != 201) {
@@ -31,9 +23,7 @@ class WishlistService {
   }
 
   Future<List<WishlistModel>> getWishlist(int userId) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/user/$userId'),
-    );
+    final response = await http.get(Uri.parse('$baseUrl/user/$userId'));
 
     if (response.statusCode != 200) {
       throw Exception(response.body);
@@ -44,9 +34,7 @@ class WishlistService {
   }
 
   Future<int> getWishlistCount(int userId) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/user/$userId/count'),
-    );
+    final response = await http.get(Uri.parse('$baseUrl/user/$userId/count'));
 
     if (response.statusCode != 200) {
       throw Exception(response.body);
@@ -57,9 +45,7 @@ class WishlistService {
   }
 
   Future<int> deleteWishlist(int wishlistId) async {
-    final response = await http.delete(
-      Uri.parse('$baseUrl/$wishlistId'),
-    );
+    final response = await http.delete(Uri.parse('$baseUrl/$wishlistId'));
 
     if (response.statusCode != 200 && response.statusCode != 204) {
       throw Exception(response.body);
@@ -74,9 +60,7 @@ class WishlistService {
   }
 
   Future<int> clearWishlist(int userId) async {
-    final response = await http.delete(
-      Uri.parse('$baseUrl/user/$userId'),
-    );
+    final response = await http.delete(Uri.parse('$baseUrl/user/$userId'));
 
     if (response.statusCode != 200 && response.statusCode != 204) {
       throw Exception(response.body);

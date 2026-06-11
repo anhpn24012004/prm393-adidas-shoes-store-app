@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../models/address_model.dart';
 import '../../models/order_model.dart';
+import '../../localization/app_localization.dart';
+import '../../services/address_service.dart';
 import '../../services/order_service.dart';
 
 class CheckoutScreen extends StatefulWidget {
@@ -13,25 +16,30 @@ class CheckoutScreen extends StatefulWidget {
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
   final OrderService _orderService = OrderService();
-  final TextEditingController _addressIdController = TextEditingController();
+  final AddressService _addressService = AddressService();
   final TextEditingController _noteController = TextEditingController();
 
+  late Future<List<UserAddress>> _addresses;
+  int? _selectedAddressId;
   String _paymentMethod = 'COD';
   bool _isSubmitting = false;
 
   @override
+  void initState() {
+    super.initState();
+    _addresses = _addressService.getAddresses();
+  }
+
+  @override
   void dispose() {
-    _addressIdController.dispose();
     _noteController.dispose();
     super.dispose();
   }
 
   Future<void> _placeOrder() async {
-    final addressId = int.tryParse(_addressIdController.text.trim());
-
-    if (addressId == null || addressId <= 0) {
+    if (_selectedAddressId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid address ID')),
+        SnackBar(content: Text(context.tr('selectShippingAddress'))),
       );
       return;
     }
@@ -42,7 +50,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     try {
       final order = await _orderService.createOrder(
-        addressId: addressId,
+        addressId: _selectedAddressId!,
         paymentMethod: _paymentMethod,
         note: _noteController.text.trim().isEmpty
             ? null
@@ -57,7 +65,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Order created successfully')),
+        SnackBar(content: Text(context.tr('orderCreated'))),
       );
 
       Navigator.pushReplacementNamed(
@@ -78,13 +86,95 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
+  Widget _buildAddressSelector() {
+    return FutureBuilder<List<UserAddress>>(
+      future: _addresses,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                snapshot.error.toString().replaceFirst('Exception: ', ''),
+              ),
+              TextButton(
+                onPressed: () => setState(() {
+                  _addresses = _addressService.getAddresses();
+                }),
+                child: Text(context.tr('retry').toUpperCase()),
+              ),
+            ],
+          );
+        }
+
+        final addresses = snapshot.data ?? [];
+        if (addresses.isEmpty) {
+          return OutlinedButton.icon(
+            onPressed: () async {
+              await Navigator.pushNamed(context, '/address-form');
+              if (mounted) {
+                setState(() {
+                  _addresses = _addressService.getAddresses();
+                });
+              }
+            },
+            icon: const Icon(Icons.add_location_alt_outlined),
+            label: Text(context.tr('addShippingAddress').toUpperCase()),
+          );
+        }
+
+        _selectedAddressId ??= addresses
+            .where((address) => address.isDefault)
+            .map((address) => address.addressId)
+            .firstOrNull;
+        _selectedAddressId ??= addresses.first.addressId;
+
+        return Column(
+          children: addresses.map((address) {
+            return RadioListTile<int>(
+              contentPadding: EdgeInsets.zero,
+              value: address.addressId,
+              groupValue: _selectedAddressId,
+              onChanged: _isSubmitting
+                  ? null
+                  : (value) => setState(() => _selectedAddressId = value),
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      address.receiverName,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  if (address.isDefault)
+                    Text(
+                      context.tr('defaultLabel').toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                ],
+              ),
+              subtitle: Text('${address.phone}\n${address.formattedAddress}'),
+              isThreeLine: true,
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
   Future<void> _handleVnPay(OrderDetail order) async {
     try {
       final response = await _orderService.createVnPayPayment(order.orderId);
       final uri = Uri.tryParse(response.paymentUrl);
 
       if (uri == null || response.paymentUrl.isEmpty) {
-        _showError('VNPay integration is not available yet');
+        _showError(context.tr('vnpayUnavailable'));
         return;
       }
 
@@ -93,7 +183,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       if (!mounted) return;
 
       if (!opened) {
-        _showError('Could not open VNPay payment page');
+        _showError(context.tr('cannotOpenVnpay'));
         return;
       }
 
@@ -144,9 +234,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Payment Method',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        Text(
+          context.tr('paymentMethod'),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         paymentOption('COD', 'COD'),
         paymentOption('VNPAY', 'VNPAY'),
@@ -157,27 +247,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Checkout')),
+      appBar: AppBar(title: Text(context.tr('checkout'))),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Shipping Address',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            Text(
+              context.tr('shippingAddress'),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            TextField(
-              controller: _addressIdController,
-              keyboardType: TextInputType.number,
-              enabled: !_isSubmitting,
-              decoration: const InputDecoration(
-                labelText: 'Address ID',
-                helperText: 'Temporary field until address UI is available',
-                border: OutlineInputBorder(),
-              ),
-            ),
+            _buildAddressSelector(),
             const SizedBox(height: 20),
             _buildPaymentMethod(),
             const SizedBox(height: 16),
@@ -185,9 +266,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               controller: _noteController,
               enabled: !_isSubmitting,
               maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Note',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: context.tr('note'),
+                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 24),
@@ -202,7 +283,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text('Place Order'),
+                    : Text(context.tr('placeOrder')),
               ),
             ),
           ],

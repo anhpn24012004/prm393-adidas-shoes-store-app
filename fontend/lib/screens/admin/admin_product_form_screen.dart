@@ -8,10 +8,7 @@ import '../../services/product_service.dart';
 class AdminProductFormScreen extends StatefulWidget {
   final ProductModel? product;
 
-  const AdminProductFormScreen({
-    super.key,
-    this.product,
-  });
+  const AdminProductFormScreen({super.key, this.product});
 
   @override
   State<AdminProductFormScreen> createState() => _AdminProductFormScreenState();
@@ -74,9 +71,9 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     if (_selectedCategoryId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select category')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please select category')));
       return;
     }
 
@@ -132,9 +129,9 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
       if (mounted) {
         setState(() {
@@ -226,9 +223,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
     final title = isEditMode ? 'Edit Product' : 'Create Product';
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-      ),
+      appBar: AppBar(title: Text(title)),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Center(
@@ -263,10 +258,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                   _buildCategoryDropdown(),
                   const SizedBox(height: 16),
 
-                  _buildTextField(
-                    controller: _brandController,
-                    label: 'Brand',
-                  ),
+                  _buildTextField(controller: _brandController, label: 'Brand'),
                   const SizedBox(height: 16),
 
                   _buildTextField(
@@ -301,7 +293,9 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                       onPressed: _isSubmitting ? null : _submit,
                       child: _isSubmitting
                           ? const CircularProgressIndicator()
-                          : Text(isEditMode ? 'Update Product' : 'Create Product'),
+                          : Text(
+                              isEditMode ? 'Update Product' : 'Create Product',
+                            ),
                     ),
                   ),
                 ],

@@ -6,10 +6,7 @@ import '../../services/category_service.dart';
 class AdminCategoryFormScreen extends StatefulWidget {
   final CategoryModel? category;
 
-  const AdminCategoryFormScreen({
-    super.key,
-    this.category,
-  });
+  const AdminCategoryFormScreen({super.key, this.category});
 
   @override
   State<AdminCategoryFormScreen> createState() =>
@@ -21,8 +18,7 @@ class _AdminCategoryFormScreenState extends State<AdminCategoryFormScreen> {
 
   final CategoryService _categoryService = CategoryService();
 
-  final TextEditingController _categoryNameController =
-  TextEditingController();
+  final TextEditingController _categoryNameController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
 
   bool _isSubmitting = false;
@@ -88,11 +84,9 @@ class _AdminCategoryFormScreenState extends State<AdminCategoryFormScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
       if (mounted) {
         setState(() {
@@ -107,9 +101,7 @@ class _AdminCategoryFormScreenState extends State<AdminCategoryFormScreen> {
     final title = isEditMode ? 'Edit Category' : 'Create Category';
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-      ),
+      appBar: AppBar(title: Text(title)),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Center(
@@ -163,7 +155,11 @@ class _AdminCategoryFormScreenState extends State<AdminCategoryFormScreen> {
                       onPressed: _isSubmitting ? null : _submit,
                       child: _isSubmitting
                           ? const CircularProgressIndicator()
-                          : Text(isEditMode ? 'Update Category' : 'Create Category'),
+                          : Text(
+                              isEditMode
+                                  ? 'Update Category'
+                                  : 'Create Category',
+                            ),
                     ),
                   ),
                 ],

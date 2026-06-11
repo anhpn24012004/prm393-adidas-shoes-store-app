@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/category_model.dart';
 import '../../models/product_model.dart';
+import '../../localization/app_localization.dart';
 import '../../services/category_service.dart';
 import '../../services/product_service.dart';
 import '../product/product_detail_screen.dart';
@@ -38,7 +39,9 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
     setState(() {
       selectedCategoryId = category.categoryId;
       selectedCategoryName = category.categoryName;
-      _productsFuture = _productService.getProductsByCategory(category.categoryId);
+      _productsFuture = _productService.getProductsByCategory(
+        category.categoryId,
+      );
     });
   }
 
@@ -82,16 +85,14 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
       future: _categoriesFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
+          return const Center(child: CircularProgressIndicator());
         }
 
         if (snapshot.hasError) {
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Text('Error: ${snapshot.error}'),
+              child: Text('${context.tr('error')}: ${snapshot.error}'),
             ),
           );
         }
@@ -99,9 +100,7 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
         final categories = snapshot.data ?? [];
 
         if (categories.isEmpty) {
-          return const Center(
-            child: Text('No categories found'),
-          );
+          return Center(child: Text(context.tr('noCategories')));
         }
 
         return ListView.builder(
@@ -122,7 +121,7 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
                   ),
                 ),
                 subtitle: Text(
-                  category.description ?? 'No description',
+                  category.description ?? context.tr('noDescription'),
                   style: TextStyle(
                     color: isSelected ? Colors.white70 : Colors.grey.shade700,
                   ),
@@ -145,25 +144,21 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
 
   Widget _buildProductsByCategory() {
     if (_productsFuture == null) {
-      return const Center(
-        child: Text('Select a category to view products'),
-      );
+      return Center(child: Text(context.tr('selectCategory')));
     }
 
     return FutureBuilder<List<ProductModel>>(
       future: _productsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
+          return const Center(child: CircularProgressIndicator());
         }
 
         if (snapshot.hasError) {
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Text('Error: ${snapshot.error}'),
+              child: Text('${context.tr('error')}: ${snapshot.error}'),
             ),
           );
         }
@@ -172,7 +167,7 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
 
         if (products.isEmpty) {
           return Center(
-            child: Text('No products in $selectedCategoryName'),
+            child: Text('${context.tr('noProductsIn')} $selectedCategoryName'),
           );
         }
 
@@ -211,64 +206,52 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
     final isWideScreen = MediaQuery.of(context).size.width >= 700;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Categories'),
-      ),
+      appBar: AppBar(title: Text(context.tr('categories').toUpperCase())),
       body: isWideScreen
           ? Row(
-        children: [
-          SizedBox(
-            width: 320,
-            child: _buildCategoryList(),
-          ),
-          const VerticalDivider(width: 1),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                SizedBox(width: 320, child: _buildCategoryList()),
+                const VerticalDivider(width: 1),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          selectedCategoryName,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      Expanded(child: _buildProductsByCategory()),
+                    ],
+                  ),
+                ),
+              ],
+            )
+          : Column(
+              children: [
+                SizedBox(height: 260, child: _buildCategoryList()),
+                const Divider(height: 1),
                 Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    selectedCategoryName,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
+                  padding: const EdgeInsets.all(12),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      selectedCategoryName,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),
-                Expanded(
-                  child: _buildProductsByCategory(),
-                ),
+                Expanded(child: _buildProductsByCategory()),
               ],
             ),
-          ),
-        ],
-      )
-          : Column(
-        children: [
-          SizedBox(
-            height: 260,
-            child: _buildCategoryList(),
-          ),
-          const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                selectedCategoryName,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            child: _buildProductsByCategory(),
-          ),
-        ],
-      ),
     );
   }
 }

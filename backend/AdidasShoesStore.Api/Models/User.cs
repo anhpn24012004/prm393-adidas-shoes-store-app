@@ -31,6 +31,10 @@ public partial class User
 
     public DateTime? ResetPasswordTokenExpires { get; set; }
 
+    public string? ResetPasswordOtp { get; set; }
+
+    public DateTime? ResetPasswordOtpExpiredAt { get; set; }
+
     public virtual ICollection<AirecommendationLog> AirecommendationLogs { get; set; } = new List<AirecommendationLog>();
 
     public virtual Cart? Cart { get; set; }

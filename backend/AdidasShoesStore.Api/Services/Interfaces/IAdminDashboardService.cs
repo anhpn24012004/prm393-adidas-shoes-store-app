@@ -1,6 +1,8 @@
-﻿namespace AdidasShoesStore.Api.Services.Interfaces
+﻿using AdidasShoesStore.Api.DTOs.Admin;
+
+namespace AdidasShoesStore.Api.Services.Interfaces;
+
+public interface IAdminDashboardService
 {
-    public class IAdminDashboardService
-    {
-    }
+    Task<AdminDashboardDto> GetDashboardAsync();
 }
