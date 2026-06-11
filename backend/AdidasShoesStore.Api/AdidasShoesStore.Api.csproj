@@ -29,7 +29,6 @@
   </ItemGroup>
 
   <ItemGroup>
-
     <Folder Include="Common\" />
     <Folder Include="DTOs\AI\" />
     <Folder Include="DTOs\Categories\" />
@@ -61,5 +60,4 @@
     <Folder Include="Services\Interfaces\" />
     <Folder Include="Services\Implementations\" />
   </ItemGroup>
-
 </Project>

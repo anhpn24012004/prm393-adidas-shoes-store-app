@@ -27,6 +27,10 @@ public partial class User
 
     public DateTime? CreatedAt { get; set; }
 
+    public string? ResetPasswordToken { get; set; }
+
+    public DateTime? ResetPasswordTokenExpires { get; set; }
+
     public virtual ICollection<AirecommendationLog> AirecommendationLogs { get; set; } = new List<AirecommendationLog>();
 
     public virtual Cart? Cart { get; set; }
