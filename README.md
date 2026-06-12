@@ -107,7 +107,15 @@ The system includes an AI assistant that helps users:
 
 ---
 
-# 7. Design Phase Status
+# 7. Cart & Wishlist Documentation
+
+Xem luồng chi tiết của giỏ hàng và wishlist tại:
+
+- [docs/cart-wishlist-readme.md](docs/cart-wishlist-readme.md)
+
+---
+
+# 8. Design Phase Status
 
 Completed:
 - Flutter project initialized
@@ -121,7 +129,7 @@ Completed:
 
 ---
 
-# 8. Branch Workflow
+# 9. Branch Workflow
 
 - main → stable production branch
 - develop → integration branch
@@ -129,7 +137,7 @@ Completed:
 
 ---
 
-# 9. Team Workflow
+# 10. Team Workflow
 
 - Each member works on a separate feature branch
 - Features are merged into develop
