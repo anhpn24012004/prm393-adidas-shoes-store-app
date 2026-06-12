@@ -6,17 +6,13 @@ class AiAssistantService {
   static const String baseUrl = 'http://10.0.2.2:5209';
 
   Future<AiRecommendationResponse> getRecommendation(
-      AiRecommendationRequest request,
-      ) async {
-    final url = Uri.parse(
-      '$baseUrl/api/AiAssistant/shoe-recommendation',
-    );
+    AiRecommendationRequest request,
+  ) async {
+    final url = Uri.parse('$baseUrl/api/AiAssistant/shoe-recommendation');
 
     final response = await http.post(
       url,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode(request.toJson()),
     );
 

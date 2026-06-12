@@ -57,11 +57,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
         _result = response;
       });
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Lỗi: $e'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       setState(() {
         _isLoading = false;
@@ -72,19 +70,14 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
   InputDecoration _inputDecoration(String label) {
     return InputDecoration(
       labelText: label,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('AI Shoe Assistant'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('AI Shoe Assistant'), centerTitle: true),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -104,14 +97,8 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                         value: _gender,
                         decoration: _inputDecoration('Giới tính'),
                         items: const [
-                          DropdownMenuItem(
-                            value: 'Nam',
-                            child: Text('Nam'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'Nữ',
-                            child: Text('Nữ'),
-                          ),
+                          DropdownMenuItem(value: 'Nam', child: Text('Nam')),
+                          DropdownMenuItem(value: 'Nữ', child: Text('Nữ')),
                         ],
                         onChanged: (value) {
                           setState(() {
@@ -124,9 +111,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                       TextFormField(
                         controller: _footLengthController,
                         keyboardType: TextInputType.number,
-                        decoration: _inputDecoration(
-                          'Chiều dài bàn chân (cm)',
-                        ),
+                        decoration: _inputDecoration('Chiều dài bàn chân (cm)'),
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
                             return 'Vui lòng nhập chiều dài bàn chân';
@@ -146,18 +131,12 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                         value: _footWidth,
                         decoration: _inputDecoration('Độ rộng bàn chân'),
                         items: const [
-                          DropdownMenuItem(
-                            value: 'Hẹp',
-                            child: Text('Hẹp'),
-                          ),
+                          DropdownMenuItem(value: 'Hẹp', child: Text('Hẹp')),
                           DropdownMenuItem(
                             value: 'Bình thường',
                             child: Text('Bình thường'),
                           ),
-                          DropdownMenuItem(
-                            value: 'Rộng',
-                            child: Text('Rộng'),
-                          ),
+                          DropdownMenuItem(value: 'Rộng', child: Text('Rộng')),
                         ],
                         onChanged: (value) {
                           setState(() {
@@ -236,21 +215,18 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                         width: double.infinity,
                         height: 50,
                         child: ElevatedButton.icon(
-                          onPressed:
-                          _isLoading ? null : _submitRecommendation,
+                          onPressed: _isLoading ? null : _submitRecommendation,
                           icon: _isLoading
                               ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                            ),
-                          )
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
                               : const Icon(Icons.auto_awesome),
                           label: Text(
-                            _isLoading
-                                ? 'Đang tư vấn...'
-                                : 'Nhận tư vấn AI',
+                            _isLoading ? 'Đang tư vấn...' : 'Nhận tư vấn AI',
                           ),
                         ),
                       ),
@@ -292,10 +268,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                       const SizedBox(height: 12),
                       Text(
                         _result!.advice,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          height: 1.5,
-                        ),
+                        style: const TextStyle(fontSize: 16, height: 1.5),
                       ),
                     ],
                   ),

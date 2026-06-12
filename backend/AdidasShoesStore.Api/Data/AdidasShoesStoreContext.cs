@@ -56,6 +56,12 @@ public partial class AdidasShoesStoreContext : DbContext
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
+        if (!optionsBuilder.IsConfigured)
+        {
+            optionsBuilder.UseSqlServer(
+                "Server=localhost;Database=AdidasShoesStore;Trusted_Connection=True;TrustServerCertificate=True;"
+            );
+        }
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -362,6 +368,10 @@ public partial class AdidasShoesStoreContext : DbContext
             entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.PasswordHash).HasMaxLength(255);
             entity.Property(e => e.Phone).HasMaxLength(20);
+            entity.Property(e => e.ResetPasswordOtp).HasMaxLength(6);
+            entity.Property(e => e.ResetPasswordOtpExpiredAt).HasColumnType("datetime");
+            entity.Property(e => e.ResetPasswordToken).HasMaxLength(255);
+            entity.Property(e => e.ResetPasswordTokenExpires).HasColumnType("datetime");
 
             entity.HasOne(d => d.Role).WithMany(p => p.Users)
                 .HasForeignKey(d => d.RoleId)

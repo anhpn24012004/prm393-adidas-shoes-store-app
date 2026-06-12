@@ -40,6 +40,50 @@ namespace AdidasShoesStore.Api.Services.Implementations
             using var client = new SmtpClient(config.SmtpHost, config.SmtpPort)
             {
                 EnableSsl = true,
+                UseDefaultCredentials = false,
+                Credentials = new NetworkCredential(
+                    config.Username,
+                    config.Password
+                )
+            };
+
+            await client.SendMailAsync(message);
+        }
+
+        public async Task SendOtpEmailAsync(string toEmail, string otp)
+        {
+            var config = GetEmailConfig()
+                ?? throw new InvalidOperationException(
+                    "Email SMTP settings are not configured."
+                );
+
+            using var message = new MailMessage
+            {
+                From = new MailAddress(config.From),
+                Subject = "Mã OTP đặt lại mật khẩu Adidas",
+                Body = $"""
+                    <!doctype html>
+                    <html>
+                    <body style="font-family:Arial,sans-serif;color:#171717;">
+                      <h2>Đặt lại mật khẩu</h2>
+                      <p>Mã OTP xác thực của bạn là:</p>
+                      <p style="font-size:32px;font-weight:700;letter-spacing:8px;">
+                        {WebUtility.HtmlEncode(otp)}
+                      </p>
+                      <p>Mã OTP có hiệu lực trong 5 phút.</p>
+                      <p>Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email này.</p>
+                    </body>
+                    </html>
+                    """,
+                IsBodyHtml = true
+            };
+
+            message.To.Add(toEmail);
+
+            using var client = new SmtpClient(config.SmtpHost, config.SmtpPort)
+            {
+                EnableSsl = true,
+                UseDefaultCredentials = false,
                 Credentials = new NetworkCredential(
                     config.Username,
                     config.Password
@@ -116,6 +160,9 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 string.IsNullOrWhiteSpace(username) ||
                 string.IsNullOrWhiteSpace(password) ||
                 string.IsNullOrWhiteSpace(from) ||
+                username.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase) ||
+                password.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase) ||
+                from.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase) ||
                 !int.TryParse(portValue, out var smtpPort))
             {
                 return null;

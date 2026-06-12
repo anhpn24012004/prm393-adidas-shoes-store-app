@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../config/app_config.dart';
 import '../../models/wishlist_model.dart';
+import '../../localization/app_localization.dart';
 import '../../providers/badge_notifier.dart';
 import '../../services/wishlist_service.dart';
 import '../../widgets/cart_wishlist_badges.dart';
@@ -27,8 +28,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
 
   void _loadWishlist() {
     setState(() {
-      _wishlistFuture =
-          _wishlistService.getWishlist(AppConfig.currentUserId);
+      _wishlistFuture = _wishlistService.getWishlist(AppConfig.currentUserId);
     });
   }
 
@@ -38,15 +38,14 @@ class _WishlistScreenState extends State<WishlistScreen> {
 
   Future<void> _removeItem(WishlistModel item) async {
     try {
-      final totalItems =
-          await _wishlistService.deleteWishlist(item.wishlistId);
+      final totalItems = await _wishlistService.deleteWishlist(item.wishlistId);
       BadgeNotifier.instance.setWishlistCount(totalItems);
       _loadWishlist();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
 
@@ -54,16 +53,16 @@ class _WishlistScreenState extends State<WishlistScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Clear wishlist'),
-        content: const Text('Remove all items from your wishlist?'),
+        title: Text(context.tr('clearWishlist')),
+        content: Text(context.tr('clearWishlistQuestion')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(context.tr('cancel')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Clear'),
+            child: Text(context.tr('clear')),
           ),
         ],
       ),
@@ -72,15 +71,16 @@ class _WishlistScreenState extends State<WishlistScreen> {
     if (confirmed != true) return;
 
     try {
-      final totalItems =
-          await _wishlistService.clearWishlist(AppConfig.currentUserId);
+      final totalItems = await _wishlistService.clearWishlist(
+        AppConfig.currentUserId,
+      );
       BadgeNotifier.instance.setWishlistCount(totalItems);
       _loadWishlist();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
 
@@ -167,10 +167,8 @@ class _WishlistScreenState extends State<WishlistScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Wishlist'),
-        actions: const [
-          CartWishlistBadges(),
-        ],
+        title: Text(context.tr('myWishlist')),
+        actions: const [CartWishlistBadges()],
       ),
       body: FutureBuilder<List<WishlistModel>>(
         future: _wishlistFuture,
@@ -186,11 +184,11 @@ class _WishlistScreenState extends State<WishlistScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('Error: ${snapshot.error}'),
+                    Text('${context.tr('error')}: ${snapshot.error}'),
                     const SizedBox(height: 12),
                     ElevatedButton(
                       onPressed: _loadWishlist,
-                      child: const Text('Retry'),
+                      child: Text(context.tr('retry')),
                     ),
                   ],
                 ),
@@ -201,9 +199,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
           final items = snapshot.data ?? [];
 
           if (items.isEmpty) {
-            return const Center(
-              child: Text('Your wishlist is empty'),
-            );
+            return Center(child: Text(context.tr('wishlistEmpty')));
           }
 
           return Column(
@@ -222,7 +218,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                   width: double.infinity,
                   child: OutlinedButton(
                     onPressed: _clearWishlist,
-                    child: const Text('Clear Wishlist'),
+                    child: Text(context.tr('clearWishlist')),
                   ),
                 ),
               ),

@@ -23,5 +23,5 @@ class AppConfig {
 
   static String get apiBaseUrl => 'http://$apiHost:5209/api';
 
-  static const int currentUserId = 2;
+  static int currentUserId = 0;
 }

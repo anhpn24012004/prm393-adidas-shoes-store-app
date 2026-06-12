@@ -14,10 +14,7 @@ class CartModel {
   });
 
   double get totalAmount {
-    return cartItems.fold(
-      0,
-      (sum, item) => sum + item.subtotal,
-    );
+    return cartItems.fold(0, (sum, item) => sum + item.subtotal);
   }
 
   factory CartModel.fromJson(Map<String, dynamic> json) {

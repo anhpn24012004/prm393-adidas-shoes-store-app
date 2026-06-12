@@ -8,10 +8,7 @@ import 'admin_variant_form_screen.dart';
 class AdminVariantListScreen extends StatefulWidget {
   final ProductModel product;
 
-  const AdminVariantListScreen({
-    super.key,
-    required this.product,
-  });
+  const AdminVariantListScreen({super.key, required this.product});
 
   @override
   State<AdminVariantListScreen> createState() => _AdminVariantListScreenState();
@@ -29,8 +26,9 @@ class _AdminVariantListScreenState extends State<AdminVariantListScreen> {
   }
 
   void _loadVariants() {
-    _variantsFuture =
-        _productService.getVariantsByProduct(widget.product.productId);
+    _variantsFuture = _productService.getVariantsByProduct(
+      widget.product.productId,
+    );
   }
 
   String formatPrice(double price) {
@@ -41,9 +39,8 @@ class _AdminVariantListScreenState extends State<AdminVariantListScreen> {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => AdminVariantFormScreen(
-          productId: widget.product.productId,
-        ),
+        builder: (_) =>
+            AdminVariantFormScreen(productId: widget.product.productId),
       ),
     );
 
@@ -78,9 +75,7 @@ class _AdminVariantListScreenState extends State<AdminVariantListScreen> {
       builder: (context) {
         return AlertDialog(
           title: const Text('Delete variant'),
-          content: Text(
-            'Delete variant ${variant.size} - ${variant.color}?',
-          ),
+          content: Text('Delete variant ${variant.size} - ${variant.color}?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -103,9 +98,7 @@ class _AdminVariantListScreenState extends State<AdminVariantListScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Variant deleted successfully'),
-        ),
+        const SnackBar(content: Text('Variant deleted successfully')),
       );
 
       setState(() {
@@ -114,11 +107,9 @@ class _AdminVariantListScreenState extends State<AdminVariantListScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
@@ -127,15 +118,13 @@ class _AdminVariantListScreenState extends State<AdminVariantListScreen> {
       child: ListTile(
         title: Text(
           '${variant.size} - ${variant.color}',
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         subtitle: Text(
           'Price: ${formatPrice(variant.price)}\n'
-              'Stock: ${variant.stockQuantity}\n'
-              'SKU: ${variant.sku ?? 'N/A'}\n'
-              'Status: ${variant.isActive ? 'Active' : 'Inactive'}',
+          'Stock: ${variant.stockQuantity}\n'
+          'SKU: ${variant.sku ?? 'N/A'}\n'
+          'Status: ${variant.isActive ? 'Active' : 'Inactive'}',
         ),
         isThreeLine: true,
         trailing: Wrap(
@@ -162,9 +151,7 @@ class _AdminVariantListScreenState extends State<AdminVariantListScreen> {
       future: _variantsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
+          return const Center(child: CircularProgressIndicator());
         }
 
         if (snapshot.hasError) {
@@ -179,9 +166,7 @@ class _AdminVariantListScreenState extends State<AdminVariantListScreen> {
         final variants = snapshot.data ?? [];
 
         if (variants.isEmpty) {
-          return const Center(
-            child: Text('No variants found'),
-          );
+          return const Center(child: Text('No variants found'));
         }
 
         return RefreshIndicator(
@@ -205,9 +190,7 @@ class _AdminVariantListScreenState extends State<AdminVariantListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Variants - ${widget.product.productName}'),
-      ),
+      appBar: AppBar(title: Text('Variants - ${widget.product.productName}')),
       body: _buildBody(),
       floatingActionButton: FloatingActionButton(
         onPressed: _goToCreate,

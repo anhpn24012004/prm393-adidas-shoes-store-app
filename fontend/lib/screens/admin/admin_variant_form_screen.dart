@@ -110,11 +110,9 @@ class _AdminVariantFormScreenState extends State<AdminVariantFormScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
       if (mounted) {
         setState(() {
@@ -168,9 +166,7 @@ class _AdminVariantFormScreenState extends State<AdminVariantFormScreen> {
     final title = isEditMode ? 'Edit Variant' : 'Create Variant';
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-      ),
+      appBar: AppBar(title: Text(title)),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Center(
@@ -206,10 +202,7 @@ class _AdminVariantFormScreenState extends State<AdminVariantFormScreen> {
                     keyboardType: TextInputType.number,
                   ),
                   const SizedBox(height: 16),
-                  _buildTextField(
-                    controller: _skuController,
-                    label: 'SKU',
-                  ),
+                  _buildTextField(controller: _skuController, label: 'SKU'),
                   const SizedBox(height: 16),
                   if (isEditMode)
                     SwitchListTile(
@@ -229,7 +222,9 @@ class _AdminVariantFormScreenState extends State<AdminVariantFormScreen> {
                       onPressed: _isSubmitting ? null : _submit,
                       child: _isSubmitting
                           ? const CircularProgressIndicator()
-                          : Text(isEditMode ? 'Update Variant' : 'Create Variant'),
+                          : Text(
+                              isEditMode ? 'Update Variant' : 'Create Variant',
+                            ),
                     ),
                   ),
                 ],

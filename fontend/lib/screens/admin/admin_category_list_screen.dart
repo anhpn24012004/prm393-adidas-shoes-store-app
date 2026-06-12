@@ -30,9 +30,7 @@ class _AdminCategoryListScreenState extends State<AdminCategoryListScreen> {
   Future<void> _goToCreate() async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const AdminCategoryFormScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const AdminCategoryFormScreen()),
     );
 
     if (result == true) {
@@ -88,9 +86,7 @@ class _AdminCategoryListScreenState extends State<AdminCategoryListScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Category deleted successfully'),
-        ),
+        const SnackBar(content: Text('Category deleted successfully')),
       );
 
       setState(() {
@@ -99,11 +95,9 @@ class _AdminCategoryListScreenState extends State<AdminCategoryListScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
@@ -112,9 +106,7 @@ class _AdminCategoryListScreenState extends State<AdminCategoryListScreen> {
       child: ListTile(
         title: Text(
           category.categoryName,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         subtitle: Text(
           '${category.description ?? 'No description'}\nProducts: ${category.productCount}',
@@ -142,9 +134,7 @@ class _AdminCategoryListScreenState extends State<AdminCategoryListScreen> {
       future: _categoriesFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
+          return const Center(child: CircularProgressIndicator());
         }
 
         if (snapshot.hasError) {
@@ -159,9 +149,7 @@ class _AdminCategoryListScreenState extends State<AdminCategoryListScreen> {
         final categories = snapshot.data ?? [];
 
         if (categories.isEmpty) {
-          return const Center(
-            child: Text('No categories found'),
-          );
+          return const Center(child: Text('No categories found'));
         }
 
         return ListView.builder(
@@ -178,9 +166,7 @@ class _AdminCategoryListScreenState extends State<AdminCategoryListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Admin Category Management'),
-      ),
+      appBar: AppBar(title: const Text('Admin Category Management')),
       body: _buildBody(),
       floatingActionButton: FloatingActionButton(
         onPressed: _goToCreate,

@@ -1,5 +1,6 @@
 using AdidasShoesStore.Api.Data;
 using AdidasShoesStore.Api.Helpers;
+using AdidasShoesStore.Api.Models;
 using AdidasShoesStore.Api.Services.Implementations;
 using AdidasShoesStore.Api.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -10,7 +11,7 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// Add services to the container
 builder.Services.AddControllers();
 
 // CORS for Flutter Web
@@ -61,17 +62,18 @@ builder.Services.AddDbContext<AdidasShoesStoreContext>(options =>
 // Register custom services
 builder.Services.AddScoped<JwtHelper>();
 builder.Services.AddScoped<VnPayHelper>();
+
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddHttpClient<IAiAssistantService, AiAssistantService>();
+
 builder.Services.AddScoped<IReviewService, ReviewService>();
 builder.Services.AddScoped<IReturnRequestService, ReturnRequestService>();
 builder.Services.AddScoped<IRefundService, RefundService>();
-builder.Services.AddScoped<
-    IOrderService,
-    OrderService>();
+builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IShipmentService, ShipmentService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IAdminDashboardService, AdminDashboardService>();
 
 // Configure JWT Authentication
 builder.Services.AddAuthentication(options =>
@@ -102,23 +104,74 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 // CORS should be before Authentication/Authorization
 app.UseCors("AllowFlutterWeb");
 
 // Authentication must be before Authorization
 app.UseAuthentication();
-
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Seed admin in Development
+if (app.Environment.IsDevelopment())
+{
+    using var scope = app.Services.CreateScope();
+    var context = scope.ServiceProvider.GetRequiredService<AdidasShoesStoreContext>();
+
+    var adminRole = await context.Roles
+        .FirstOrDefaultAsync(role => role.RoleName == "Admin");
+
+    if (adminRole == null)
+    {
+        adminRole = new Role
+        {
+            RoleName = "Admin"
+        };
+
+        context.Roles.Add(adminRole);
+        await context.SaveChangesAsync();
+    }
+
+    var adminEmail = "admin@adidas.com";
+
+    var admin = await context.Users
+        .FirstOrDefaultAsync(user => user.Email == adminEmail);
+
+    if (admin == null)
+    {
+        context.Users.Add(new User
+        {
+            FullName = "Admin User",
+            Email = adminEmail,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("123456"),
+            Phone = "0900000000",
+            RoleId = adminRole.RoleId,
+            IsActive = true,
+            CreatedAt = DateTime.Now
+        });
+
+        await context.SaveChangesAsync();
+    }
+    else
+    {
+        admin.RoleId = adminRole.RoleId;
+        admin.IsActive = true;
+
+        await context.SaveChangesAsync();
+    }
+}
 
 app.Run();

@@ -89,11 +89,9 @@ class _AdminProductImageFormScreenState
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
       if (mounted) {
         setState(() {
@@ -111,9 +109,7 @@ class _AdminProductImageFormScreenState
         height: 220,
         width: double.infinity,
         color: Colors.grey.shade200,
-        child: const Center(
-          child: Icon(Icons.image, size: 64),
-        ),
+        child: const Center(child: Icon(Icons.image, size: 64)),
       );
     }
 
@@ -127,9 +123,7 @@ class _AdminProductImageFormScreenState
           height: 220,
           width: double.infinity,
           color: Colors.grey.shade200,
-          child: const Center(
-            child: Icon(Icons.broken_image, size: 64),
-          ),
+          child: const Center(child: Icon(Icons.broken_image, size: 64)),
         );
       },
     );
@@ -140,9 +134,7 @@ class _AdminProductImageFormScreenState
     final title = isEditMode ? 'Edit Product Image' : 'Create Product Image';
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-      ),
+      appBar: AppBar(title: Text(title)),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Center(

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../config/app_config.dart';
 import '../../models/review_model.dart';
 import '../../services/review_service.dart';
 
@@ -10,205 +12,100 @@ class CreateReviewScreen extends StatefulWidget {
 }
 
 class _CreateReviewScreenState extends State<CreateReviewScreen> {
-  final _formKey = GlobalKey<FormState>();
-
-  final _userIdController = TextEditingController();
-  final _productIdController = TextEditingController();
   final _commentController = TextEditingController();
-
   final _reviewService = ReviewService();
-
   int _rating = 5;
-  bool _isLoading = false;
+  int? _productId;
+  bool _loading = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final argument = ModalRoute.of(context)?.settings.arguments;
+    _productId ??= argument is int ? argument : null;
+  }
 
   @override
   void dispose() {
-    _userIdController.dispose();
-    _productIdController.dispose();
     _commentController.dispose();
     super.dispose();
   }
 
-  Future<void> _submitReview() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final request = CreateReviewRequest(
-        userId: int.parse(_userIdController.text),
-        productId: int.parse(_productIdController.text),
-        rating: _rating,
-        comment: _commentController.text.trim(),
-      );
-
-      final result = await _reviewService.createReview(request);
-
-      if (!mounted) return;
-
+  Future<void> _submit() async {
+    if (AppConfig.currentUserId <= 0) {
+      Navigator.pushNamed(context, '/login');
+      return;
+    }
+    if (_productId == null || _commentController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Tạo review thành công. Review ID: ${result.reviewId}'),
+        const SnackBar(content: Text('Please enter your review.')),
+      );
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      await _reviewService.createReview(
+        CreateReviewRequest(
+          userId: AppConfig.currentUserId,
+          productId: _productId!,
+          rating: _rating,
+          comment: _commentController.text.trim(),
         ),
       );
-
-      _commentController.clear();
-    } catch (e) {
       if (!mounted) return;
-
+      Navigator.pop(context, true);
+    } catch (error) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Lỗi: $e'),
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
         ),
       );
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _loading = false);
     }
-  }
-
-  InputDecoration _inputDecoration(String label) {
-    return InputDecoration(
-      labelText: label,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-    );
-  }
-
-  Widget _buildRatingStars() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(5, (index) {
-        final starValue = index + 1;
-
-        return IconButton(
-          onPressed: () {
-            setState(() {
-              _rating = starValue;
-            });
-          },
-          icon: Icon(
-            starValue <= _rating ? Icons.star : Icons.star_border,
-            color: Colors.orange,
-            size: 34,
-          ),
-        );
-      }),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Đánh giá sản phẩm'),
-        centerTitle: true,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+      appBar: AppBar(title: const Text('WRITE A REVIEW')),
+      body: ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          Text(
+            'HOW DID\nTHEY FEEL?',
+            style: Theme.of(context).textTheme.displayLarge,
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  TextFormField(
-                    controller: _userIdController,
-                    keyboardType: TextInputType.number,
-                    decoration: _inputDecoration('User ID'),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Vui lòng nhập User ID';
-                      }
-
-                      if (int.tryParse(value) == null) {
-                        return 'User ID không hợp lệ';
-                      }
-
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  TextFormField(
-                    controller: _productIdController,
-                    keyboardType: TextInputType.number,
-                    decoration: _inputDecoration('Product ID'),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Vui lòng nhập Product ID';
-                      }
-
-                      if (int.tryParse(value) == null) {
-                        return 'Product ID không hợp lệ';
-                      }
-
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  const Text(
-                    'Chọn số sao',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  _buildRatingStars(),
-
-                  const SizedBox(height: 16),
-
-                  TextFormField(
-                    controller: _commentController,
-                    maxLines: 4,
-                    decoration: _inputDecoration('Nhận xét'),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Vui lòng nhập nhận xét';
-                      }
-
-                      return null;
-                    },
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton.icon(
-                      onPressed: _isLoading ? null : _submitReview,
-                      icon: _isLoading
-                          ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                        ),
-                      )
-                          : const Icon(Icons.rate_review),
-                      label: Text(
-                        _isLoading ? 'Đang gửi...' : 'Gửi đánh giá',
-                      ),
-                    ),
-                  ),
-                ],
+          const SizedBox(height: 28),
+          Row(
+            children: List.generate(
+              5,
+              (index) => IconButton(
+                onPressed: () => setState(() => _rating = index + 1),
+                icon: Icon(
+                  index < _rating ? Icons.star : Icons.star_border,
+                  color: Colors.amber.shade700,
+                  size: 36,
+                ),
               ),
             ),
           ),
-        ),
+          const SizedBox(height: 18),
+          TextField(
+            controller: _commentController,
+            maxLines: 6,
+            decoration: const InputDecoration(
+              labelText: 'Share your experience',
+              alignLabelWithHint: true,
+            ),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: _loading ? null : _submit,
+            child: Text(_loading ? 'SUBMITTING...' : 'SUBMIT REVIEW'),
+          ),
+        ],
       ),
     );
   }

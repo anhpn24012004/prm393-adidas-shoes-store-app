@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../models/product_model.dart';
 import '../../models/category_model.dart';
+import '../../localization/app_localization.dart';
 import '../../providers/badge_notifier.dart';
 import '../../services/product_service.dart';
 import '../../services/category_service.dart';
 import '../../widgets/cart_wishlist_badges.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/store_brand.dart';
 import 'product_detail_screen.dart';
 
 class ProductListScreen extends StatefulWidget {
@@ -105,7 +108,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
               Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: ChoiceChip(
-                  label: const Text('All'),
+                  label: Text(context.tr('all')),
                   selected: selectedCategoryId == null,
                   onSelected: (_) => _filterByCategory(null),
                 ),
@@ -153,39 +156,52 @@ class _ProductListScreenState extends State<ProductListScreen> {
   Widget _buildProductCard(ProductModel product) {
     return InkWell(
       onTap: () => _goToDetail(product),
-      child: Card(
-        elevation: 3,
-        clipBehavior: Clip.antiAlias,
+      child: Container(
+        color: Colors.white,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(child: _buildProductImage(product.mainImageUrl)),
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ColoredBox(
+                    color: AppColors.surface,
+                    child: _buildProductImage(product.mainImageUrl),
+                  ),
+                  const Positioned(
+                    right: 8,
+                    top: 8,
+                    child: CircleAvatar(
+                      radius: 17,
+                      backgroundColor: Colors.white,
+                      child: Icon(Icons.favorite_border, size: 19),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             Padding(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.only(top: 10),
               child: Text(
                 product.productName,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Text(
-                formatPrice(product.basePrice),
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Text(
-                product.categoryName ?? 'No category',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+            Text(
+              product.categoryName ?? 'Originals',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: AppColors.muted, fontSize: 12),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              formatPrice(product.basePrice),
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                color: AppColors.black,
               ),
             ),
           ],
@@ -206,7 +222,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Text('Error: ${snapshot.error}'),
+              child: Text('${context.tr('error')}: ${snapshot.error}'),
             ),
           );
         }
@@ -214,17 +230,17 @@ class _ProductListScreenState extends State<ProductListScreen> {
         final products = snapshot.data ?? [];
 
         if (products.isEmpty) {
-          return const Center(child: Text('No products found'));
+          return Center(child: Text(context.tr('noProductsFound')));
         }
 
         return GridView.builder(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           itemCount: products.length,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            mainAxisSpacing: 12,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: MediaQuery.sizeOf(context).width > 700 ? 4 : 2,
+            mainAxisSpacing: 24,
             crossAxisSpacing: 12,
-            childAspectRatio: 0.68,
+            childAspectRatio: 0.64,
           ),
           itemBuilder: (context, index) {
             return _buildProductCard(products[index]);
@@ -238,41 +254,25 @@ class _ProductListScreenState extends State<ProductListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Adidas Products'),
-        actions:[
-          IconButton(
-            tooltip: 'Cart',
-            icon: const Icon(Icons.shopping_cart),
-            onPressed: () => Navigator.pushNamed(context, '/cart'),
-          ),
-          IconButton(
-            tooltip: 'My Orders',
-            icon: const Icon(Icons.receipt_long),
-            onPressed: () => Navigator.pushNamed(context, '/orders'),
-          ),
-          IconButton(
-            tooltip: 'Profile',
-            icon: const Icon(Icons.person),
-            onPressed: () => Navigator.pushNamed(context, '/profile'),
-          ),
-        ],
+        title: const StoreBrand(size: 27),
+        actions: [const CartWishlistBadges(), const SizedBox(width: 4)],
       ),
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
             child: TextField(
               controller: _searchController,
               onSubmitted: (_) => _searchProduct(),
               decoration: InputDecoration(
-                hintText: 'Search shoes...',
+                hintText: context.tr('searchHint'),
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: IconButton(
                   onPressed: _searchProduct,
                   icon: const Icon(Icons.arrow_forward),
                 ),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ),

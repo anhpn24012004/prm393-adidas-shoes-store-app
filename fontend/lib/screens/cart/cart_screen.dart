@@ -3,16 +3,13 @@ import 'package:flutter/material.dart';
 import '../../config/app_config.dart';
 import '../../models/cart_item_model.dart';
 import '../../models/cart_model.dart';
+import '../../localization/app_localization.dart';
 import '../../providers/badge_notifier.dart';
 import '../../services/cart_service.dart';
 import '../../widgets/cart_wishlist_badges.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
-
-  void _goToCheckout(BuildContext context) {
-    Navigator.pushNamed(context, '/checkout');
-  }
 
   @override
   State<CartScreen> createState() => _CartScreenState();
@@ -57,9 +54,9 @@ class _CartScreenState extends State<CartScreen> {
       _loadCart();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) {
         setState(() {
@@ -76,9 +73,9 @@ class _CartScreenState extends State<CartScreen> {
       _loadCart();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
 
@@ -86,16 +83,16 @@ class _CartScreenState extends State<CartScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Clear cart'),
-        content: const Text('Remove all items from your cart?'),
+        title: Text(context.tr('clearCart')),
+        content: Text(context.tr('clearCartQuestion')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(context.tr('cancel')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Clear'),
+            child: Text(context.tr('clear')),
           ),
         ],
       ),
@@ -109,9 +106,9 @@ class _CartScreenState extends State<CartScreen> {
       _loadCart();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
 
@@ -197,9 +194,7 @@ class _CartScreenState extends State<CartScreen> {
                       const Spacer(),
                       Text(
                         _formatPrice(item.subtotal),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
@@ -208,24 +203,20 @@ class _CartScreenState extends State<CartScreen> {
             ),
             IconButton(
               onPressed: () => _removeItem(item),
-              icon: const Icon(
-                Icons.delete_outline,
-                color: Colors.red,
-              ),
+              icon: const Icon(Icons.delete_outline, color: Colors.red),
             ),
           ],
         ),
       ),
     );
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Cart'),
-        actions: const [
-          CartWishlistBadges(),
-        ],
+        title: Text(context.tr('myCart')),
+        actions: const [CartWishlistBadges()],
       ),
       body: FutureBuilder<CartModel>(
         future: _cartFuture,
@@ -241,11 +232,11 @@ class _CartScreenState extends State<CartScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('Error: ${snapshot.error}'),
+                    Text('${context.tr('error')}: ${snapshot.error}'),
                     const SizedBox(height: 12),
                     ElevatedButton(
                       onPressed: _loadCart,
-                      child: const Text('Retry'),
+                      child: Text(context.tr('retry')),
                     ),
                   ],
                 ),
@@ -256,9 +247,7 @@ class _CartScreenState extends State<CartScreen> {
           final cart = snapshot.data!;
 
           if (cart.cartItems.isEmpty) {
-            return const Center(
-              child: Text('Your cart is empty'),
-            );
+            return Center(child: Text(context.tr('cartEmpty')));
           }
 
           return Column(
@@ -290,9 +279,9 @@ class _CartScreenState extends State<CartScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'Total',
-                          style: TextStyle(
+                        Text(
+                          context.tr('total'),
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
@@ -312,7 +301,7 @@ class _CartScreenState extends State<CartScreen> {
                         Expanded(
                           child: OutlinedButton(
                             onPressed: _clearCart,
-                            child: const Text('Clear Cart'),
+                            child: Text(context.tr('clearCart')),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -321,7 +310,7 @@ class _CartScreenState extends State<CartScreen> {
                             onPressed: () {
                               Navigator.pushNamed(context, '/checkout');
                             },
-                            child: const Text('Checkout'),
+                            child: Text(context.tr('checkout')),
                           ),
                         ),
                       ],
