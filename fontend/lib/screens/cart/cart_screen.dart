@@ -123,7 +123,7 @@ class _CartScreenState extends State<CartScreen> {
     }
 
     return Image.network(
-      imageUrl,
+      AppConfig.resolveImageUrl(imageUrl),
       width: 72,
       height: 72,
       fit: BoxFit.cover,

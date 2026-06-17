@@ -23,5 +23,23 @@ class AppConfig {
 
   static String get apiBaseUrl => 'http://$apiHost:5209/api';
 
+  static String get staticBaseUrl => 'http://$apiHost:5209';
+
+  static String resolveImageUrl(String imageUrl) {
+    final trimmed = imageUrl.trim();
+
+    if (trimmed.isEmpty ||
+        trimmed.startsWith('http://') ||
+        trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+
+    if (trimmed.startsWith('/')) {
+      return '$staticBaseUrl$trimmed';
+    }
+
+    return '$staticBaseUrl/$trimmed';
+  }
+
   static int currentUserId = 0;
 }

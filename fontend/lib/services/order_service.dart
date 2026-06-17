@@ -12,6 +12,8 @@ class OrderService {
     required int addressId,
     required String paymentMethod,
     String? note,
+    int? buyNowVariantId,
+    int? buyNowQuantity,
   }) async {
     final response = await http.post(
       Uri.parse('${ApiClient.baseUrl}/orders'),
@@ -21,6 +23,8 @@ class OrderService {
           addressId: addressId,
           paymentMethod: paymentMethod,
           note: note,
+          buyNowVariantId: buyNowVariantId,
+          buyNowQuantity: buyNowQuantity,
         ).toJson(),
       ),
     );

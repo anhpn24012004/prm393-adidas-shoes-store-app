@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../config/app_config.dart';
 import '../../models/product_model.dart';
 import '../../services/product_service.dart';
 import 'admin_product_form_screen.dart';
@@ -151,7 +152,7 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
     }
 
     return Image.network(
-      imageUrl,
+      AppConfig.resolveImageUrl(imageUrl),
       width: 72,
       height: 72,
       fit: BoxFit.cover,

@@ -21,6 +21,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   late Future<List<UserAddress>> _addresses;
   int? _selectedAddressId;
+  int? _buyNowVariantId;
+  int? _buyNowQuantity;
   String _paymentMethod = 'COD';
   bool _isSubmitting = false;
 
@@ -28,6 +30,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   void initState() {
     super.initState();
     _addresses = _addressService.getAddresses();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final arguments = ModalRoute.of(context)?.settings.arguments;
+
+    if (arguments is Map) {
+      _buyNowVariantId = arguments['variantId'] as int?;
+      _buyNowQuantity = arguments['quantity'] as int?;
+    }
   }
 
   @override
@@ -55,6 +69,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         note: _noteController.text.trim().isEmpty
             ? null
             : _noteController.text.trim(),
+        buyNowVariantId: _buyNowVariantId,
+        buyNowQuantity: _buyNowQuantity,
       );
 
       if (!mounted) return;
@@ -84,6 +100,102 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         });
       }
     }
+  }
+
+  Future<void> _openAddressPicker(List<UserAddress> addresses) async {
+    final selectedAddressId = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                child: Text(
+                  context.tr('selectAddress').toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: addresses.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final address = addresses[index];
+                    final selected = address.addressId == _selectedAddressId;
+
+                    return ListTile(
+                      leading: Icon(
+                        selected
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_off,
+                      ),
+                      title: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              address.receiverName,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          if (address.isDefault)
+                            Text(
+                              context.tr('defaultLabel').toUpperCase(),
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                        ],
+                      ),
+                      subtitle: Text(
+                        '${address.phone}\n${address.formattedAddress}',
+                      ),
+                      isThreeLine: true,
+                      onTap: () => Navigator.pop(context, address.addressId),
+                    );
+                  },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      Navigator.pop(context);
+                      await Navigator.pushNamed(context, '/address-form');
+                      if (mounted) {
+                        setState(() {
+                          _addresses = _addressService.getAddresses();
+                        });
+                      }
+                    },
+                    icon: const Icon(Icons.add_location_alt_outlined),
+                    label: Text(context.tr('addShippingAddress').toUpperCase()),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (selectedAddressId == null || !mounted) return;
+
+    setState(() {
+      _selectedAddressId = selectedAddressId;
+    });
   }
 
   Widget _buildAddressSelector() {
@@ -132,37 +244,76 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             .firstOrNull;
         _selectedAddressId ??= addresses.first.addressId;
 
-        return Column(
-          children: addresses.map((address) {
-            return RadioListTile<int>(
-              contentPadding: EdgeInsets.zero,
-              value: address.addressId,
-              groupValue: _selectedAddressId,
-              onChanged: _isSubmitting
-                  ? null
-                  : (value) => setState(() => _selectedAddressId = value),
-              title: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      address.receiverName,
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
+        final selectedAddress = addresses.firstWhere(
+          (address) => address.addressId == _selectedAddressId,
+          orElse: () => addresses.first,
+        );
+
+        return InkWell(
+          onTap: _isSubmitting ? null : () => _openAddressPicker(addresses),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(top: 4),
+                  child: Icon(Icons.location_on_outlined),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              selectedAddress.receiverName,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          if (selectedAddress.isDefault)
+                            Text(
+                              context.tr('defaultLabel').toUpperCase(),
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(selectedAddress.phone),
+                      Text(
+                        selectedAddress.formattedAddress,
+                        style: TextStyle(color: Colors.grey.shade700),
+                      ),
+                    ],
                   ),
-                  if (address.isDefault)
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    const Icon(Icons.keyboard_arrow_down),
+                    const SizedBox(height: 8),
                     Text(
-                      context.tr('defaultLabel').toUpperCase(),
+                      context.tr('changeAddress').toUpperCase(),
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                ],
-              ),
-              subtitle: Text('${address.phone}\n${address.formattedAddress}'),
-              isThreeLine: true,
-            );
-          }).toList(),
+                  ],
+                ),
+              ],
+            ),
+          ),
         );
       },
     );

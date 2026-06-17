@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../localization/app_localization.dart';
 import '../../models/order_model.dart';
 import '../../services/order_service.dart';
 
@@ -65,15 +66,15 @@ class _PaymentResultScreenState extends State<PaymentResultScreen> {
     final status = _paymentStatus;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Payment Status')),
+      appBar: AppBar(title: Text(context.tr('paymentStatus'))),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'After payment, return to app and refresh payment status.',
-              style: TextStyle(fontSize: 16),
+            Text(
+              context.tr('paymentResultHint'),
+              style: const TextStyle(fontSize: 16),
             ),
             const SizedBox(height: 16),
             if (_error != null)
@@ -83,19 +84,19 @@ class _PaymentResultScreenState extends State<PaymentResultScreen> {
                 child: ListTile(
                   title: Text(status.orderCode),
                   subtitle: Text(
-                    'Order: ${status.orderStatus}\n'
-                    'Payment: ${status.paymentStatus}\n'
-                    'Amount: ${formatPrice(status.amount)}',
+                    '${context.tr('order')}: ${status.orderStatus}\n'
+                    '${context.tr('payment')}: ${status.paymentStatus}\n'
+                    '${context.tr('amount')}: ${formatPrice(status.amount)}',
                   ),
                   isThreeLine: true,
                 ),
               ),
               if (status.paymentStatus == 'Success')
-                const Padding(
-                  padding: EdgeInsets.only(top: 8),
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
                   child: Text(
-                    'Payment completed successfully.',
-                    style: TextStyle(
+                    context.tr('paymentCompleted'),
+                    style: const TextStyle(
                       color: Colors.green,
                       fontWeight: FontWeight.bold,
                     ),
@@ -114,7 +115,7 @@ class _PaymentResultScreenState extends State<PaymentResultScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.refresh),
-                label: const Text('Refresh Payment Status'),
+                label: Text(context.tr('refreshPaymentStatus')),
               ),
             ),
             const SizedBox(height: 8),
@@ -122,7 +123,7 @@ class _PaymentResultScreenState extends State<PaymentResultScreen> {
               width: double.infinity,
               child: OutlinedButton(
                 onPressed: _goToOrderDetail,
-                child: const Text('View Order Detail'),
+                child: Text(context.tr('viewOrderDetail')),
               ),
             ),
           ],

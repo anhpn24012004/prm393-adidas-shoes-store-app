@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../localization/app_localization.dart';
 import '../../models/order_model.dart';
 import '../../models/shipment_model.dart';
 import '../../services/order_service.dart';
@@ -48,13 +49,28 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   String formatDate(DateTime? date) {
-    if (date == null) return 'N/A';
+    if (date == null) return context.tr('notAvailable');
 
     return '${date.year.toString().padLeft(4, '0')}-'
         '${date.month.toString().padLeft(2, '0')}-'
         '${date.day.toString().padLeft(2, '0')} '
         '${date.hour.toString().padLeft(2, '0')}:'
         '${date.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _statusLabel(String? status) {
+    return switch (status) {
+      'PendingPayment' => context.tr('statusPendingPayment'),
+      'Paid' => context.tr('statusPaid'),
+      'Processing' => context.tr('statusProcessing'),
+      'Shipping' => context.tr('statusShipping'),
+      'Delivered' => context.tr('statusDelivered'),
+      'Cancelled' => context.tr('statusCancelled'),
+      'Completed' => context.tr('statusCompleted'),
+      'Pending' => context.tr('statusPendingPayment'),
+      null => context.tr('notAvailable'),
+      _ => status ?? context.tr('notAvailable'),
+    };
   }
 
   Future<void> _refresh() async {
@@ -68,16 +84,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Cancel order'),
-          content: Text('Cancel order ${order.orderCode}?'),
+          title: Text(context.tr('cancelOrder')),
+          content: Text('${context.tr('cancelOrderQuestion')} ${order.orderCode}?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('No'),
+              child: Text(context.tr('cancel')),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Cancel Order'),
+              child: Text(context.tr('cancelOrder')),
             ),
           ],
         );
@@ -96,7 +112,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Order cancelled successfully')),
+        SnackBar(content: Text(context.tr('orderCancelled'))),
       );
 
       await _refresh();
@@ -127,7 +143,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Payment status refreshed')));
+      ).showSnackBar(SnackBar(content: Text(context.tr('paymentStatusRefreshed'))));
 
       await _refresh();
     } catch (e) {
@@ -173,8 +189,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       child: ListTile(
         title: Text(item.productName),
         subtitle: Text(
-          'Size: ${item.size}  Color: ${item.color}\n'
-          'Quantity: ${item.quantity}  Unit: ${formatPrice(item.unitPrice)}',
+          '${context.tr('productSize')}: ${item.size}  '
+          '${context.tr('productColor')}: ${item.color}\n'
+          '${context.tr('quantity')}: ${item.quantity}  '
+          '${context.tr('unitPrice')}: ${formatPrice(item.unitPrice)}',
         ),
         isThreeLine: true,
         trailing: Text(
@@ -203,14 +221,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _sectionTitle('Shipping'),
-          const Text('Shipment information is not available yet.'),
+          _sectionTitle(context.tr('shipping')),
+          Text(context.tr('shipmentUnavailable')),
           if (canTrack) ...[
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () => _goToTracking(order),
               icon: const Icon(Icons.local_shipping),
-              label: const Text('Track Shipment'),
+              label: Text(context.tr('trackShipment')),
             ),
           ],
         ],
@@ -220,23 +238,23 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle('Shipping'),
-        _infoRow('Shipment status', shipment.shipmentStatus ?? 'Not available'),
-        _infoRow('Carrier', shipment.carrier ?? 'N/A'),
-        _infoRow('Tracking number', shipment.trackingNumber ?? 'N/A'),
+        _sectionTitle(context.tr('shipping')),
+        _infoRow(context.tr('shipmentStatus'), _statusLabel(shipment.shipmentStatus)),
+        _infoRow(context.tr('carrier'), shipment.carrier ?? context.tr('notAvailable')),
+        _infoRow(context.tr('trackingNumber'), shipment.trackingNumber ?? context.tr('notAvailable')),
         _infoRow(
-          'Estimated delivery',
+          context.tr('estimatedDelivery'),
           formatDate(shipment.estimatedDeliveryDate),
         ),
-        _infoRow('Shipped at', formatDate(shipment.shippedAt)),
-        _infoRow('Delivered at', formatDate(shipment.deliveredAt)),
-        _infoRow('Receiver', shipment.receiverName ?? order.receiverName),
+        _infoRow(context.tr('shippedAt'), formatDate(shipment.shippedAt)),
+        _infoRow(context.tr('deliveredAt'), formatDate(shipment.deliveredAt)),
+        _infoRow(context.tr('receiver'), shipment.receiverName ?? order.receiverName),
         _infoRow(
-          'Receiver phone',
+          context.tr('receiverPhone'),
           shipment.receiverPhone ?? order.receiverPhone,
         ),
         _infoRow(
-          'Shipping address',
+          context.tr('shippingAddress'),
           shipment.shippingAddress ?? order.shippingAddress,
         ),
         if (canTrack) ...[
@@ -244,7 +262,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           OutlinedButton.icon(
             onPressed: () => _goToTracking(order),
             icon: const Icon(Icons.local_shipping),
-            label: const Text('Track Shipment'),
+            label: Text(context.tr('trackShipment')),
           ),
         ],
       ],
@@ -268,30 +286,30 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 4),
-          Text('Status: ${order.status}'),
-          _sectionTitle('Receiver'),
-          _infoRow('Name', order.receiverName),
-          _infoRow('Phone', order.receiverPhone),
-          _infoRow('Address', order.shippingAddress),
+          Text('${context.tr('orderStatus')}: ${_statusLabel(order.status)}'),
+          _sectionTitle(context.tr('receiver')),
+          _infoRow(context.tr('name'), order.receiverName),
+          _infoRow(context.tr('phoneNumber'), order.receiverPhone),
+          _infoRow(context.tr('address'), order.shippingAddress),
           if (order.note != null && order.note!.isNotEmpty)
-            _infoRow('Note', order.note!),
-          _sectionTitle('Items'),
+            _infoRow(context.tr('note'), order.note!),
+          _sectionTitle(context.tr('items')),
           ...order.items.map(_buildItem),
           _buildShipmentSection(order, shipment),
-          _sectionTitle('Payment'),
-          _infoRow('Method', order.payment.paymentMethod ?? 'N/A'),
-          _infoRow('Status', paymentStatus ?? 'N/A'),
-          _infoRow('Paid at', formatDate(paidAt)),
-          _sectionTitle('Totals'),
-          _infoRow('Total amount', formatPrice(order.totalAmount)),
-          _infoRow('Shipping fee', formatPrice(order.shippingFee)),
-          _infoRow('Discount', formatPrice(order.discountAmount)),
-          _infoRow('Final amount', formatPrice(order.finalAmount)),
+          _sectionTitle(context.tr('payment')),
+          _infoRow(context.tr('paymentMethod'), order.payment.paymentMethod ?? context.tr('notAvailable')),
+          _infoRow(context.tr('paymentStatus'), _statusLabel(paymentStatus)),
+          _infoRow(context.tr('paidAt'), formatDate(paidAt)),
+          _sectionTitle(context.tr('totals')),
+          _infoRow(context.tr('totalAmount'), formatPrice(order.totalAmount)),
+          _infoRow(context.tr('shippingFee'), formatPrice(order.shippingFee)),
+          _infoRow(context.tr('discount'), formatPrice(order.discountAmount)),
+          _infoRow(context.tr('finalAmount'), formatPrice(order.finalAmount)),
           const SizedBox(height: 20),
           OutlinedButton.icon(
             onPressed: () => _refreshPaymentStatus(order),
             icon: const Icon(Icons.refresh),
-            label: const Text('Refresh Payment Status'),
+            label: Text(context.tr('refreshPaymentStatus')),
           ),
           if (order.status == 'Delivered' || order.status == 'Completed') ...[
             const SizedBox(height: 8),
@@ -302,7 +320,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 arguments: order.orderId,
               ),
               icon: const Icon(Icons.assignment_return_outlined),
-              label: const Text('Request Return'),
+              label: Text(context.tr('requestReturn')),
             ),
           ],
           if (canCancel) ...[
@@ -316,7 +334,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.cancel),
-              label: const Text('Cancel Order'),
+              label: Text(context.tr('cancelOrder')),
             ),
           ],
         ],
@@ -329,9 +347,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final orderFuture = _orderFuture;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Order Detail')),
+      appBar: AppBar(title: Text(context.tr('orderDetail'))),
       body: _orderId == null
-          ? const Center(child: Text('Order ID is missing'))
+          ? Center(child: Text(context.tr('orderIdMissing')))
           : FutureBuilder<OrderDetail>(
               future: orderFuture,
               builder: (context, snapshot) {
@@ -351,17 +369,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('Error: $message'),
+                          Text('${context.tr('error')}: $message'),
                           const SizedBox(height: 12),
                           ElevatedButton(
                             onPressed: _refresh,
-                            child: const Text('Retry'),
+                            child: Text(context.tr('retry')),
                           ),
                           if (message == 'Login required')
                             TextButton(
                               onPressed: () =>
                                   Navigator.pushNamed(context, '/login'),
-                              child: const Text('Go to Login'),
+                              child: Text(context.tr('goToLogin')),
                             ),
                         ],
                       ),
@@ -372,7 +390,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 final order = snapshot.data;
 
                 if (order == null) {
-                  return const Center(child: Text('Order not found'));
+                  return Center(child: Text(context.tr('orderNotFound')));
                 }
 
                 return FutureBuilder<ShipmentDetail?>(

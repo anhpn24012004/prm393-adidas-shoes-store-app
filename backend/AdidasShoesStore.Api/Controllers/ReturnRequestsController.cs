@@ -10,10 +10,14 @@ namespace AdidasShoesStore.Api.Controllers;
 public class ReturnRequestsController : ControllerBase
 {
     private readonly IReturnRequestService _returnRequestService;
+    private readonly IWebHostEnvironment _environment;
 
-    public ReturnRequestsController(IReturnRequestService returnRequestService)
+    public ReturnRequestsController(
+        IReturnRequestService returnRequestService,
+        IWebHostEnvironment environment)
     {
         _returnRequestService = returnRequestService;
+        _environment = environment;
     }
 
     [Authorize(Roles = "Admin")]
@@ -40,6 +44,40 @@ public class ReturnRequestsController : ControllerBase
             return BadRequest("Invalid return request. Order must be delivered/completed and items must belong to the order.");
 
         return Ok(result);
+    }
+
+    [HttpPost("evidence")]
+    [RequestSizeLimit(50_000_000)]
+    public async Task<IActionResult> UploadEvidence([FromForm] IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest(new { message = "File is required." });
+
+        var allowedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp4", ".mov", ".webm"
+        };
+
+        var extension = Path.GetExtension(file.FileName);
+
+        if (!allowedExtensions.Contains(extension))
+            return BadRequest(new { message = "Unsupported evidence file type." });
+
+        var webRoot = _environment.WebRootPath ??
+            Path.Combine(_environment.ContentRootPath, "wwwroot");
+        var uploadsRoot = Path.Combine(webRoot, "uploads", "returns");
+
+        Directory.CreateDirectory(uploadsRoot);
+
+        var fileName = $"{Guid.NewGuid():N}{extension.ToLowerInvariant()}";
+        var filePath = Path.Combine(uploadsRoot, fileName);
+
+        await using (var stream = System.IO.File.Create(filePath))
+        {
+            await file.CopyToAsync(stream);
+        }
+
+        return Ok(new { url = $"/uploads/returns/{fileName}" });
     }
 
     [HttpPut("{id}/approve")]

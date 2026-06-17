@@ -125,6 +125,8 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+app.UseStaticFiles();
+
 // Seed admin in Development
 if (app.Environment.IsDevelopment())
 {

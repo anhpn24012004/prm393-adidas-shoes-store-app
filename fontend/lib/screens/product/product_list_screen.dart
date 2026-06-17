@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../config/app_config.dart';
 import '../../models/product_model.dart';
 import '../../models/category_model.dart';
 import '../../localization/app_localization.dart';
@@ -141,7 +142,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
     }
 
     return Image.network(
-      imageUrl,
+      AppConfig.resolveImageUrl(imageUrl),
       width: double.infinity,
       fit: BoxFit.cover,
       errorBuilder: (context, error, stackTrace) {

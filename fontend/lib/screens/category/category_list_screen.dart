@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../config/app_config.dart';
 import '../../models/category_model.dart';
 import '../../models/product_model.dart';
 import '../../localization/app_localization.dart';
@@ -65,7 +66,7 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
     }
 
     return Image.network(
-      imageUrl,
+      AppConfig.resolveImageUrl(imageUrl),
       width: 72,
       height: 72,
       fit: BoxFit.cover,

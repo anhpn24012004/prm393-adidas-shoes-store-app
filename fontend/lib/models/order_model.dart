@@ -2,11 +2,15 @@ class CreateOrderRequest {
   final int addressId;
   final String paymentMethod;
   final String? note;
+  final int? buyNowVariantId;
+  final int? buyNowQuantity;
 
   CreateOrderRequest({
     required this.addressId,
     required this.paymentMethod,
     this.note,
+    this.buyNowVariantId,
+    this.buyNowQuantity,
   });
 
   Map<String, dynamic> toJson() {
@@ -14,6 +18,8 @@ class CreateOrderRequest {
       'addressId': addressId,
       'paymentMethod': paymentMethod,
       'note': note,
+      'buyNowVariantId': buyNowVariantId,
+      'buyNowQuantity': buyNowQuantity,
     };
   }
 }

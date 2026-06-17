@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../config/app_config.dart';
 import '../../models/category_model.dart';
 import '../../models/product_model.dart';
 import '../../localization/app_localization.dart';
@@ -294,7 +295,7 @@ class _HomeProductCard extends StatelessWidget {
                 color: AppColors.surface,
                 child: product.mainImageUrl?.isNotEmpty == true
                     ? Image.network(
-                        product.mainImageUrl!,
+                        AppConfig.resolveImageUrl(product.mainImageUrl!),
                         width: double.infinity,
                         fit: BoxFit.cover,
                         errorBuilder: (_, _, _) =>

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../config/app_config.dart';
 import '../../models/product_detail_model.dart';
 import '../../models/product_model.dart';
 import '../../services/product_service.dart';
@@ -122,7 +123,7 @@ class _AdminProductImageListScreenState
     }
 
     return Image.network(
-      imageUrl,
+      AppConfig.resolveImageUrl(imageUrl),
       width: 90,
       height: 90,
       fit: BoxFit.cover,

@@ -104,7 +104,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
     }
 
     return Image.network(
-      imageUrl,
+      AppConfig.resolveImageUrl(imageUrl),
       width: 80,
       height: 80,
       fit: BoxFit.cover,

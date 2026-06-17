@@ -56,22 +56,57 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 return OrderServiceResult<OrderDetailDto>.Fail("Address not found");
             }
 
-            var cart = await _context.Carts
-                .Include(c => c.CartItems)
-                    .ThenInclude(i => i.Variant)
-                        .ThenInclude(v => v.Product)
-                .FirstOrDefaultAsync(c => c.UserId == userId);
+            Cart? cart = null;
+            List<(ProductVariant Variant, int Quantity)> orderItems;
 
-            if (cart == null || !cart.CartItems.Any())
+            if (dto.BuyNowVariantId.HasValue)
             {
-                return OrderServiceResult<OrderDetailDto>.Fail("Cart is empty");
+                var quantity = dto.BuyNowQuantity.GetValueOrDefault(1);
+
+                if (quantity <= 0)
+                {
+                    return OrderServiceResult<OrderDetailDto>.Fail("Quantity must be greater than 0");
+                }
+
+                var variant = await _context.ProductVariants
+                    .Include(v => v.Product)
+                    .FirstOrDefaultAsync(v =>
+                        v.VariantId == dto.BuyNowVariantId.Value &&
+                        v.IsActive == true);
+
+                if (variant == null)
+                {
+                    return OrderServiceResult<OrderDetailDto>.Fail("Product variant not found");
+                }
+
+                orderItems = new List<(ProductVariant Variant, int Quantity)>
+                {
+                    (variant, quantity)
+                };
+            }
+            else
+            {
+                cart = await _context.Carts
+                    .Include(c => c.CartItems)
+                        .ThenInclude(i => i.Variant)
+                            .ThenInclude(v => v.Product)
+                    .FirstOrDefaultAsync(c => c.UserId == userId);
+
+                if (cart == null || !cart.CartItems.Any())
+                {
+                    return OrderServiceResult<OrderDetailDto>.Fail("Cart is empty");
+                }
+
+                orderItems = cart.CartItems
+                    .Select(item => (item.Variant, item.Quantity))
+                    .ToList();
             }
 
             await using var transaction = await _context.Database.BeginTransactionAsync();
 
             try
             {
-                foreach (var item in cart.CartItems)
+                foreach (var item in orderItems)
                 {
                     if (item.Variant.StockQuantity == null ||
                         item.Variant.StockQuantity < item.Quantity)
@@ -86,7 +121,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     }
                 }
 
-                var totalAmount = cart.CartItems.Sum(i => i.Variant.Price * i.Quantity);
+                var totalAmount = orderItems.Sum(i => i.Variant.Price * i.Quantity);
                 var finalAmount = totalAmount + ShippingFee - DiscountAmount;
                 var createdAt = DateTime.Now;
 
@@ -112,11 +147,11 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     }
                 };
 
-                foreach (var item in cart.CartItems)
+                foreach (var item in orderItems)
                 {
                     order.OrderItems.Add(new OrderItem
                     {
-                        VariantId = item.VariantId,
+                        VariantId = item.Variant.VariantId,
                         ProductName = item.Variant.Product.ProductName,
                         Size = item.Variant.Size,
                         Color = item.Variant.Color,
@@ -128,7 +163,11 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 }
 
                 _context.Orders.Add(order);
-                _context.CartItems.RemoveRange(cart.CartItems);
+
+                if (cart != null)
+                {
+                    _context.CartItems.RemoveRange(cart.CartItems);
+                }
 
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
