@@ -37,6 +37,10 @@ public class WishlistController : ControllerBase
                     .Where(i => i.IsMain == true)
                     .Select(i => i.ImageUrl)
                     .FirstOrDefault(),
+                AverageRating = w.Product.Reviews.Any()
+                    ? w.Product.Reviews.Average(r => r.Rating)
+                    : 0,
+                ReviewCount = w.Product.Reviews.Count,
                 CreatedAt = w.CreatedAt
             })
             .ToListAsync();

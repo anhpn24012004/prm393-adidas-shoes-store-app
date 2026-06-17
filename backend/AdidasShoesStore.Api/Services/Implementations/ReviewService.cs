@@ -27,9 +27,22 @@ public class ReviewService : IReviewService
                 ProductId = r.ProductId,
                 Rating = r.Rating,
                 Comment = r.Comment,
-                CreatedAt = r.CreatedAt
+                CreatedAt = r.CreatedAt,
+                EditCount = r.EditCount,
+                CanEdit = r.EditCount == 0
             })
             .ToListAsync();
+    }
+
+    public async Task<ReviewDto?> GetUserReviewAsync(int userId, int productId)
+    {
+        var review = await _context.Reviews
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r =>
+                r.UserId == userId &&
+                r.ProductId == productId);
+
+        return review == null ? null : ToDto(review);
     }
 
     public async Task<ReviewDto?> CreateReviewAsync(CreateReviewDto dto)
@@ -55,14 +68,7 @@ public class ReviewService : IReviewService
             return null;
         }
 
-        var hasPurchased = await _context.Orders
-            .AnyAsync(o =>
-                o.UserId == dto.UserId &&
-                (o.Status == "Delivered" || o.Status == "Completed") &&
-                o.OrderItems.Any(oi =>
-                    oi.Variant.ProductId == dto.ProductId
-                )
-            );
+        var hasPurchased = await CanReviewProductAsync(dto.UserId, dto.ProductId);
 
         if (!hasPurchased)
         {
@@ -99,7 +105,72 @@ public class ReviewService : IReviewService
             ProductId = review.ProductId,
             Rating = review.Rating,
             Comment = review.Comment,
-            CreatedAt = review.CreatedAt
+            CreatedAt = review.CreatedAt,
+            EditCount = review.EditCount,
+            CanEdit = review.EditCount == 0
         };
+    }
+
+    public async Task<ReviewDto?> UpdateReviewAsync(int reviewId, UpdateReviewDto dto)
+    {
+        if (dto.Rating < 1 || dto.Rating > 5)
+        {
+            return null;
+        }
+
+        var review = await _context.Reviews
+            .FirstOrDefaultAsync(r =>
+                r.ReviewId == reviewId &&
+                r.UserId == dto.UserId);
+
+        if (review == null || review.EditCount >= 1)
+        {
+            return null;
+        }
+
+        var canStillReview = await CanReviewProductAsync(
+            dto.UserId,
+            review.ProductId);
+
+        if (!canStillReview)
+        {
+            return null;
+        }
+
+        review.Rating = dto.Rating;
+        review.Comment = dto.Comment;
+        review.EditCount += 1;
+
+        await _context.SaveChangesAsync();
+
+        return ToDto(review);
+    }
+
+    private static ReviewDto ToDto(Review review)
+    {
+        return new ReviewDto
+        {
+            ReviewId = review.ReviewId,
+            UserId = review.UserId,
+            ProductId = review.ProductId,
+            Rating = review.Rating,
+            Comment = review.Comment,
+            CreatedAt = review.CreatedAt,
+            EditCount = review.EditCount,
+            CanEdit = review.EditCount == 0
+        };
+    }
+
+    private async Task<bool> CanReviewProductAsync(int userId, int productId)
+    {
+        return await _context.Orders
+            .AnyAsync(o =>
+                o.UserId == userId &&
+                o.Status == "Completed" &&
+                !o.ReturnRequests.Any() &&
+                o.OrderItems.Any(oi =>
+                    oi.Variant.ProductId == productId
+                )
+            );
     }
 }

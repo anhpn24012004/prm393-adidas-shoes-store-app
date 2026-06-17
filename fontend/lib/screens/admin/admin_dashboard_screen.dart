@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/admin_model.dart';
 import '../../services/admin_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/currency_formatter.dart';
 import '../../widgets/store_brand.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -108,7 +109,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  String _money(double value) => '${value.toStringAsFixed(0)}đ';
+  String _money(double value) => formatVnd(value);
 }
 
 class _Metric extends StatelessWidget {

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../localization/app_localization.dart';
 import '../../models/order_model.dart';
 import '../../services/order_service.dart';
+import '../../utils/currency_formatter.dart';
 
 class PaymentResultScreen extends StatefulWidget {
   final int orderId;
@@ -21,7 +22,7 @@ class _PaymentResultScreenState extends State<PaymentResultScreen> {
   String? _error;
 
   String formatPrice(double price) {
-    return '${price.toStringAsFixed(0)} VND';
+    return formatVnd(price);
   }
 
   Future<void> _refreshPaymentStatus() async {

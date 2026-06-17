@@ -2,15 +2,18 @@ import 'package:flutter/material.dart';
 
 import '../../config/app_config.dart';
 import '../../models/product_detail_model.dart';
+import '../../models/product_model.dart';
 import '../../localization/app_localization.dart';
 import '../../providers/badge_notifier.dart';
 import '../../services/product_service.dart';
 import '../../services/cart_service.dart';
 import '../../services/wishlist_service.dart';
 import '../../widgets/cart_wishlist_badges.dart';
+import '../../widgets/product_rating.dart';
 import '../../theme/app_theme.dart';
 import '../../models/review_model.dart';
 import '../../services/review_service.dart';
+import '../../utils/currency_formatter.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final int productId;
@@ -29,6 +32,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   late Future<ProductDetailModel> _productFuture;
   late Future<List<ReviewResponse>> _reviewsFuture;
+  final Map<int, Future<List<ProductModel>>> _relatedProductsFutures = {};
 
   ProductVariantModel? selectedVariant;
   String? _selectedImageUrl;
@@ -46,7 +50,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   String formatPrice(double price) {
-    return '${price.toStringAsFixed(0)} VND';
+    return formatVnd(price);
+  }
+
+  Future<List<ProductModel>> _getRelatedProducts(ProductDetailModel product) {
+    return _relatedProductsFutures.putIfAbsent(product.categoryId, () async {
+      final products = await _productService.getProductsByCategory(
+        product.categoryId,
+      );
+
+      return products
+          .where((item) => item.productId != product.productId)
+          .take(8)
+          .toList();
+    });
   }
 
   String? getMainImage(ProductDetailModel product) {
@@ -314,35 +331,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  context.tr('customerReviews').toUpperCase(),
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              TextButton(
-                onPressed: () async {
-                  final created = await Navigator.pushNamed(
-                    context,
-                    '/create-review',
-                    arguments: widget.productId,
-                  );
-                  if (created == true && mounted) {
-                    setState(() {
-                      _reviewsFuture = _reviewService.getReviewsByProductId(
-                        widget.productId,
-                      );
-                    });
-                  }
-                },
-                child: Text(context.tr('writeReview').toUpperCase()),
-              ),
-            ],
+          child: Text(
+            context.tr('customerReviews').toUpperCase(),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
           ),
         ),
         FutureBuilder<List<ReviewResponse>>(
@@ -390,6 +381,114 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           },
         ),
       ],
+    );
+  }
+
+  Widget _buildRelatedProducts(ProductDetailModel product) {
+    return FutureBuilder<List<ProductModel>>(
+      future: _getRelatedProducts(product),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final products = snapshot.data ?? [];
+
+        if (products.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionTitle(context.tr('relatedProducts')),
+            const SizedBox(height: 14),
+            SizedBox(
+              height: 270,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                itemCount: products.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 14),
+                itemBuilder: (context, index) {
+                  final relatedProduct = products[index];
+
+                  return _buildRelatedProductCard(relatedProduct);
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildRelatedProductCard(ProductModel product) {
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProductDetailScreen(productId: product.productId),
+          ),
+        );
+      },
+      child: SizedBox(
+        width: 170,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                color: AppColors.surface,
+                child: _buildRelatedProductImage(product.mainImageUrl),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              product.productName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              product.categoryName ?? '',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: AppColors.muted, fontSize: 12),
+            ),
+            const SizedBox(height: 5),
+            ProductRating(
+              averageRating: product.averageRating,
+              reviewCount: product.reviewCount,
+            ),
+            const SizedBox(height: 5),
+            Text(
+              formatPrice(product.basePrice),
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRelatedProductImage(String? imageUrl) {
+    if (imageUrl == null || imageUrl.isEmpty) {
+      return const Center(child: Icon(Icons.image_outlined, size: 42));
+    }
+
+    return Image.network(
+      AppConfig.resolveImageUrl(imageUrl),
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return const Center(child: Icon(Icons.broken_image_outlined, size: 42));
+      },
     );
   }
 
@@ -638,6 +737,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 ),
 
                 _buildReviews(),
+
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 22),
+                  child: Divider(height: 1),
+                ),
+
+                _buildRelatedProducts(product),
 
                 const SizedBox(height: 24),
               ],

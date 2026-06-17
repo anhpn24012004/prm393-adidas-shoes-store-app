@@ -39,6 +39,17 @@ class AuthStorage {
     await preferences.setString('role', role);
   }
 
+  Future<void> saveProfile({
+    required String fullName,
+    required String email,
+    required String role,
+  }) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString('fullName', fullName);
+    await preferences.setString('email', email);
+    await preferences.setString('role', role);
+  }
+
   Future<int?> getUserId() async {
     final preferences = await SharedPreferences.getInstance();
     return preferences.getInt('userId');

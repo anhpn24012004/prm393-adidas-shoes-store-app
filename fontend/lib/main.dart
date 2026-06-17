@@ -20,6 +20,8 @@ import 'screens/refund/refund_status_screen.dart';
 import 'screens/ai/ai_assistant_screen.dart';
 import 'screens/category/category_list_screen.dart';
 import 'screens/profile/profile_screen.dart';
+import 'screens/profile/edit_profile_screen.dart';
+import 'screens/profile/payment_methods_screen.dart';
 import 'screens/profile/address_list_screen.dart';
 import 'screens/profile/address_form_screen.dart';
 import 'screens/settings/settings_screen.dart';
@@ -80,6 +82,8 @@ class AdidasShoesStoreApp extends StatelessWidget {
           '/refund-status': (context) => const RefundStatusScreen(),
           '/ai-assistant': (context) => const AiAssistantScreen(),
           '/profile': (context) => const ProfileScreen(),
+          '/edit-profile': (context) => const EditProfileScreen(),
+          '/payment-methods': (context) => const PaymentMethodsScreen(),
           '/addresses': (context) => const AddressListScreen(),
           '/address-form': (context) => const AddressFormScreen(),
           '/settings': (context) => const SettingsScreen(),

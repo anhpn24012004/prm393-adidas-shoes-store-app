@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../config/app_config.dart';
 import '../../models/product_model.dart';
 import '../../services/product_service.dart';
+import '../../utils/currency_formatter.dart';
 import 'admin_product_form_screen.dart';
 import 'admin_variant_list_screen.dart';
 import 'admin_product_image_list_screen.dart';
@@ -30,7 +31,7 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
   }
 
   String formatPrice(double price) {
-    return '${price.toStringAsFixed(0)} VND';
+    return formatVnd(price);
   }
 
   Future<void> _deleteProduct(ProductModel product) async {

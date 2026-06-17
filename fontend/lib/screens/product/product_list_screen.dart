@@ -8,7 +8,9 @@ import '../../providers/badge_notifier.dart';
 import '../../services/product_service.dart';
 import '../../services/category_service.dart';
 import '../../widgets/cart_wishlist_badges.dart';
+import '../../widgets/product_rating.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/currency_formatter.dart';
 import '../../widgets/store_brand.dart';
 import 'product_detail_screen.dart';
 
@@ -44,7 +46,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
   }
 
   String formatPrice(double price) {
-    return '${price.toStringAsFixed(0)} VND';
+    return formatVnd(price);
   }
 
   void _searchProduct() {
@@ -196,6 +198,11 @@ class _ProductListScreenState extends State<ProductListScreen> {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(color: AppColors.muted, fontSize: 12),
+            ),
+            const SizedBox(height: 4),
+            ProductRating(
+              averageRating: product.averageRating,
+              reviewCount: product.reviewCount,
             ),
             const SizedBox(height: 5),
             Text(

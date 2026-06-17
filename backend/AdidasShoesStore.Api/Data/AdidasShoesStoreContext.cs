@@ -314,6 +314,9 @@ public partial class AdidasShoesStoreContext : DbContext
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
 
+            entity.Property(e => e.EditCount)
+                .HasDefaultValue(0);
+
             entity.HasOne(d => d.Product).WithMany(p => p.Reviews)
                 .HasForeignKey(d => d.ProductId)
                 .OnDelete(DeleteBehavior.ClientSetNull)

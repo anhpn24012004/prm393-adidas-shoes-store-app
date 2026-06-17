@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/return_refund_model.dart';
 import '../../services/return_refund_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/currency_formatter.dart';
 
 class AdminReturnsRefundsScreen extends StatefulWidget {
   const AdminReturnsRefundsScreen({super.key});
@@ -215,7 +216,7 @@ class _AdminReturnsRefundsScreenState extends State<AdminReturnsRefundsScreen>
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      '${item.amount.toStringAsFixed(0)}đ',
+                      formatVnd(item.amount),
                       style: const TextStyle(fontWeight: FontWeight.w900),
                     ),
                     if (item.status == 'Pending')

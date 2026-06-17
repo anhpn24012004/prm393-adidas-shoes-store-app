@@ -11,6 +11,8 @@ public class ProductDetailDto
     public string? Brand { get; set; }
     public string? Gender { get; set; }
     public string? Material { get; set; }
+    public double AverageRating { get; set; }
+    public int ReviewCount { get; set; }
     public bool IsActive { get; set; }
 
     public List<ProductImageDto> Images { get; set; } = new();

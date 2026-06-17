@@ -7,5 +7,7 @@ public class WishlistItemDto
     public string ProductName { get; set; } = string.Empty;
     public decimal BasePrice { get; set; }
     public string? ImageUrl { get; set; }
+    public double AverageRating { get; set; }
+    public int ReviewCount { get; set; }
     public DateTime? CreatedAt { get; set; }
 }

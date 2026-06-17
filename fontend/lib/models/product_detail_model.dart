@@ -8,6 +8,8 @@ class ProductDetailModel {
   final String? brand;
   final String? gender;
   final String? material;
+  final double averageRating;
+  final int reviewCount;
   final bool isActive;
   final List<ProductImageModel> images;
   final List<ProductVariantModel> variants;
@@ -22,6 +24,8 @@ class ProductDetailModel {
     this.brand,
     this.gender,
     this.material,
+    required this.averageRating,
+    required this.reviewCount,
     required this.isActive,
     required this.images,
     required this.variants,
@@ -38,6 +42,8 @@ class ProductDetailModel {
       brand: json['brand'],
       gender: json['gender'],
       material: json['material'],
+      averageRating: (json['averageRating'] as num? ?? 0).toDouble(),
+      reviewCount: json['reviewCount'] ?? 0,
       isActive: json['isActive'] ?? false,
       images: (json['images'] as List? ?? [])
           .map((e) => ProductImageModel.fromJson(e))

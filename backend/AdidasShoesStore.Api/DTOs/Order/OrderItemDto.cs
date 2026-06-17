@@ -6,6 +6,8 @@ namespace AdidasShoesStore.Api.DTOs.Order
 
         public int VariantId { get; set; }
 
+        public int ProductId { get; set; }
+
         public string ProductName { get; set; } = null!;
 
         public string Size { get; set; } = null!;

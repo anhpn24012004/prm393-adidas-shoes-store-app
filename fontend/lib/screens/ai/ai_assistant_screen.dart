@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../config/app_config.dart';
 import '../../models/ai_recommendation_model.dart';
 import '../../services/ai_assistant_service.dart';
+import '../../utils/currency_formatter.dart';
 import '../product/product_detail_screen.dart';
 
 class AiAssistantScreen extends StatefulWidget {
@@ -80,7 +81,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
   }
 
   String _formatPrice(double price) {
-    return '${price.toStringAsFixed(0)} VND';
+    return formatVnd(price);
   }
 
   void _goToProduct(AiRecommendedProduct product) {

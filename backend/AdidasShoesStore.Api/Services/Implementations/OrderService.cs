@@ -224,6 +224,8 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     DiscountAmount = o.DiscountAmount ?? 0m,
                     FinalAmount = o.FinalAmount,
                     Status = o.Status,
+                    CanReview = o.Status == "Completed" &&
+                        !o.ReturnRequests.Any(),
                     ShippingAddress = o.ShippingAddress,
                     ReceiverName = o.ReceiverName,
                     ReceiverPhone = o.ReceiverPhone,
@@ -237,6 +239,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     {
                         OrderItemId = i.OrderItemId,
                         VariantId = i.VariantId,
+                        ProductId = i.Variant.ProductId,
                         ProductName = i.ProductName,
                         Size = i.Size,
                         Color = i.Color,
@@ -304,6 +307,47 @@ namespace AdidasShoesStore.Api.Services.Implementations
 
                 return OrderServiceResult<OrderDetailDto>.Fail("Could not cancel order");
             }
+        }
+
+        public async Task<OrderServiceResult<OrderDetailDto>> CompleteOrderAsync(
+            int userId,
+            int orderId)
+        {
+            var order = await _context.Orders
+                .Include(o => o.ReturnRequests)
+                .FirstOrDefaultAsync(o =>
+                    o.OrderId == orderId &&
+                    o.UserId == userId);
+
+            if (order == null)
+            {
+                return OrderServiceResult<OrderDetailDto>.Fail(
+                    "Order not found",
+                    "NotFound"
+                );
+            }
+
+            if (order.Status != "Delivered")
+            {
+                return OrderServiceResult<OrderDetailDto>.Fail(
+                    "Only delivered orders can be completed"
+                );
+            }
+
+            if (order.ReturnRequests.Any())
+            {
+                return OrderServiceResult<OrderDetailDto>.Fail(
+                    "Orders with return/refund requests cannot be completed"
+                );
+            }
+
+            order.Status = "Completed";
+
+            await _context.SaveChangesAsync();
+
+            var detail = await GetOrderDetailAsync(userId, orderId);
+
+            return OrderServiceResult<OrderDetailDto>.Ok(detail!);
         }
 
         public async Task<List<AdminOrderListDto>> GetAdminOrdersAsync(
@@ -396,6 +440,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     {
                         OrderItemId = i.OrderItemId,
                         VariantId = i.VariantId,
+                        ProductId = i.Variant.ProductId,
                         ProductName = i.ProductName,
                         Size = i.Size,
                         Color = i.Color,

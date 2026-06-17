@@ -16,13 +16,25 @@ class _CreateReviewScreenState extends State<CreateReviewScreen> {
   final _reviewService = ReviewService();
   int _rating = 5;
   int? _productId;
+  int? _reviewId;
+  bool _editMode = false;
   bool _loading = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final argument = ModalRoute.of(context)?.settings.arguments;
-    _productId ??= argument is int ? argument : null;
+    if (_productId != null) return;
+
+    if (argument is int) {
+      _productId = argument;
+    } else if (argument is Map) {
+      _productId = argument['productId'] as int?;
+      _reviewId = argument['reviewId'] as int?;
+      _rating = argument['rating'] as int? ?? 5;
+      _commentController.text = argument['comment']?.toString() ?? '';
+      _editMode = _reviewId != null;
+    }
   }
 
   @override
@@ -44,14 +56,23 @@ class _CreateReviewScreenState extends State<CreateReviewScreen> {
     }
     setState(() => _loading = true);
     try {
-      await _reviewService.createReview(
-        CreateReviewRequest(
+      if (_editMode) {
+        await _reviewService.updateReview(
+          reviewId: _reviewId!,
           userId: AppConfig.currentUserId,
-          productId: _productId!,
           rating: _rating,
           comment: _commentController.text.trim(),
-        ),
-      );
+        );
+      } else {
+        await _reviewService.createReview(
+          CreateReviewRequest(
+            userId: AppConfig.currentUserId,
+            productId: _productId!,
+            rating: _rating,
+            comment: _commentController.text.trim(),
+          ),
+        );
+      }
       if (!mounted) return;
       Navigator.pop(context, true);
     } catch (error) {
@@ -69,12 +90,12 @@ class _CreateReviewScreenState extends State<CreateReviewScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('WRITE A REVIEW')),
+      appBar: AppBar(title: Text(_editMode ? 'SỬA ĐÁNH GIÁ' : 'VIẾT ĐÁNH GIÁ')),
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
           Text(
-            'HOW DID\nTHEY FEEL?',
+            _editMode ? 'CẬP NHẬT\nTRẢI NGHIỆM.' : 'BẠN THẤY\nTHẾ NÀO?',
             style: Theme.of(context).textTheme.displayLarge,
           ),
           const SizedBox(height: 28),
@@ -96,14 +117,20 @@ class _CreateReviewScreenState extends State<CreateReviewScreen> {
             controller: _commentController,
             maxLines: 6,
             decoration: const InputDecoration(
-              labelText: 'Share your experience',
+              labelText: 'Chia sẻ trải nghiệm của bạn',
               alignLabelWithHint: true,
             ),
           ),
           const SizedBox(height: 24),
           ElevatedButton(
             onPressed: _loading ? null : _submit,
-            child: Text(_loading ? 'SUBMITTING...' : 'SUBMIT REVIEW'),
+            child: Text(
+              _loading
+                  ? 'ĐANG GỬI...'
+                  : _editMode
+                      ? 'LƯU ĐÁNH GIÁ'
+                      : 'GỬI ĐÁNH GIÁ',
+            ),
           ),
         ],
       ),

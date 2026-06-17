@@ -16,6 +16,8 @@ namespace AdidasShoesStore.Api.DTOs.Order
 
         public string Status { get; set; } = null!;
 
+        public bool CanReview { get; set; }
+
         public string ShippingAddress { get; set; } = null!;
 
         public string ReceiverName { get; set; } = null!;

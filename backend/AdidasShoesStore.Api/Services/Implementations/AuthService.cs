@@ -222,6 +222,42 @@ namespace AdidasShoesStore.Api.Services.Implementations
             };
         }
 
+        public async Task<UserProfileDto?> GetProfileAsync(int userId)
+        {
+            var user = await _context.Users
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.UserId == userId);
+
+            return user == null ? null : ToProfileDto(user);
+        }
+
+        public async Task<UserProfileDto?> UpdateProfileAsync(
+            int userId,
+            UpdateProfileDto request)
+        {
+            var user = await _context.Users
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.UserId == userId);
+
+            if (user == null)
+            {
+                return null;
+            }
+
+            user.FullName = request.FullName.Trim();
+            user.Phone = string.IsNullOrWhiteSpace(request.Phone)
+                ? null
+                : request.Phone.Trim();
+            user.Gender = string.IsNullOrWhiteSpace(request.Gender)
+                ? null
+                : request.Gender.Trim();
+            user.DateOfBirth = request.DateOfBirth;
+
+            await _context.SaveChangesAsync();
+
+            return ToProfileDto(user);
+        }
+
         public async Task<bool> ChangePasswordAsync(int userId, ChangePasswordDto request)
         {
             var user = await _context.Users
@@ -311,6 +347,20 @@ namespace AdidasShoesStore.Api.Services.Implementations
             await _context.SaveChangesAsync();
 
             return true;
+        }
+
+        private static UserProfileDto ToProfileDto(User user)
+        {
+            return new UserProfileDto
+            {
+                UserId = user.UserId,
+                FullName = user.FullName,
+                Email = user.Email,
+                Phone = user.Phone,
+                Gender = user.Gender,
+                DateOfBirth = user.DateOfBirth,
+                Role = user.Role.RoleName
+            };
         }
 
     }

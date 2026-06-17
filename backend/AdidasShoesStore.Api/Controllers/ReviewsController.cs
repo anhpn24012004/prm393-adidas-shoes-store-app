@@ -22,6 +22,19 @@ public class ReviewsController : ControllerBase
         return Ok(reviews);
     }
 
+    [HttpGet("user/{userId}/product/{productId}")]
+    public async Task<IActionResult> GetUserReview(int userId, int productId)
+    {
+        var review = await _reviewService.GetUserReviewAsync(userId, productId);
+
+        if (review == null)
+        {
+            return NotFound(new { message = "Review not found" });
+        }
+
+        return Ok(review);
+    }
+
     [HttpPost]
     public async Task<IActionResult> CreateReview([FromBody] CreateReviewDto dto)
     {
@@ -29,7 +42,20 @@ public class ReviewsController : ControllerBase
 
         if (result == null)
         {
-            return BadRequest("Invalid review data.");
+            return BadRequest("Chỉ có thể đánh giá sản phẩm sau khi đơn hàng đã hoàn thành, chưa trả/hoàn hàng và chưa từng đánh giá sản phẩm này.");
+        }
+
+        return Ok(result);
+    }
+
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> UpdateReview(int id, [FromBody] UpdateReviewDto dto)
+    {
+        var result = await _reviewService.UpdateReviewAsync(id, dto);
+
+        if (result == null)
+        {
+            return BadRequest("Chỉ được sửa đánh giá 1 lần. Sau khi sửa, bạn không thể đánh giá lại sản phẩm này.");
         }
 
         return Ok(result);

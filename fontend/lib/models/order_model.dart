@@ -73,6 +73,7 @@ class OrderDetail {
   final double discountAmount;
   final double finalAmount;
   final String status;
+  final bool canReview;
   final String shippingAddress;
   final String receiverName;
   final String receiverPhone;
@@ -89,6 +90,7 @@ class OrderDetail {
     required this.discountAmount,
     required this.finalAmount,
     required this.status,
+    required this.canReview,
     required this.shippingAddress,
     required this.receiverName,
     required this.receiverPhone,
@@ -107,6 +109,7 @@ class OrderDetail {
       discountAmount: (json['discountAmount'] as num? ?? 0).toDouble(),
       finalAmount: (json['finalAmount'] as num? ?? 0).toDouble(),
       status: json['status'] ?? '',
+      canReview: json['canReview'] ?? false,
       shippingAddress: json['shippingAddress'] ?? '',
       receiverName: json['receiverName'] ?? '',
       receiverPhone: json['receiverPhone'] ?? '',
@@ -123,6 +126,7 @@ class OrderDetail {
 class OrderItem {
   final int orderItemId;
   final int variantId;
+  final int productId;
   final String productName;
   final String size;
   final String color;
@@ -133,6 +137,7 @@ class OrderItem {
   OrderItem({
     required this.orderItemId,
     required this.variantId,
+    required this.productId,
     required this.productName,
     required this.size,
     required this.color,
@@ -145,6 +150,7 @@ class OrderItem {
     return OrderItem(
       orderItemId: json['orderItemId'] ?? 0,
       variantId: json['variantId'] ?? 0,
+      productId: json['productId'] ?? 0,
       productName: json['productName'] ?? '',
       size: json['size'] ?? '',
       color: json['color'] ?? '',

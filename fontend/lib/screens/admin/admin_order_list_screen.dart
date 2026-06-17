@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/admin_model.dart';
 import '../../services/admin_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/currency_formatter.dart';
 
 class AdminOrderListScreen extends StatefulWidget {
   const AdminOrderListScreen({super.key});
@@ -154,7 +155,7 @@ class _AdminOrderListScreenState extends State<AdminOrderListScreen> {
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
-                                '${order.finalAmount.toStringAsFixed(0)}đ',
+                                formatVnd(order.finalAmount),
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w900,
                                 ),
@@ -299,13 +300,13 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
                   subtitle: Text(
                     '${item.size} / ${item.color} • ${item.quantity} pcs',
                   ),
-                  trailing: Text('${item.subtotal.toStringAsFixed(0)}đ'),
+                  trailing: Text(formatVnd(item.subtotal)),
                 ),
               ),
               const Divider(height: 36),
               _line(
                 'Total',
-                '${order.summary.finalAmount.toStringAsFixed(0)}đ',
+                formatVnd(order.summary.finalAmount),
               ),
               _line(
                 'Payment',

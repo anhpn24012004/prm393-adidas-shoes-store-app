@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/product_detail_model.dart';
 import '../../models/product_model.dart';
 import '../../services/product_service.dart';
+import '../../utils/currency_formatter.dart';
 import 'admin_variant_form_screen.dart';
 
 class AdminVariantListScreen extends StatefulWidget {
@@ -32,7 +33,7 @@ class _AdminVariantListScreenState extends State<AdminVariantListScreen> {
   }
 
   String formatPrice(double price) {
-    return '${price.toStringAsFixed(0)} VND';
+    return formatVnd(price);
   }
 
   Future<void> _goToCreate() async {

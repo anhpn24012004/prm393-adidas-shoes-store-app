@@ -76,6 +76,19 @@ class OrderService {
     throw Exception(_errorMessage(response));
   }
 
+  Future<OrderDetail> completeOrder(int orderId) async {
+    final response = await http.put(
+      Uri.parse('${ApiClient.baseUrl}/orders/$orderId/complete'),
+      headers: await _headers(),
+    );
+
+    if (response.statusCode == 200) {
+      return OrderDetail.fromJson(jsonDecode(response.body));
+    }
+
+    throw Exception(_errorMessage(response));
+  }
+
   Future<CreateVnPayPaymentResponse> createVnPayPayment(int orderId) async {
     final response = await http.post(
       Uri.parse('${ApiClient.baseUrl}/payments/vnpay/create'),

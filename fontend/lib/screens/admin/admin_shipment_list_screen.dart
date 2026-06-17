@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/shipment_model.dart';
 import '../../services/auth_storage.dart';
 import '../../services/shipment_service.dart';
+import '../../utils/currency_formatter.dart';
 import 'admin_shipment_detail_screen.dart';
 import 'admin_shipment_form_screen.dart';
 
@@ -53,7 +54,7 @@ class _AdminShipmentListScreenState extends State<AdminShipmentListScreen> {
 
   String _formatMoney(double? amount) {
     if (amount == null) return 'N/A';
-    return '${amount.toStringAsFixed(0)} VND';
+    return formatVnd(amount);
   }
 
   String _formatDate(DateTime? date) {

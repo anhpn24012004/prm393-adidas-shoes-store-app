@@ -105,17 +105,66 @@ namespace AdidasShoesStore.Api.Controllers
         }
 
         [Authorize]
-        [HttpPost("change-password")]
-        public async Task<IActionResult> ChangePassword(ChangePasswordDto request)
+        [HttpGet("profile")]
+        public async Task<IActionResult> GetProfile()
         {
-            var userIdValue = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userId = GetCurrentUserId();
 
-            if (!int.TryParse(userIdValue, out var userId))
+            if (userId == null)
             {
                 return Unauthorized(new { message = "Invalid access token" });
             }
 
-            var result = await _authService.ChangePasswordAsync(userId, request);
+            var result = await _authService.GetProfileAsync(userId.Value);
+
+            if (result == null)
+            {
+                return NotFound(new { message = "User not found" });
+            }
+
+            return Ok(result);
+        }
+
+        [Authorize]
+        [HttpPut("profile")]
+        public async Task<IActionResult> UpdateProfile(UpdateProfileDto request)
+        {
+            var userId = GetCurrentUserId();
+
+            if (userId == null)
+            {
+                return Unauthorized(new { message = "Invalid access token" });
+            }
+
+            var result = await _authService.UpdateProfileAsync(
+                userId.Value,
+                request);
+
+            if (result == null)
+            {
+                return BadRequest(new
+                {
+                    message = "User not found or email already exists"
+                });
+            }
+
+            return Ok(result);
+        }
+
+        [Authorize]
+        [HttpPost("change-password")]
+        public async Task<IActionResult> ChangePassword(ChangePasswordDto request)
+        {
+            var userId = GetCurrentUserId();
+
+            if (userId == null)
+            {
+                return Unauthorized(new { message = "Invalid access token" });
+            }
+
+            var result = await _authService.ChangePasswordAsync(
+                userId.Value,
+                request);
 
             if (!result)
             {
@@ -181,6 +230,15 @@ namespace AdidasShoesStore.Api.Controllers
             {
                 message = "Password reset successfully"
             });
+        }
+
+        private int? GetCurrentUserId()
+        {
+            var userIdValue = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            return int.TryParse(userIdValue, out var userId)
+                ? userId
+                : null;
         }
     }
 }

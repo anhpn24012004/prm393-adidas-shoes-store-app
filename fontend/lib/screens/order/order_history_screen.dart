@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../localization/app_localization.dart';
 import '../../models/order_model.dart';
 import '../../services/order_service.dart';
+import '../../utils/currency_formatter.dart';
 
 class OrderHistoryScreen extends StatefulWidget {
   const OrderHistoryScreen({super.key});
@@ -27,7 +28,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
   }
 
   String formatPrice(double price) {
-    return '${price.toStringAsFixed(0)} VND';
+    return formatVnd(price);
   }
 
   String formatDate(DateTime? date) {

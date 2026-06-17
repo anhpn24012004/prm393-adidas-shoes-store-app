@@ -9,6 +9,8 @@ class ProductModel {
   final String? gender;
   final String? material;
   final String? mainImageUrl;
+  final double averageRating;
+  final int reviewCount;
   final bool isActive;
 
   ProductModel({
@@ -22,6 +24,8 @@ class ProductModel {
     this.gender,
     this.material,
     this.mainImageUrl,
+    required this.averageRating,
+    required this.reviewCount,
     required this.isActive,
   });
 
@@ -37,6 +41,8 @@ class ProductModel {
       gender: json['gender'],
       material: json['material'],
       mainImageUrl: json['mainImageUrl'],
+      averageRating: (json['averageRating'] as num? ?? 0).toDouble(),
+      reviewCount: json['reviewCount'] ?? 0,
       isActive: json['isActive'] ?? false,
     );
   }

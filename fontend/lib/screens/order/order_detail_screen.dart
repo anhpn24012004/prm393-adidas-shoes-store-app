@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../config/app_config.dart';
 import '../../localization/app_localization.dart';
 import '../../models/order_model.dart';
+import '../../models/review_model.dart';
 import '../../models/shipment_model.dart';
 import '../../services/order_service.dart';
+import '../../services/review_service.dart';
 import '../../services/shipment_service.dart';
+import '../../utils/currency_formatter.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final int? orderId;
@@ -18,11 +22,13 @@ class OrderDetailScreen extends StatefulWidget {
 class _OrderDetailScreenState extends State<OrderDetailScreen> {
   final OrderService _orderService = OrderService();
   final ShipmentService _shipmentService = ShipmentService();
+  final ReviewService _reviewService = ReviewService();
 
   Future<OrderDetail>? _orderFuture;
   Future<ShipmentDetail?>? _shipmentFuture;
   int? _orderId;
   bool _isCancelling = false;
+  bool _isCompleting = false;
   PaymentStatus? _paymentStatus;
 
   @override
@@ -45,7 +51,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   String formatPrice(double price) {
-    return '${price.toStringAsFixed(0)} VND';
+    return formatVnd(price);
   }
 
   String formatDate(DateTime? date) {
@@ -184,20 +190,163 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
-  Widget _buildItem(OrderItem item) {
+  Future<void> _writeReview(OrderItem item) async {
+    final created = await Navigator.pushNamed(
+      context,
+      '/create-review',
+      arguments: item.productId,
+    );
+
+    if (created == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('reviewSubmitted'))),
+      );
+    }
+  }
+
+  Future<void> _editReview(OrderItem item, ReviewResponse review) async {
+    final updated = await Navigator.pushNamed(
+      context,
+      '/create-review',
+      arguments: {
+        'productId': item.productId,
+        'reviewId': review.reviewId,
+        'rating': review.rating,
+        'comment': review.comment,
+      },
+    );
+
+    if (updated == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('reviewSubmitted'))),
+      );
+      setState(() {});
+    }
+  }
+
+  Widget _buildReviewAction(OrderItem item) {
+    return FutureBuilder<ReviewResponse?>(
+      future: _reviewService.getUserReview(
+        userId: AppConfig.currentUserId,
+        productId: item.productId,
+      ),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          );
+        }
+
+        final review = snapshot.data;
+
+        if (review == null) {
+          return OutlinedButton.icon(
+            onPressed: () => _writeReview(item),
+            icon: const Icon(Icons.rate_review_outlined),
+            label: Text(context.tr('writeReview')),
+          );
+        }
+
+        if (review.canEdit) {
+          return OutlinedButton.icon(
+            onPressed: () => _editReview(item, review),
+            icon: const Icon(Icons.edit_outlined),
+            label: Text(context.tr('editReview')),
+          );
+        }
+
+        return OutlinedButton.icon(
+          onPressed: null,
+          icon: const Icon(Icons.lock_outline),
+          label: Text(context.tr('reviewLocked')),
+        );
+      },
+    );
+  }
+
+  Future<void> _completeOrder(OrderDetail order) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(context.tr('confirmReceived')),
+          content: Text(context.tr('confirmReceivedMessage')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(context.tr('cancel')),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(context.tr('confirm')),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isCompleting = true);
+
+    try {
+      await _orderService.completeOrder(order.orderId);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('orderCompleted'))),
+      );
+
+      await _refresh();
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) setState(() => _isCompleting = false);
+    }
+  }
+
+  Widget _buildItem(OrderItem item, {required bool canReview}) {
     return Card(
-      child: ListTile(
-        title: Text(item.productName),
-        subtitle: Text(
-          '${context.tr('productSize')}: ${item.size}  '
-          '${context.tr('productColor')}: ${item.color}\n'
-          '${context.tr('quantity')}: ${item.quantity}  '
-          '${context.tr('unitPrice')}: ${formatPrice(item.unitPrice)}',
-        ),
-        isThreeLine: true,
-        trailing: Text(
-          formatPrice(item.subtotal),
-          style: const TextStyle(fontWeight: FontWeight.bold),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.productName,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${context.tr('productSize')}: ${item.size}  '
+                    '${context.tr('productColor')}: ${item.color}\n'
+                    '${context.tr('quantity')}: ${item.quantity}  '
+                    '${context.tr('unitPrice')}: ${formatPrice(item.unitPrice)}',
+                  ),
+                  if (canReview && item.productId > 0) ...[
+                    const SizedBox(height: 10),
+                    _buildReviewAction(item),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              formatPrice(item.subtotal),
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
         ),
       ),
     );
@@ -222,7 +371,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _sectionTitle(context.tr('shipping')),
-          Text(context.tr('shipmentUnavailable')),
+          Text(context.tr('shipmentFallback')),
+          const SizedBox(height: 6),
+          _infoRow(context.tr('orderStatus'), _statusLabel(order.status)),
           if (canTrack) ...[
             const SizedBox(height: 8),
             OutlinedButton.icon(
@@ -275,6 +426,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final paymentStatus =
         _paymentStatus?.paymentStatus ?? order.payment.paymentStatus;
     final paidAt = _paymentStatus?.paidAt ?? order.payment.paidAt;
+    final canReview = order.canReview;
 
     return RefreshIndicator(
       onRefresh: _refresh,
@@ -294,7 +446,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           if (order.note != null && order.note!.isNotEmpty)
             _infoRow(context.tr('note'), order.note!),
           _sectionTitle(context.tr('items')),
-          ...order.items.map(_buildItem),
+          ...order.items.map((item) => _buildItem(item, canReview: canReview)),
           _buildShipmentSection(order, shipment),
           _sectionTitle(context.tr('payment')),
           _infoRow(context.tr('paymentMethod'), order.payment.paymentMethod ?? context.tr('notAvailable')),
@@ -321,6 +473,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               ),
               icon: const Icon(Icons.assignment_return_outlined),
               label: Text(context.tr('requestReturn')),
+            ),
+          ],
+          if (order.status == 'Delivered') ...[
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              onPressed: _isCompleting ? null : () => _completeOrder(order),
+              icon: _isCompleting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.check_circle_outline),
+              label: Text(context.tr('confirmReceived')),
             ),
           ],
           if (canCancel) ...[

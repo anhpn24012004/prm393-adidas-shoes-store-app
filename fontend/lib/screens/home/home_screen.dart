@@ -8,7 +8,9 @@ import '../../providers/badge_notifier.dart';
 import '../../services/category_service.dart';
 import '../../services/product_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/currency_formatter.dart';
 import '../../widgets/cart_wishlist_badges.dart';
+import '../../widgets/product_rating.dart';
 import '../../widgets/store_brand.dart';
 import '../product/product_detail_screen.dart';
 
@@ -316,8 +318,13 @@ class _HomeProductCard extends StatelessWidget {
               style: const TextStyle(color: AppColors.muted, fontSize: 12),
             ),
             const SizedBox(height: 4),
+            ProductRating(
+              averageRating: product.averageRating,
+              reviewCount: product.reviewCount,
+            ),
+            const SizedBox(height: 4),
             Text(
-              '${product.basePrice.toStringAsFixed(0)} VND',
+              formatVnd(product.basePrice),
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
           ],
