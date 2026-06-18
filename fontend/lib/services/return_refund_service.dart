@@ -52,6 +52,31 @@ class ReturnRefundService {
     if (response.statusCode != 200) throw Exception(_message(response));
   }
 
+  Future<String> uploadEvidence({
+    required List<int> bytes,
+    required String fileName,
+  }) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('${ApiClient.baseUrl}/returnrequests/evidence'),
+    );
+
+    request.headers.addAll(await _headers(includeContentType: false));
+    request.files.add(
+      http.MultipartFile.fromBytes('file', bytes, filename: fileName),
+    );
+
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+
+    if (response.statusCode != 200) {
+      throw Exception(_message(response));
+    }
+
+    final data = jsonDecode(response.body);
+    return data['url']?.toString() ?? '';
+  }
+
   Future<void> reviewReturn({
     required int returnRequestId,
     required bool approve,
@@ -99,10 +124,10 @@ class ReturnRefundService {
     if (response.statusCode != 200) throw Exception(_message(response));
   }
 
-  Future<Map<String, String>> _headers() async {
+  Future<Map<String, String>> _headers({bool includeContentType = true}) async {
     final token = await _authStorage.getToken();
     return {
-      'Content-Type': 'application/json',
+      if (includeContentType) 'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
     };
   }

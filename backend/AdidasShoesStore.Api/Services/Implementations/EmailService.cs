@@ -29,7 +29,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
 
             using var message = new MailMessage
             {
-                From = new MailAddress(config.From),
+                From = new MailAddress(config.From, config.FromName, Encoding.UTF8),
                 Subject = subject,
                 Body = body,
                 IsBodyHtml = true
@@ -59,7 +59,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
 
             using var message = new MailMessage
             {
-                From = new MailAddress(config.From),
+                From = new MailAddress(config.From, config.FromName, Encoding.UTF8),
                 Subject = "Mã OTP đặt lại mật khẩu Adidas",
                 Body = $"""
                     <!doctype html>
@@ -154,6 +154,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
             var username = _configuration["Email:Username"];
             var password = _configuration["Email:Password"];
             var from = _configuration["Email:From"];
+            var fromName = _configuration["Email:FromName"];
             var portValue = _configuration["Email:SmtpPort"];
 
             if (string.IsNullOrWhiteSpace(smtpHost) ||
@@ -174,7 +175,10 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 SmtpPort = smtpPort,
                 Username = username,
                 Password = password,
-                From = from
+                From = from,
+                FromName = string.IsNullOrWhiteSpace(fromName)
+                    ? "Adidas Shoes Store"
+                    : fromName
             };
         }
 
@@ -189,6 +193,8 @@ namespace AdidasShoesStore.Api.Services.Implementations
             public string Password { get; set; } = null!;
 
             public string From { get; set; } = null!;
+
+            public string FromName { get; set; } = null!;
         }
     }
 }

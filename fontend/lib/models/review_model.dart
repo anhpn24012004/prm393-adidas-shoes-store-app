@@ -28,6 +28,8 @@ class ReviewResponse {
   final int rating;
   final String? comment;
   final String? createdAt;
+  final int editCount;
+  final bool canEdit;
 
   ReviewResponse({
     required this.reviewId,
@@ -36,6 +38,8 @@ class ReviewResponse {
     required this.rating,
     this.comment,
     this.createdAt,
+    required this.editCount,
+    required this.canEdit,
   });
 
   factory ReviewResponse.fromJson(Map<String, dynamic> json) {
@@ -46,6 +50,8 @@ class ReviewResponse {
       rating: json['rating'] ?? 0,
       comment: json['comment'],
       createdAt: json['createdAt'],
+      editCount: json['editCount'] ?? 0,
+      canEdit: json['canEdit'] ?? false,
     );
   }
 }

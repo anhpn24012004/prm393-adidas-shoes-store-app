@@ -1,14 +1,17 @@
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
+
+import '../config/app_config.dart';
 import '../../models/ai_recommendation_model.dart';
 
 class AiAssistantService {
-  static const String baseUrl = 'http://10.0.2.2:5209';
-
   Future<AiRecommendationResponse> getRecommendation(
     AiRecommendationRequest request,
   ) async {
-    final url = Uri.parse('$baseUrl/api/AiAssistant/shoe-recommendation');
+    final url = Uri.parse(
+      '${AppConfig.apiBaseUrl}/AiAssistant/shoe-recommendation',
+    );
 
     final response = await http.post(
       url,
@@ -21,6 +24,8 @@ class AiAssistantService {
       return AiRecommendationResponse.fromJson(data);
     }
 
-    throw Exception('Không thể lấy tư vấn AI. Mã lỗi: ${response.statusCode}');
+    throw Exception(
+      'Không thể lấy tư vấn AI. Mã lỗi: ${response.statusCode}',
+    );
   }
 }

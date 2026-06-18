@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../localization/app_localization.dart';
 import '../../models/shipment_model.dart';
 import '../../services/auth_storage.dart';
 import '../../services/shipment_service.dart';
+import '../../utils/currency_formatter.dart';
 import 'admin_shipment_form_screen.dart';
 
 class AdminShipmentDetailScreen extends StatefulWidget {
@@ -57,12 +59,12 @@ class _AdminShipmentDetailScreenState extends State<AdminShipmentDetailScreen> {
   }
 
   String _formatMoney(double? amount) {
-    if (amount == null) return 'N/A';
-    return '${amount.toStringAsFixed(0)} VND';
+    if (amount == null) return context.tr('notAvailable');
+    return formatVnd(amount);
   }
 
   String _formatDate(DateTime? date) {
-    if (date == null) return 'N/A';
+    if (date == null) return context.tr('notAvailable');
 
     return '${date.year.toString().padLeft(4, '0')}-'
         '${date.month.toString().padLeft(2, '0')}-'
@@ -95,7 +97,7 @@ class _AdminShipmentDetailScreenState extends State<AdminShipmentDetailScreen> {
     if (nextStatuses.isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('No valid next statuses')));
+      ).showSnackBar(SnackBar(content: Text(context.tr('noNextStatus'))));
       return;
     }
 
@@ -113,8 +115,8 @@ class _AdminShipmentDetailScreenState extends State<AdminShipmentDetailScreen> {
                 TextField(
                   controller: noteController,
                   maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Note (optional)',
+                  decoration: InputDecoration(
+                    labelText: context.tr('noteOptional'),
                     border: OutlineInputBorder(),
                   ),
                 ),
@@ -122,7 +124,7 @@ class _AdminShipmentDetailScreenState extends State<AdminShipmentDetailScreen> {
                 ...nextStatuses.map((status) {
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: Text(status),
+                    title: Text(_shipmentStatusLabel(status)),
                     onTap: () => Navigator.pop(context, {
                       'status': status,
                       'note': noteController.text.trim(),
@@ -149,7 +151,9 @@ class _AdminShipmentDetailScreenState extends State<AdminShipmentDetailScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Shipment status updated to ${result['status']}'),
+          content: Text(
+            '${context.tr('shipmentStatusUpdated')}: ${_shipmentStatusLabel(result['status']!)}',
+          ),
         ),
       );
 
@@ -195,10 +199,12 @@ class _AdminShipmentDetailScreenState extends State<AdminShipmentDetailScreen> {
   Widget _buildItem(ShipmentItem item) {
     return Card(
       child: ListTile(
-        title: Text(item.productName ?? 'Item'),
+        title: Text(item.productName ?? context.tr('items')),
         subtitle: Text(
-          'Size: ${item.size ?? 'N/A'}  Color: ${item.color ?? 'N/A'}\n'
-          'Quantity: ${item.quantity ?? 0}  Unit: ${_formatMoney(item.unitPrice)}',
+          '${context.tr('productSize')}: ${item.size ?? context.tr('notAvailable')}  '
+          '${context.tr('productColor')}: ${item.color ?? context.tr('notAvailable')}\n'
+          '${context.tr('quantity')}: ${item.quantity ?? 0}  '
+          '${context.tr('unitPrice')}: ${_formatMoney(item.unitPrice)}',
         ),
         isThreeLine: true,
       ),
@@ -216,53 +222,88 @@ class _AdminShipmentDetailScreenState extends State<AdminShipmentDetailScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           Text(
-            detail.orderCode ?? 'Shipment Detail',
+            detail.orderCode ?? context.tr('shipmentDetail'),
             style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 4),
-          Text('Shipment status: ${detail.shipmentStatus ?? 'N/A'}'),
-          _sectionTitle('Order Info'),
-          _infoRow('Order status', detail.orderStatus ?? 'N/A'),
-          _infoRow('Final amount', _formatMoney(detail.finalAmount)),
-          _infoRow('Order total', _formatMoney(detail.totalAmount)),
-          _sectionTitle('Customer Info'),
-          _infoRow('Customer', detail.customerName ?? 'N/A'),
-          _infoRow('Email', detail.customerEmail ?? 'N/A'),
-          _infoRow('Phone', detail.customerPhone ?? 'N/A'),
-          _sectionTitle('Receiver'),
-          _infoRow('Receiver', detail.receiverName ?? 'N/A'),
-          _infoRow('Receiver phone', detail.receiverPhone ?? 'N/A'),
-          _infoRow('Address', detail.shippingAddress ?? 'N/A'),
-          _sectionTitle('Payment'),
-          _infoRow('Method', detail.paymentMethod ?? 'N/A'),
-          _infoRow('Status', detail.paymentStatus ?? 'N/A'),
-          _infoRow('Transaction', detail.transactionCode ?? 'N/A'),
-          _infoRow('Paid at', _formatDate(detail.paidAt)),
-          _sectionTitle('Shipment'),
-          _infoRow('Carrier', detail.carrier ?? 'N/A'),
-          _infoRow('Tracking number', detail.trackingNumber ?? 'N/A'),
+          Text(
+            '${context.tr('shipmentStatus')}: ${detail.shipmentStatus == null ? context.tr('notAvailable') : _shipmentStatusLabel(detail.shipmentStatus!)}',
+          ),
+          _sectionTitle(context.tr('orderInfo')),
           _infoRow(
-            'Estimated delivery',
+            context.tr('orderStatus'),
+            detail.orderStatus ?? context.tr('notAvailable'),
+          ),
+          _infoRow(context.tr('finalAmount'), _formatMoney(detail.finalAmount)),
+          _infoRow(context.tr('totalAmount'), _formatMoney(detail.totalAmount)),
+          _sectionTitle(context.tr('customerInfo')),
+          _infoRow(
+            context.tr('customer'),
+            detail.customerName ?? context.tr('notAvailable'),
+          ),
+          _infoRow('Email', detail.customerEmail ?? context.tr('notAvailable')),
+          _infoRow(
+            context.tr('phoneNumber'),
+            detail.customerPhone ?? context.tr('notAvailable'),
+          ),
+          _sectionTitle(context.tr('receiver')),
+          _infoRow(
+            context.tr('receiver'),
+            detail.receiverName ?? context.tr('notAvailable'),
+          ),
+          _infoRow(
+            context.tr('receiverPhone'),
+            detail.receiverPhone ?? context.tr('notAvailable'),
+          ),
+          _infoRow(
+            context.tr('address'),
+            detail.shippingAddress ?? context.tr('notAvailable'),
+          ),
+          _sectionTitle(context.tr('payment')),
+          _infoRow(
+            context.tr('paymentMethod'),
+            detail.paymentMethod ?? context.tr('notAvailable'),
+          ),
+          _infoRow(
+            context.tr('orderStatus'),
+            detail.paymentStatus ?? context.tr('notAvailable'),
+          ),
+          _infoRow(
+            context.tr('transactionCode'),
+            detail.transactionCode ?? context.tr('notAvailable'),
+          ),
+          _infoRow(context.tr('paidAt'), _formatDate(detail.paidAt)),
+          _sectionTitle(context.tr('shipment')),
+          _infoRow(
+            context.tr('carrier'),
+            detail.carrier ?? context.tr('notAvailable'),
+          ),
+          _infoRow(
+            context.tr('trackingNumber'),
+            detail.trackingNumber ?? context.tr('notAvailable'),
+          ),
+          _infoRow(
+            context.tr('estimatedDelivery'),
             _formatDate(detail.estimatedDeliveryDate),
           ),
-          _infoRow('Shipped at', _formatDate(detail.shippedAt)),
-          _infoRow('Delivered at', _formatDate(detail.deliveredAt)),
-          _sectionTitle('Order Items'),
+          _infoRow(context.tr('shippedAt'), _formatDate(detail.shippedAt)),
+          _infoRow(context.tr('deliveredAt'), _formatDate(detail.deliveredAt)),
+          _sectionTitle(context.tr('orderItems')),
           if (detail.items.isEmpty)
-            const Text('No order items returned')
+            Text(context.tr('noOrderItems'))
           else
             ...detail.items.map(_buildItem),
           const SizedBox(height: 16),
           OutlinedButton.icon(
             onPressed: locked ? null : () => _editTracking(detail),
             icon: const Icon(Icons.local_shipping),
-            label: const Text('Update Tracking Info'),
+            label: Text(context.tr('updateTrackingInfo')),
           ),
           const SizedBox(height: 8),
           ElevatedButton.icon(
             onPressed: locked ? null : () => _updateStatus(detail),
             icon: const Icon(Icons.sync),
-            label: const Text('Update Shipment Status'),
+            label: Text(context.tr('updateShipmentStatus')),
           ),
         ],
       ),
@@ -282,15 +323,15 @@ class _AdminShipmentDetailScreenState extends State<AdminShipmentDetailScreen> {
 
         if (roleSnapshot.data != true) {
           return Scaffold(
-            appBar: AppBar(title: const Text('Shipment Detail')),
-            body: const Center(child: Text('Admin access required')),
+            appBar: AppBar(title: Text(context.tr('shipmentDetail'))),
+            body: Center(child: Text(context.tr('adminAccessRequired'))),
           );
         }
 
         return Scaffold(
-          appBar: AppBar(title: const Text('Shipment Detail')),
+          appBar: AppBar(title: Text(context.tr('shipmentDetail'))),
           body: _shipmentId == null
-              ? const Center(child: Text('Shipment ID is missing'))
+              ? Center(child: Text(context.tr('shipmentIdMissing')))
               : FutureBuilder<ShipmentDetail>(
                   future: _detailFuture,
                   builder: (context, snapshot) {
@@ -310,11 +351,11 @@ class _AdminShipmentDetailScreenState extends State<AdminShipmentDetailScreen> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text('Error: $message'),
+                              Text('${context.tr('error')}: $message'),
                               const SizedBox(height: 12),
                               ElevatedButton(
                                 onPressed: _refresh,
-                                child: const Text('Retry'),
+                                child: Text(context.tr('retry')),
                               ),
                             ],
                           ),
@@ -325,7 +366,9 @@ class _AdminShipmentDetailScreenState extends State<AdminShipmentDetailScreen> {
                     final detail = snapshot.data;
 
                     if (detail == null) {
-                      return const Center(child: Text('Shipment not found'));
+                      return Center(
+                        child: Text(context.tr('shipmentNotFound')),
+                      );
                     }
 
                     return _buildBody(detail);
@@ -334,5 +377,19 @@ class _AdminShipmentDetailScreenState extends State<AdminShipmentDetailScreen> {
         );
       },
     );
+  }
+
+  String _shipmentStatusLabel(String status) {
+    return switch (status) {
+      'Pending' => context.tr('statusPending'),
+      'Preparing' => context.tr('statusPreparing'),
+      'Shipped' => context.tr('statusShipped'),
+      'InTransit' => context.tr('statusInTransit'),
+      'OutForDelivery' => context.tr('statusOutForDelivery'),
+      'Delivered' => context.tr('statusDelivered'),
+      'Failed' => context.tr('statusFailed'),
+      'Returned' => context.tr('statusReturned'),
+      _ => status,
+    };
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../config/app_config.dart';
+import '../../localization/app_localization.dart';
 import '../../models/return_refund_model.dart';
 import '../../services/return_refund_service.dart';
 import '../../theme/app_theme.dart';
@@ -40,10 +41,19 @@ class _RefundStatusScreenState extends State<RefundStatusScreen> {
     };
   }
 
+  String _statusLabel(String status) {
+    return switch (status.toLowerCase()) {
+      'approved' => context.tr('statusApproved'),
+      'refunded' => context.tr('statusRefunded'),
+      'rejected' => context.tr('statusRejected'),
+      _ => context.tr('statusPending'),
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('RETURNS & REFUNDS')),
+      appBar: AppBar(title: Text(context.tr('returnsRefunds').toUpperCase())),
       body: FutureBuilder<List<ReturnRequestModel>>(
         future: _future,
         builder: (context, snapshot) {
@@ -62,7 +72,7 @@ class _RefundStatusScreenState extends State<RefundStatusScreen> {
           }
           final requests = snapshot.data ?? [];
           if (requests.isEmpty) {
-            return const Center(child: Text('No return requests yet.'));
+            return Center(child: Text(context.tr('returnsRefundsEmpty')));
           }
           return RefreshIndicator(
             onRefresh: _refresh,
@@ -82,7 +92,7 @@ class _RefundStatusScreenState extends State<RefundStatusScreen> {
                           children: [
                             Expanded(
                               child: Text(
-                                'ORDER #${request.orderId}',
+                                '${context.tr('order').toUpperCase()} #${request.orderId}',
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w900,
                                 ),
@@ -95,7 +105,7 @@ class _RefundStatusScreenState extends State<RefundStatusScreen> {
                               ),
                               color: _statusColor(request.status),
                               child: Text(
-                                request.status.toUpperCase(),
+                                _statusLabel(request.status).toUpperCase(),
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 11,
@@ -110,7 +120,7 @@ class _RefundStatusScreenState extends State<RefundStatusScreen> {
                         if (request.adminNote?.isNotEmpty == true) ...[
                           const SizedBox(height: 8),
                           Text(
-                            'Admin note: ${request.adminNote}',
+                            '${context.tr('adminNote')}: ${request.adminNote}',
                             style: const TextStyle(color: AppColors.muted),
                           ),
                         ],

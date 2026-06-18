@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../localization/app_localization.dart';
 import '../../models/shipment_model.dart';
 import '../../services/auth_storage.dart';
 import '../../services/shipment_service.dart';
+import '../../utils/currency_formatter.dart';
 import 'admin_shipment_detail_screen.dart';
 import 'admin_shipment_form_screen.dart';
 
@@ -52,15 +54,30 @@ class _AdminShipmentListScreenState extends State<AdminShipmentListScreen> {
   }
 
   String _formatMoney(double? amount) {
-    if (amount == null) return 'N/A';
-    return '${amount.toStringAsFixed(0)} VND';
+    if (amount == null) return context.tr('notAvailable');
+    return formatVnd(amount);
   }
 
   String _formatDate(DateTime? date) {
-    if (date == null) return 'N/A';
+    if (date == null) return context.tr('notAvailable');
     return '${date.year.toString().padLeft(4, '0')}-'
         '${date.month.toString().padLeft(2, '0')}-'
         '${date.day.toString().padLeft(2, '0')}';
+  }
+
+  String _shipmentStatusLabel(String status) {
+    return switch (status) {
+      'All' => context.tr('all'),
+      'Pending' => context.tr('statusPending'),
+      'Preparing' => context.tr('statusPreparing'),
+      'Shipped' => context.tr('statusShipped'),
+      'InTransit' => context.tr('statusInTransit'),
+      'OutForDelivery' => context.tr('statusOutForDelivery'),
+      'Delivered' => context.tr('statusDelivered'),
+      'Failed' => context.tr('statusFailed'),
+      'Returned' => context.tr('statusReturned'),
+      _ => status,
+    };
   }
 
   List<ShipmentSummary> _applyFilters(List<ShipmentSummary> shipments) {
@@ -122,15 +139,15 @@ class _AdminShipmentListScreenState extends State<AdminShipmentListScreen> {
       child: ListTile(
         onTap: () => _openDetail(shipment),
         title: Text(
-          shipment.orderCode ?? 'Shipment',
+          shipment.orderCode ?? context.tr('shipment'),
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         subtitle: Text(
-          '${shipment.customerName ?? 'N/A'}\n'
-          'Receiver: ${shipment.receiverName ?? 'N/A'} - ${shipment.receiverPhone ?? 'N/A'}\n'
-          'Carrier: ${shipment.carrier ?? 'N/A'}  Tracking: ${shipment.trackingNumber ?? 'N/A'}\n'
-          'Shipment: ${shipment.shipmentStatus ?? 'N/A'}  Order: ${shipment.orderStatus ?? 'N/A'}\n'
-          'Payment: ${shipment.paymentStatus ?? 'N/A'}  ETA: ${_formatDate(shipment.estimatedDeliveryDate)}',
+          '${shipment.customerName ?? context.tr('notAvailable')}\n'
+          '${context.tr('receiver')}: ${shipment.receiverName ?? context.tr('notAvailable')} - ${shipment.receiverPhone ?? context.tr('notAvailable')}\n'
+          '${context.tr('carrier')}: ${shipment.carrier ?? context.tr('notAvailable')}  ${context.tr('trackingNumber')}: ${shipment.trackingNumber ?? context.tr('notAvailable')}\n'
+          '${context.tr('shipmentStatus')}: ${shipment.shipmentStatus == null ? context.tr('notAvailable') : _shipmentStatusLabel(shipment.shipmentStatus!)}  ${context.tr('order')}: ${shipment.orderStatus ?? context.tr('notAvailable')}\n'
+          '${context.tr('payment')}: ${shipment.paymentStatus ?? context.tr('notAvailable')}  ${context.tr('estimatedDelivery')}: ${_formatDate(shipment.estimatedDeliveryDate)}',
         ),
         isThreeLine: false,
         trailing: Text(
@@ -158,12 +175,12 @@ class _AdminShipmentListScreenState extends State<AdminShipmentListScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'Error: ${snapshot.error.toString().replaceFirst('Exception: ', '')}',
+                    '${context.tr('error')}: ${snapshot.error.toString().replaceFirst('Exception: ', '')}',
                   ),
                   const SizedBox(height: 12),
                   ElevatedButton(
                     onPressed: _refresh,
-                    child: const Text('Retry'),
+                    child: Text(context.tr('retry')),
                   ),
                 ],
               ),
@@ -174,7 +191,7 @@ class _AdminShipmentListScreenState extends State<AdminShipmentListScreen> {
         final shipments = _applyFilters(snapshot.data ?? []);
 
         if (shipments.isEmpty) {
-          return const Center(child: Text('No shipments found'));
+          return Center(child: Text(context.tr('noShipmentsFound')));
         }
 
         return RefreshIndicator(
@@ -199,7 +216,7 @@ class _AdminShipmentListScreenState extends State<AdminShipmentListScreen> {
           child: TextField(
             controller: _searchController,
             decoration: InputDecoration(
-              hintText: 'Search shipments...',
+              hintText: context.tr('searchShipments'),
               prefixIcon: const Icon(Icons.search),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -217,7 +234,7 @@ class _AdminShipmentListScreenState extends State<AdminShipmentListScreen> {
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: ChoiceChip(
-                  label: Text(status),
+                  label: Text(_shipmentStatusLabel(status)),
                   selected: _selectedStatus == status,
                   onSelected: (_) {
                     setState(() {
@@ -246,13 +263,13 @@ class _AdminShipmentListScreenState extends State<AdminShipmentListScreen> {
 
         if (snapshot.data != true) {
           return Scaffold(
-            appBar: AppBar(title: const Text('Shipment Management')),
-            body: const Center(child: Text('Admin access required')),
+            appBar: AppBar(title: Text(context.tr('shipmentManagement'))),
+            body: Center(child: Text(context.tr('adminAccessRequired'))),
           );
         }
 
         return Scaffold(
-          appBar: AppBar(title: const Text('Shipment Management')),
+          appBar: AppBar(title: Text(context.tr('shipmentManagement'))),
           body: Column(
             children: [
               _buildFilters(),

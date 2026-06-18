@@ -12,6 +12,8 @@ class OrderService {
     required int addressId,
     required String paymentMethod,
     String? note,
+    int? buyNowVariantId,
+    int? buyNowQuantity,
   }) async {
     final response = await http.post(
       Uri.parse('${ApiClient.baseUrl}/orders'),
@@ -21,6 +23,8 @@ class OrderService {
           addressId: addressId,
           paymentMethod: paymentMethod,
           note: note,
+          buyNowVariantId: buyNowVariantId,
+          buyNowQuantity: buyNowQuantity,
         ).toJson(),
       ),
     );
@@ -72,6 +76,19 @@ class OrderService {
     throw Exception(_errorMessage(response));
   }
 
+  Future<OrderDetail> completeOrder(int orderId) async {
+    final response = await http.put(
+      Uri.parse('${ApiClient.baseUrl}/orders/$orderId/complete'),
+      headers: await _headers(),
+    );
+
+    if (response.statusCode == 200) {
+      return OrderDetail.fromJson(jsonDecode(response.body));
+    }
+
+    throw Exception(_errorMessage(response));
+  }
+
   Future<CreateVnPayPaymentResponse> createVnPayPayment(int orderId) async {
     final response = await http.post(
       Uri.parse('${ApiClient.baseUrl}/payments/vnpay/create'),
@@ -81,6 +98,20 @@ class OrderService {
 
     if (response.statusCode == 200) {
       return CreateVnPayPaymentResponse.fromJson(jsonDecode(response.body));
+    }
+
+    throw Exception(_errorMessage(response));
+  }
+
+  Future<PaymentStatus> payWithVisa(VisaPaymentRequest request) async {
+    final response = await http.post(
+      Uri.parse('${ApiClient.baseUrl}/payments/visa/pay'),
+      headers: await _headers(),
+      body: jsonEncode(request.toJson()),
+    );
+
+    if (response.statusCode == 200) {
+      return PaymentStatus.fromJson(jsonDecode(response.body));
     }
 
     throw Exception(_errorMessage(response));

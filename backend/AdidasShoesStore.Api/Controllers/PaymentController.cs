@@ -70,6 +70,30 @@ namespace AdidasShoesStore.Api.Controllers
         }
 
         [Authorize]
+        [HttpPost("visa/pay")]
+        public async Task<IActionResult> PayWithVisa(CreateVisaPaymentDto dto)
+        {
+            if (!TryGetUserId(out var userId))
+            {
+                return Unauthorized(new { message = "Invalid token" });
+            }
+
+            var result = await _paymentService.PayWithVisaAsync(userId, dto);
+
+            if (!result.Success)
+            {
+                if (result.ErrorType == "NotFound")
+                {
+                    return NotFound(new { message = result.Error });
+                }
+
+                return BadRequest(new { message = result.Error });
+            }
+
+            return Ok(result.Data);
+        }
+
+        [Authorize]
         [HttpGet("order/{orderId:int}/status")]
         public async Task<IActionResult> GetPaymentStatus(int orderId)
         {

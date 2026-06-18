@@ -21,5 +21,9 @@ namespace AdidasShoesStore.Api.DTOs.Order
         public string? PaymentStatus { get; set; }
 
         public DateTime? CreatedAt { get; set; }
+
+        public bool HasReturnRequest { get; set; }
+
+        public List<OrderItemDto> Items { get; set; } = new();
     }
 }

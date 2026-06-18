@@ -6,8 +6,21 @@ import '../../localization/app_localization.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/store_brand.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  Future<void> _editProfile() async {
+    final updated = await Navigator.pushNamed(context, '/edit-profile');
+
+    if (updated == true && mounted) {
+      setState(() {});
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,50 +59,63 @@ class ProfileScreen extends StatelessWidget {
                   final values = userSnapshot.data ?? [];
                   final name = values.isNotEmpty ? values[0] : null;
                   final email = values.length > 1 ? values[1] : null;
-                  return Container(
-                    padding: const EdgeInsets.all(20),
-                    color: AppColors.black,
-                    child: Row(
-                      children: [
-                        const CircleAvatar(
-                          radius: 30,
-                          backgroundColor: Colors.white,
-                          child: Icon(
-                            Icons.person,
-                            color: AppColors.black,
-                            size: 32,
+                  return InkWell(
+                    onTap: signedIn ? _editProfile : null,
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+                      color: AppColors.black,
+                      child: Row(
+                        children: [
+                          const CircleAvatar(
+                            radius: 30,
+                            backgroundColor: Colors.white,
+                            child: Icon(
+                              Icons.person,
+                              color: AppColors.black,
+                              size: 32,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                (name ?? context.tr('adiclubMember'))
-                                    .toUpperCase(),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 17,
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  (name ?? context.tr('adiclubMember'))
+                                      .toUpperCase(),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 17,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                email ?? context.tr('signInToSync'),
-                                style: const TextStyle(color: Colors.white70),
-                              ),
-                            ],
+                                const SizedBox(height: 4),
+                                Text(
+                                  email ?? context.tr('signInToSync'),
+                                  style: const TextStyle(color: Colors.white70),
+                                ),
+                                if (signedIn) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    context.tr('editProfile'),
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
                           ),
-                        ),
-                        const Icon(Icons.arrow_forward, color: Colors.white),
-                      ],
+                          const Icon(Icons.arrow_forward, color: Colors.white),
+                        ],
+                      ),
                     ),
                   );
                 },
               ),
               const SizedBox(height: 24),
-              if (signedIn) ...[
+              if (signedIn && !isAdmin) ...[
                 _ProfileItem(
                   icon: Icons.receipt_long_outlined,
                   title: context.tr('myOrders'),
@@ -115,18 +141,30 @@ class ProfileScreen extends StatelessWidget {
                   onTap: () => Navigator.pushNamed(context, '/addresses'),
                 ),
                 _ProfileItem(
+                  icon: Icons.credit_card_outlined,
+                  title: context.tr('paymentMethods'),
+                  subtitle: context.tr('paymentMethodsSubtitle'),
+                  onTap: () => Navigator.pushNamed(context, '/payment-methods'),
+                ),
+                _ProfileItem(
                   icon: Icons.lock_outline,
                   title: context.tr('changePassword'),
                   subtitle: context.tr('changePasswordSubtitle'),
-                  onTap: () =>
-                      Navigator.pushNamed(context, '/change-password'),
+                  onTap: () => Navigator.pushNamed(context, '/change-password'),
                 ),
               ],
+              if (signedIn && isAdmin)
+                _ProfileItem(
+                  icon: Icons.lock_outline,
+                  title: context.tr('changePassword'),
+                  subtitle: context.tr('changePasswordSubtitle'),
+                  onTap: () => Navigator.pushNamed(context, '/change-password'),
+                ),
               _ProfileItem(
                 icon: Icons.support_agent_outlined,
                 title: context.tr('helpSupport'),
                 subtitle: context.tr('helpSupportSubtitle'),
-                onTap: () {},
+                onTap: () => Navigator.pushNamed(context, '/help-support'),
               ),
               _ProfileItem(
                 icon: Icons.settings_outlined,
@@ -166,6 +204,12 @@ class ProfileScreen extends StatelessWidget {
                   title: context.tr('adminDashboard'),
                   subtitle: context.tr('businessOverview'),
                   onTap: () => Navigator.pushNamed(context, '/admin/dashboard'),
+                ),
+                _ProfileItem(
+                  icon: Icons.people_outline,
+                  title: context.tr('userManagement'),
+                  subtitle: context.tr('userManagementSubtitle'),
+                  onTap: () => Navigator.pushNamed(context, '/admin/users'),
                 ),
                 _ProfileItem(
                   icon: Icons.receipt_long_outlined,

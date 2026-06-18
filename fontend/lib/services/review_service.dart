@@ -17,7 +17,53 @@ class ReviewService {
       return ReviewResponse.fromJson(jsonDecode(response.body));
     }
 
-    throw Exception(response.body);
+    throw Exception(response.body.replaceAll('"', ''));
+  }
+
+  Future<ReviewResponse?> getUserReview({
+    required int userId,
+    required int productId,
+  }) async {
+    final url = Uri.parse(
+      '${ApiClient.baseUrl}/reviews/user/$userId/product/$productId',
+    );
+
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      return ReviewResponse.fromJson(jsonDecode(response.body));
+    }
+
+    if (response.statusCode == 404) {
+      return null;
+    }
+
+    throw Exception(response.body.replaceAll('"', ''));
+  }
+
+  Future<ReviewResponse> updateReview({
+    required int reviewId,
+    required int userId,
+    required int rating,
+    required String comment,
+  }) async {
+    final url = Uri.parse('${ApiClient.baseUrl}/reviews/$reviewId');
+
+    final response = await http.put(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'userId': userId,
+        'rating': rating,
+        'comment': comment,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return ReviewResponse.fromJson(jsonDecode(response.body));
+    }
+
+    throw Exception(response.body.replaceAll('"', ''));
   }
 
   Future<List<ReviewResponse>> getReviewsByProductId(int productId) async {

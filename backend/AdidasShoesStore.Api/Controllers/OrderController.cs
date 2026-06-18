@@ -104,6 +104,32 @@ namespace AdidasShoesStore.Api.Controllers
             return Ok(result.Data);
         }
 
+        [HttpPut("{id:int}/complete")]
+        public async Task<IActionResult> CompleteOrder(int id)
+        {
+            if (!TryGetUserId(out var userId))
+            {
+                return Unauthorized(new { message = "Invalid token" });
+            }
+
+            var result = await _orderService.CompleteOrderAsync(
+                userId,
+                id
+            );
+
+            if (!result.Success)
+            {
+                if (result.ErrorType == "NotFound")
+                {
+                    return NotFound(new { message = result.Error });
+                }
+
+                return BadRequest(new { message = result.Error });
+            }
+
+            return Ok(result.Data);
+        }
+
         private bool TryGetUserId(out int userId)
         {
             var value = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;

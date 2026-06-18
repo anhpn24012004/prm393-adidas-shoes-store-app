@@ -46,6 +46,11 @@ namespace AdidasShoesStore.Api.Services.Interfaces
             IReadOnlyDictionary<string, string> queryParameters
         );
 
+        Task<PaymentServiceResult<PaymentStatusDto>> PayWithVisaAsync(
+            int userId,
+            CreateVisaPaymentDto dto
+        );
+
         Task<PaymentStatusDto?> GetPaymentStatusAsync(
             int userId,
             int orderId

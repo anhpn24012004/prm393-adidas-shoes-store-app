@@ -18,9 +18,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final OrderService _orderService = OrderService();
   final AddressService _addressService = AddressService();
   final TextEditingController _noteController = TextEditingController();
+  final TextEditingController _visaCardNumberController =
+      TextEditingController();
+  final TextEditingController _visaCardHolderController =
+      TextEditingController();
+  final TextEditingController _visaExpiryController = TextEditingController();
+  final TextEditingController _visaCvvController = TextEditingController();
 
   late Future<List<UserAddress>> _addresses;
   int? _selectedAddressId;
+  int? _buyNowVariantId;
+  int? _buyNowQuantity;
   String _paymentMethod = 'COD';
   bool _isSubmitting = false;
 
@@ -31,8 +39,24 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final arguments = ModalRoute.of(context)?.settings.arguments;
+
+    if (arguments is Map) {
+      _buyNowVariantId = arguments['variantId'] as int?;
+      _buyNowQuantity = arguments['quantity'] as int?;
+    }
+  }
+
+  @override
   void dispose() {
     _noteController.dispose();
+    _visaCardNumberController.dispose();
+    _visaCardHolderController.dispose();
+    _visaExpiryController.dispose();
+    _visaCvvController.dispose();
     super.dispose();
   }
 
@@ -42,6 +66,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         SnackBar(content: Text(context.tr('selectShippingAddress'))),
       );
       return;
+    }
+
+    VisaPaymentRequest? visaPayment;
+
+    if (_paymentMethod == 'VISA') {
+      visaPayment = await _collectVisaPayment();
+
+      if (visaPayment == null) {
+        return;
+      }
     }
 
     setState(() {
@@ -55,12 +89,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         note: _noteController.text.trim().isEmpty
             ? null
             : _noteController.text.trim(),
+        buyNowVariantId: _buyNowVariantId,
+        buyNowQuantity: _buyNowQuantity,
       );
 
       if (!mounted) return;
 
       if (_paymentMethod == 'VNPAY') {
         await _handleVnPay(order);
+        return;
+      }
+
+      if (_paymentMethod == 'VISA') {
+        await _handleVisa(order, visaPayment!);
         return;
       }
 
@@ -84,6 +125,207 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         });
       }
     }
+  }
+
+  Future<VisaPaymentRequest?> _collectVisaPayment() async {
+    final formKey = GlobalKey<FormState>();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Visa'),
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: _visaCardNumberController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: context.tr('visaCardNumber'),
+                      prefixIcon: const Icon(Icons.credit_card),
+                    ),
+                    validator: _validateVisaCardNumber,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _visaCardHolderController,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: InputDecoration(
+                      labelText: context.tr('visaCardHolder'),
+                      prefixIcon: const Icon(Icons.person_outline),
+                    ),
+                    validator: (value) {
+                      if ((value ?? '').trim().isEmpty) {
+                        return context.tr('requiredField');
+                      }
+
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _visaExpiryController,
+                          keyboardType: TextInputType.datetime,
+                          decoration: InputDecoration(
+                            labelText: context.tr('visaExpiry'),
+                            hintText: 'MM/YY',
+                          ),
+                          validator: _validateVisaExpiry,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _visaCvvController,
+                          keyboardType: TextInputType.number,
+                          obscureText: true,
+                          decoration: InputDecoration(
+                            labelText: context.tr('visaCvv'),
+                          ),
+                          validator: _validateVisaCvv,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(context.tr('cancel').toUpperCase()),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (formKey.currentState?.validate() ?? false) {
+                  Navigator.pop(context, true);
+                }
+              },
+              child: Text(context.tr('confirm').toUpperCase()),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return null;
+    }
+
+    final expiryParts = _visaExpiryController.text.trim().split('/');
+
+    return VisaPaymentRequest(
+      orderId: 0,
+      cardNumber: _visaCardNumberController.text.trim(),
+      cardHolderName: _visaCardHolderController.text.trim(),
+      expiryMonth: expiryParts[0].trim(),
+      expiryYear: expiryParts[1].trim(),
+      cvv: _visaCvvController.text.trim(),
+    );
+  }
+
+  Future<void> _openAddressPicker(List<UserAddress> addresses) async {
+    final selectedAddressId = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                child: Text(
+                  context.tr('selectAddress').toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: addresses.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final address = addresses[index];
+                    final selected = address.addressId == _selectedAddressId;
+
+                    return ListTile(
+                      leading: Icon(
+                        selected
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_off,
+                      ),
+                      title: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              address.receiverName,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          if (address.isDefault)
+                            Text(
+                              context.tr('defaultLabel').toUpperCase(),
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                        ],
+                      ),
+                      subtitle: Text(
+                        '${address.phone}\n${address.formattedAddress}',
+                      ),
+                      isThreeLine: true,
+                      onTap: () => Navigator.pop(context, address.addressId),
+                    );
+                  },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      Navigator.pop(context);
+                      await Navigator.pushNamed(context, '/address-form');
+                      if (mounted) {
+                        setState(() {
+                          _addresses = _addressService.getAddresses();
+                        });
+                      }
+                    },
+                    icon: const Icon(Icons.add_location_alt_outlined),
+                    label: Text(context.tr('addShippingAddress').toUpperCase()),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (selectedAddressId == null || !mounted) return;
+
+    setState(() {
+      _selectedAddressId = selectedAddressId;
+    });
   }
 
   Widget _buildAddressSelector() {
@@ -132,49 +374,91 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             .firstOrNull;
         _selectedAddressId ??= addresses.first.addressId;
 
-        return Column(
-          children: addresses.map((address) {
-            return RadioListTile<int>(
-              contentPadding: EdgeInsets.zero,
-              value: address.addressId,
-              groupValue: _selectedAddressId,
-              onChanged: _isSubmitting
-                  ? null
-                  : (value) => setState(() => _selectedAddressId = value),
-              title: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      address.receiverName,
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
+        final selectedAddress = addresses.firstWhere(
+          (address) => address.addressId == _selectedAddressId,
+          orElse: () => addresses.first,
+        );
+
+        return InkWell(
+          onTap: _isSubmitting ? null : () => _openAddressPicker(addresses),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(top: 4),
+                  child: Icon(Icons.location_on_outlined),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              selectedAddress.receiverName,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          if (selectedAddress.isDefault)
+                            Text(
+                              context.tr('defaultLabel').toUpperCase(),
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(selectedAddress.phone),
+                      Text(
+                        selectedAddress.formattedAddress,
+                        style: TextStyle(color: Colors.grey.shade700),
+                      ),
+                    ],
                   ),
-                  if (address.isDefault)
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    const Icon(Icons.keyboard_arrow_down),
+                    const SizedBox(height: 8),
                     Text(
-                      context.tr('defaultLabel').toUpperCase(),
+                      context.tr('changeAddress').toUpperCase(),
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                ],
-              ),
-              subtitle: Text('${address.phone}\n${address.formattedAddress}'),
-              isThreeLine: true,
-            );
-          }).toList(),
+                  ],
+                ),
+              ],
+            ),
+          ),
         );
       },
     );
   }
 
   Future<void> _handleVnPay(OrderDetail order) async {
+    final unavailableMessage = context.tr('vnpayUnavailable');
+    final cannotOpenMessage = context.tr('cannotOpenVnpay');
+
     try {
       final response = await _orderService.createVnPayPayment(order.orderId);
       final uri = Uri.tryParse(response.paymentUrl);
 
       if (uri == null || response.paymentUrl.isEmpty) {
-        _showError(context.tr('vnpayUnavailable'));
+        _showError(unavailableMessage);
         return;
       }
 
@@ -183,7 +467,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       if (!mounted) return;
 
       if (!opened) {
-        _showError(context.tr('cannotOpenVnpay'));
+        _showError(cannotOpenMessage);
         return;
       }
 
@@ -197,6 +481,119 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
       _showError(e.toString());
     }
+  }
+
+  Future<void> _handleVisa(
+    OrderDetail order,
+    VisaPaymentRequest payment,
+  ) async {
+    try {
+      await _orderService.payWithVisa(
+        VisaPaymentRequest(
+          orderId: order.orderId,
+          cardNumber: payment.cardNumber,
+          cardHolderName: payment.cardHolderName,
+          expiryMonth: payment.expiryMonth,
+          expiryYear: payment.expiryYear,
+          cvv: payment.cvv,
+        ),
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('paymentCompleted'))),
+      );
+
+      Navigator.pushReplacementNamed(
+        context,
+        '/order-detail',
+        arguments: order.orderId,
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      _showError(e.toString());
+    }
+  }
+
+  String? _validateVisaCardNumber(String? value) {
+    final digits = _digitsOnly(value);
+
+    if (digits.length < 13 ||
+        digits.length > 19 ||
+        !digits.startsWith('4') ||
+        !_passesLuhn(digits)) {
+      return context.tr('invalidVisaCard');
+    }
+
+    return null;
+  }
+
+  String? _validateVisaExpiry(String? value) {
+    final match = RegExp(r'^(\d{1,2})/(\d{2}|\d{4})$').firstMatch(
+      (value ?? '').trim(),
+    );
+
+    if (match == null) {
+      return context.tr('invalidVisaExpiry');
+    }
+
+    final month = int.tryParse(match.group(1)!);
+    var year = int.tryParse(match.group(2)!);
+
+    if (month == null || month < 1 || month > 12 || year == null) {
+      return context.tr('invalidVisaExpiry');
+    }
+
+    if (year < 100) {
+      year += 2000;
+    }
+
+    final lastValidDate = DateTime(year, month + 1, 0);
+    final today = DateTime.now();
+
+    if (lastValidDate.isBefore(DateTime(today.year, today.month, today.day))) {
+      return context.tr('invalidVisaExpiry');
+    }
+
+    return null;
+  }
+
+  String? _validateVisaCvv(String? value) {
+    final digits = _digitsOnly(value);
+
+    if (digits.length < 3 || digits.length > 4) {
+      return context.tr('invalidVisaCvv');
+    }
+
+    return null;
+  }
+
+  String _digitsOnly(String? value) {
+    return (value ?? '').replaceAll(RegExp(r'\D'), '');
+  }
+
+  bool _passesLuhn(String value) {
+    var sum = 0;
+    var doubleDigit = false;
+
+    for (var index = value.length - 1; index >= 0; index--) {
+      var digit = int.parse(value[index]);
+
+      if (doubleDigit) {
+        digit *= 2;
+
+        if (digit > 9) {
+          digit -= 9;
+        }
+      }
+
+      sum += digit;
+      doubleDigit = !doubleDigit;
+    }
+
+    return sum % 10 == 0;
   }
 
   void _showError(String message) {
@@ -240,6 +637,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         ),
         paymentOption('COD', 'COD'),
         paymentOption('VNPAY', 'VNPAY'),
+        paymentOption('VISA', 'Visa'),
       ],
     );
   }

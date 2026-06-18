@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../localization/app_localization.dart';
 import '../../models/category_model.dart';
 import '../../services/category_service.dart';
 
@@ -74,8 +75,8 @@ class _AdminCategoryFormScreenState extends State<AdminCategoryFormScreen> {
         SnackBar(
           content: Text(
             isEditMode
-                ? 'Category updated successfully'
-                : 'Category created successfully',
+                ? context.tr('categoryUpdated')
+                : context.tr('categoryCreated'),
           ),
         ),
       );
@@ -86,7 +87,7 @@ class _AdminCategoryFormScreenState extends State<AdminCategoryFormScreen> {
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      ).showSnackBar(SnackBar(content: Text('${context.tr('error')}: $e')));
     } finally {
       if (mounted) {
         setState(() {
@@ -98,7 +99,9 @@ class _AdminCategoryFormScreenState extends State<AdminCategoryFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final title = isEditMode ? 'Edit Category' : 'Create Category';
+    final title = isEditMode
+        ? context.tr('editCategory')
+        : context.tr('createCategory');
 
     return Scaffold(
       appBar: AppBar(title: Text(title)),
@@ -113,17 +116,17 @@ class _AdminCategoryFormScreenState extends State<AdminCategoryFormScreen> {
                 children: [
                   TextFormField(
                     controller: _categoryNameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Category Name',
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      labelText: context.tr('categoryName'),
+                      border: const OutlineInputBorder(),
                     ),
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
-                        return 'Category name is required';
+                        return context.tr('requiredField');
                       }
 
                       if (value.trim().length > 100) {
-                        return 'Category name must be less than 100 characters';
+                        return context.tr('categoryNameTooLong');
                       }
 
                       return null;
@@ -134,13 +137,13 @@ class _AdminCategoryFormScreenState extends State<AdminCategoryFormScreen> {
                   TextFormField(
                     controller: _descriptionController,
                     maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'Description',
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      labelText: context.tr('productDescription'),
+                      border: const OutlineInputBorder(),
                     ),
                     validator: (value) {
                       if (value != null && value.length > 255) {
-                        return 'Description must be less than 255 characters';
+                        return context.tr('descriptionTooLong');
                       }
 
                       return null;
@@ -157,8 +160,8 @@ class _AdminCategoryFormScreenState extends State<AdminCategoryFormScreen> {
                           ? const CircularProgressIndicator()
                           : Text(
                               isEditMode
-                                  ? 'Update Category'
-                                  : 'Create Category',
+                                  ? context.tr('updateCategory')
+                                  : context.tr('createCategory'),
                             ),
                     ),
                   ),

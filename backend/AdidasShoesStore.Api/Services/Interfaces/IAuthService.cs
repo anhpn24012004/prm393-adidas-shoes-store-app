@@ -10,6 +10,10 @@ public interface IAuthService
 
     Task<AuthResponseDto?> GoogleLoginAsync(GoogleLoginRequestDto request);
 
+    Task<UserProfileDto?> GetProfileAsync(int userId);
+
+    Task<UserProfileDto?> UpdateProfileAsync(int userId, UpdateProfileDto request);
+
     Task<bool> ChangePasswordAsync(int userId, ChangePasswordDto request);
 
     Task<bool> ForgotPasswordAsync(string email);

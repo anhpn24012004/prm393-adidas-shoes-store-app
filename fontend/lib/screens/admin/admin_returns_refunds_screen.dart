@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../localization/app_localization.dart';
 import '../../models/return_refund_model.dart';
 import '../../services/return_refund_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/currency_formatter.dart';
 
 class AdminReturnsRefundsScreen extends StatefulWidget {
   const AdminReturnsRefundsScreen({super.key});
@@ -46,16 +48,16 @@ class _AdminReturnsRefundsScreenState extends State<AdminReturnsRefundsScreen>
         content: TextField(
           controller: controller,
           maxLines: 3,
-          decoration: const InputDecoration(labelText: 'Admin note'),
+          decoration: InputDecoration(labelText: context.tr('adminNote')),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('CANCEL'),
+            child: Text(context.tr('cancel').toUpperCase()),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('CONFIRM'),
+            child: Text(context.tr('confirm').toUpperCase()),
           ),
         ],
       ),
@@ -65,7 +67,9 @@ class _AdminReturnsRefundsScreenState extends State<AdminReturnsRefundsScreen>
   }
 
   Future<void> _review(ReturnRequestModel request, bool approve) async {
-    final note = await _askNote(approve ? 'Approve return' : 'Reject return');
+    final note = await _askNote(
+      approve ? context.tr('approveReturn') : context.tr('rejectReturn'),
+    );
     if (note == null) return;
     try {
       await _service.reviewReturn(
@@ -80,7 +84,7 @@ class _AdminReturnsRefundsScreenState extends State<AdminReturnsRefundsScreen>
   }
 
   Future<void> _complete(RefundModel refund) async {
-    final code = await _askNote('Complete refund: transaction code');
+    final code = await _askNote(context.tr('completeRefundTransactionCode'));
     if (code == null) return;
     try {
       await _service.completeRefund(refund.refundId, code);
@@ -96,16 +100,27 @@ class _AdminReturnsRefundsScreenState extends State<AdminReturnsRefundsScreen>
     );
   }
 
+  String _statusLabel(String status) {
+    return switch (status) {
+      'Pending' => context.tr('statusPending'),
+      'Approved' => context.tr('statusApproved'),
+      'Refunded' => context.tr('statusRefunded'),
+      'Rejected' => context.tr('statusRejected'),
+      'Completed' => context.tr('statusCompleted'),
+      _ => status,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('RETURNS & REFUNDS'),
+        title: Text(context.tr('returnsRefunds')),
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(text: 'RETURN REQUESTS'),
-            Tab(text: 'REFUNDS'),
+          tabs: [
+            Tab(text: context.tr('returnRequests').toUpperCase()),
+            Tab(text: context.tr('refunds').toUpperCase()),
           ],
         ),
       ),
@@ -127,6 +142,9 @@ class _AdminReturnsRefundsScreenState extends State<AdminReturnsRefundsScreen>
           return Center(child: Text(snapshot.error.toString()));
         }
         final items = snapshot.data ?? [];
+        if (items.isEmpty) {
+          return Center(child: Text(context.tr('returnsRefundsEmpty')));
+        }
         return ListView.separated(
           padding: const EdgeInsets.all(16),
           itemCount: items.length,
@@ -140,13 +158,13 @@ class _AdminReturnsRefundsScreenState extends State<AdminReturnsRefundsScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'RETURN #${item.returnRequestId} • ORDER #${item.orderId}',
+                      '${context.tr('returnRequest')} #${item.returnRequestId} - ${context.tr('order')} #${item.orderId}',
                       style: const TextStyle(fontWeight: FontWeight.w900),
                     ),
                     const SizedBox(height: 6),
                     Text(item.reason),
                     Text(
-                      item.status,
+                      _statusLabel(item.status),
                       style: const TextStyle(
                         color: AppColors.blue,
                         fontWeight: FontWeight.w800,
@@ -159,14 +177,14 @@ class _AdminReturnsRefundsScreenState extends State<AdminReturnsRefundsScreen>
                           Expanded(
                             child: OutlinedButton(
                               onPressed: () => _review(item, false),
-                              child: const Text('REJECT'),
+                              child: Text(context.tr('reject').toUpperCase()),
                             ),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: ElevatedButton(
                               onPressed: () => _review(item, true),
-                              child: const Text('APPROVE'),
+                              child: Text(context.tr('approve').toUpperCase()),
                             ),
                           ),
                         ],
@@ -193,6 +211,9 @@ class _AdminReturnsRefundsScreenState extends State<AdminReturnsRefundsScreen>
           return Center(child: Text(snapshot.error.toString()));
         }
         final items = snapshot.data ?? [];
+        if (items.isEmpty) {
+          return Center(child: Text(context.tr('refundsEmpty')));
+        }
         return ListView.separated(
           padding: const EdgeInsets.all(16),
           itemCount: items.length,
@@ -203,11 +224,12 @@ class _AdminReturnsRefundsScreenState extends State<AdminReturnsRefundsScreen>
               child: ListTile(
                 contentPadding: const EdgeInsets.all(16),
                 title: Text(
-                  'REFUND #${item.refundId}',
+                  '${context.tr('refund')} #${item.refundId}',
                   style: const TextStyle(fontWeight: FontWeight.w900),
                 ),
                 subtitle: Text(
-                  'Order #${item.orderId}\n${item.status} • ${item.paymentMethod ?? 'N/A'}',
+                  '${context.tr('order')} #${item.orderId}\n'
+                  '${_statusLabel(item.status)} - ${item.paymentMethod ?? context.tr('notAvailable')}',
                 ),
                 isThreeLine: true,
                 trailing: Column(
@@ -215,13 +237,13 @@ class _AdminReturnsRefundsScreenState extends State<AdminReturnsRefundsScreen>
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      '${item.amount.toStringAsFixed(0)}đ',
+                      formatVnd(item.amount),
                       style: const TextStyle(fontWeight: FontWeight.w900),
                     ),
                     if (item.status == 'Pending')
                       TextButton(
                         onPressed: () => _complete(item),
-                        child: const Text('COMPLETE'),
+                        child: Text(context.tr('complete').toUpperCase()),
                       ),
                   ],
                 ),

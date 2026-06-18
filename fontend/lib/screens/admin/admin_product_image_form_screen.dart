@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../config/app_config.dart';
 import '../../models/product_detail_model.dart';
 import '../../services/product_service.dart';
 
@@ -114,7 +115,7 @@ class _AdminProductImageFormScreenState
     }
 
     return Image.network(
-      imageUrl,
+      AppConfig.resolveImageUrl(imageUrl),
       height: 220,
       width: double.infinity,
       fit: BoxFit.cover,
@@ -164,8 +165,9 @@ class _AdminProductImageFormScreenState
                       }
 
                       if (!text.startsWith('http://') &&
-                          !text.startsWith('https://')) {
-                        return 'Image URL must start with http:// or https://';
+                          !text.startsWith('https://') &&
+                          !text.startsWith('/')) {
+                        return 'Image URL must start with http://, https://, or /';
                       }
 
                       return null;

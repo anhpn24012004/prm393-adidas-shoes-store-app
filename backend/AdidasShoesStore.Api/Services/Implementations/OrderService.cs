@@ -56,22 +56,57 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 return OrderServiceResult<OrderDetailDto>.Fail("Address not found");
             }
 
-            var cart = await _context.Carts
-                .Include(c => c.CartItems)
-                    .ThenInclude(i => i.Variant)
-                        .ThenInclude(v => v.Product)
-                .FirstOrDefaultAsync(c => c.UserId == userId);
+            Cart? cart = null;
+            List<(ProductVariant Variant, int Quantity)> orderItems;
 
-            if (cart == null || !cart.CartItems.Any())
+            if (dto.BuyNowVariantId.HasValue)
             {
-                return OrderServiceResult<OrderDetailDto>.Fail("Cart is empty");
+                var quantity = dto.BuyNowQuantity.GetValueOrDefault(1);
+
+                if (quantity <= 0)
+                {
+                    return OrderServiceResult<OrderDetailDto>.Fail("Quantity must be greater than 0");
+                }
+
+                var variant = await _context.ProductVariants
+                    .Include(v => v.Product)
+                    .FirstOrDefaultAsync(v =>
+                        v.VariantId == dto.BuyNowVariantId.Value &&
+                        v.IsActive == true);
+
+                if (variant == null)
+                {
+                    return OrderServiceResult<OrderDetailDto>.Fail("Product variant not found");
+                }
+
+                orderItems = new List<(ProductVariant Variant, int Quantity)>
+                {
+                    (variant, quantity)
+                };
+            }
+            else
+            {
+                cart = await _context.Carts
+                    .Include(c => c.CartItems)
+                        .ThenInclude(i => i.Variant)
+                            .ThenInclude(v => v.Product)
+                    .FirstOrDefaultAsync(c => c.UserId == userId);
+
+                if (cart == null || !cart.CartItems.Any())
+                {
+                    return OrderServiceResult<OrderDetailDto>.Fail("Cart is empty");
+                }
+
+                orderItems = cart.CartItems
+                    .Select(item => (item.Variant, item.Quantity))
+                    .ToList();
             }
 
             await using var transaction = await _context.Database.BeginTransactionAsync();
 
             try
             {
-                foreach (var item in cart.CartItems)
+                foreach (var item in orderItems)
                 {
                     if (item.Variant.StockQuantity == null ||
                         item.Variant.StockQuantity < item.Quantity)
@@ -86,7 +121,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     }
                 }
 
-                var totalAmount = cart.CartItems.Sum(i => i.Variant.Price * i.Quantity);
+                var totalAmount = orderItems.Sum(i => i.Variant.Price * i.Quantity);
                 var finalAmount = totalAmount + ShippingFee - DiscountAmount;
                 var createdAt = DateTime.Now;
 
@@ -112,11 +147,11 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     }
                 };
 
-                foreach (var item in cart.CartItems)
+                foreach (var item in orderItems)
                 {
                     order.OrderItems.Add(new OrderItem
                     {
-                        VariantId = item.VariantId,
+                        VariantId = item.Variant.VariantId,
                         ProductName = item.Variant.Product.ProductName,
                         Size = item.Variant.Size,
                         Color = item.Variant.Color,
@@ -128,7 +163,11 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 }
 
                 _context.Orders.Add(order);
-                _context.CartItems.RemoveRange(cart.CartItems);
+
+                if (cart != null)
+                {
+                    _context.CartItems.RemoveRange(cart.CartItems);
+                }
 
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -162,7 +201,24 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     Status = o.Status,
                     PaymentMethod = o.Payment == null ? null : o.Payment.PaymentMethod,
                     PaymentStatus = o.Payment == null ? null : o.Payment.Status,
-                    CreatedAt = o.CreatedAt
+                    CreatedAt = o.CreatedAt,
+                    HasReturnRequest = o.ReturnRequests.Any(),
+                    Items = o.OrderItems.Select(i => new OrderItemDto
+                    {
+                        OrderItemId = i.OrderItemId,
+                        VariantId = i.VariantId,
+                        ProductId = i.Variant.ProductId,
+                        ProductName = i.ProductName,
+                        ImageUrl = i.Variant.Product.ProductImages
+                            .OrderByDescending(img => img.IsMain == true)
+                            .Select(img => img.ImageUrl)
+                            .FirstOrDefault(),
+                        Size = i.Size,
+                        Color = i.Color,
+                        Quantity = i.Quantity,
+                        UnitPrice = i.UnitPrice,
+                        Subtotal = i.UnitPrice * i.Quantity
+                    }).ToList()
                 })
                 .ToListAsync();
         }
@@ -185,6 +241,8 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     DiscountAmount = o.DiscountAmount ?? 0m,
                     FinalAmount = o.FinalAmount,
                     Status = o.Status,
+                    CanReview = o.Status == "Completed" &&
+                        !o.ReturnRequests.Any(),
                     ShippingAddress = o.ShippingAddress,
                     ReceiverName = o.ReceiverName,
                     ReceiverPhone = o.ReceiverPhone,
@@ -198,7 +256,12 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     {
                         OrderItemId = i.OrderItemId,
                         VariantId = i.VariantId,
+                        ProductId = i.Variant.ProductId,
                         ProductName = i.ProductName,
+                        ImageUrl = i.Variant.Product.ProductImages
+                            .OrderByDescending(img => img.IsMain == true)
+                            .Select(img => img.ImageUrl)
+                            .FirstOrDefault(),
                         Size = i.Size,
                         Color = i.Color,
                         Quantity = i.Quantity,
@@ -265,6 +328,47 @@ namespace AdidasShoesStore.Api.Services.Implementations
 
                 return OrderServiceResult<OrderDetailDto>.Fail("Could not cancel order");
             }
+        }
+
+        public async Task<OrderServiceResult<OrderDetailDto>> CompleteOrderAsync(
+            int userId,
+            int orderId)
+        {
+            var order = await _context.Orders
+                .Include(o => o.ReturnRequests)
+                .FirstOrDefaultAsync(o =>
+                    o.OrderId == orderId &&
+                    o.UserId == userId);
+
+            if (order == null)
+            {
+                return OrderServiceResult<OrderDetailDto>.Fail(
+                    "Order not found",
+                    "NotFound"
+                );
+            }
+
+            if (order.Status != "Delivered")
+            {
+                return OrderServiceResult<OrderDetailDto>.Fail(
+                    "Only delivered orders can be completed"
+                );
+            }
+
+            if (order.ReturnRequests.Any())
+            {
+                return OrderServiceResult<OrderDetailDto>.Fail(
+                    "Orders with return/refund requests cannot be completed"
+                );
+            }
+
+            order.Status = "Completed";
+
+            await _context.SaveChangesAsync();
+
+            var detail = await GetOrderDetailAsync(userId, orderId);
+
+            return OrderServiceResult<OrderDetailDto>.Ok(detail!);
         }
 
         public async Task<List<AdminOrderListDto>> GetAdminOrdersAsync(
@@ -357,7 +461,12 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     {
                         OrderItemId = i.OrderItemId,
                         VariantId = i.VariantId,
+                        ProductId = i.Variant.ProductId,
                         ProductName = i.ProductName,
+                        ImageUrl = i.Variant.Product.ProductImages
+                            .OrderByDescending(img => img.IsMain == true)
+                            .Select(img => img.ImageUrl)
+                            .FirstOrDefault(),
                         Size = i.Size,
                         Color = i.Color,
                         Quantity = i.Quantity,

@@ -42,7 +42,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
             int userId,
             int orderId)
         {
-            return await _context.Shipments
+            var tracking = await _context.Shipments
                 .AsNoTracking()
                 .Where(s =>
                     s.OrderId == orderId &&
@@ -64,6 +64,40 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     ShippingAddress = s.Order.ShippingAddress
                 })
                 .FirstOrDefaultAsync();
+
+            if (tracking != null)
+            {
+                return tracking;
+            }
+
+            var order = await _context.Orders
+                .AsNoTracking()
+                .Where(o =>
+                    o.OrderId == orderId &&
+                    o.UserId == userId)
+                .FirstOrDefaultAsync();
+
+            if (order == null)
+            {
+                return null;
+            }
+
+            return new ShipmentTrackingDto
+            {
+                OrderId = order.OrderId,
+                OrderCode = order.OrderCode,
+                OrderStatus = order.Status,
+                ShipmentId = 0,
+                ShipmentStatus = MapOrderStatusToShipmentStatus(order.Status),
+                Carrier = null,
+                TrackingNumber = null,
+                EstimatedDeliveryDate = null,
+                ShippedAt = null,
+                DeliveredAt = null,
+                ReceiverName = order.ReceiverName,
+                ReceiverPhone = order.ReceiverPhone,
+                ShippingAddress = order.ShippingAddress
+            };
         }
 
         public async Task<List<AdminShipmentListDto>> GetAdminShipmentsAsync()
@@ -289,6 +323,18 @@ namespace AdidasShoesStore.Api.Services.Implementations
 
             return AllowedTransitions.TryGetValue(currentStatus, out var nextStatuses) &&
                    nextStatuses.Contains(newStatus, StringComparer.Ordinal);
+        }
+
+        private static string? MapOrderStatusToShipmentStatus(string? orderStatus)
+        {
+            return orderStatus switch
+            {
+                "Paid" or "Processing" => "Preparing",
+                "Shipping" => "Shipped",
+                "Delivered" or "Completed" => "Delivered",
+                "Cancelled" => "Returned",
+                _ => "Pending"
+            };
         }
 
         private static System.Linq.Expressions.Expression<Func<Shipment, ShipmentDetailDto>> MapShipmentDetail()

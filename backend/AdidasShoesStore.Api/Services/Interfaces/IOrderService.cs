@@ -53,6 +53,11 @@ namespace AdidasShoesStore.Api.Services.Interfaces
             int orderId
         );
 
+        Task<OrderServiceResult<OrderDetailDto>> CompleteOrderAsync(
+            int userId,
+            int orderId
+        );
+
         Task<List<AdminOrderListDto>> GetAdminOrdersAsync(
             string? status,
             DateTime? fromDate,

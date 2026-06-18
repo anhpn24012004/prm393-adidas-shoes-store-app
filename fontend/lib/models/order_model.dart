@@ -2,11 +2,15 @@ class CreateOrderRequest {
   final int addressId;
   final String paymentMethod;
   final String? note;
+  final int? buyNowVariantId;
+  final int? buyNowQuantity;
 
   CreateOrderRequest({
     required this.addressId,
     required this.paymentMethod,
     this.note,
+    this.buyNowVariantId,
+    this.buyNowQuantity,
   });
 
   Map<String, dynamic> toJson() {
@@ -14,6 +18,8 @@ class CreateOrderRequest {
       'addressId': addressId,
       'paymentMethod': paymentMethod,
       'note': note,
+      'buyNowVariantId': buyNowVariantId,
+      'buyNowQuantity': buyNowQuantity,
     };
   }
 }
@@ -29,6 +35,8 @@ class OrderListItem {
   final String? paymentMethod;
   final String? paymentStatus;
   final DateTime? createdAt;
+  final bool hasReturnRequest;
+  final List<OrderItem> items;
 
   OrderListItem({
     required this.orderId,
@@ -41,6 +49,8 @@ class OrderListItem {
     this.paymentMethod,
     this.paymentStatus,
     this.createdAt,
+    required this.hasReturnRequest,
+    required this.items,
   });
 
   factory OrderListItem.fromJson(Map<String, dynamic> json) {
@@ -55,6 +65,10 @@ class OrderListItem {
       paymentMethod: json['paymentMethod'],
       paymentStatus: json['paymentStatus'],
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
+      hasReturnRequest: json['hasReturnRequest'] ?? false,
+      items: (json['items'] as List? ?? [])
+          .map((item) => OrderItem.fromJson(item))
+          .toList(),
     );
   }
 }
@@ -67,6 +81,7 @@ class OrderDetail {
   final double discountAmount;
   final double finalAmount;
   final String status;
+  final bool canReview;
   final String shippingAddress;
   final String receiverName;
   final String receiverPhone;
@@ -83,6 +98,7 @@ class OrderDetail {
     required this.discountAmount,
     required this.finalAmount,
     required this.status,
+    required this.canReview,
     required this.shippingAddress,
     required this.receiverName,
     required this.receiverPhone,
@@ -101,6 +117,7 @@ class OrderDetail {
       discountAmount: (json['discountAmount'] as num? ?? 0).toDouble(),
       finalAmount: (json['finalAmount'] as num? ?? 0).toDouble(),
       status: json['status'] ?? '',
+      canReview: json['canReview'] ?? false,
       shippingAddress: json['shippingAddress'] ?? '',
       receiverName: json['receiverName'] ?? '',
       receiverPhone: json['receiverPhone'] ?? '',
@@ -117,7 +134,9 @@ class OrderDetail {
 class OrderItem {
   final int orderItemId;
   final int variantId;
+  final int productId;
   final String productName;
+  final String? imageUrl;
   final String size;
   final String color;
   final int quantity;
@@ -127,7 +146,9 @@ class OrderItem {
   OrderItem({
     required this.orderItemId,
     required this.variantId,
+    required this.productId,
     required this.productName,
+    this.imageUrl,
     required this.size,
     required this.color,
     required this.quantity,
@@ -139,7 +160,9 @@ class OrderItem {
     return OrderItem(
       orderItemId: json['orderItemId'] ?? 0,
       variantId: json['variantId'] ?? 0,
+      productId: json['productId'] ?? 0,
       productName: json['productName'] ?? '',
+      imageUrl: json['imageUrl'],
       size: json['size'] ?? '',
       color: json['color'] ?? '',
       quantity: json['quantity'] ?? 0,
@@ -185,6 +208,35 @@ class CreateVnPayPaymentResponse {
 
   factory CreateVnPayPaymentResponse.fromJson(Map<String, dynamic> json) {
     return CreateVnPayPaymentResponse(paymentUrl: json['paymentUrl'] ?? '');
+  }
+}
+
+class VisaPaymentRequest {
+  final int orderId;
+  final String cardNumber;
+  final String cardHolderName;
+  final String expiryMonth;
+  final String expiryYear;
+  final String cvv;
+
+  VisaPaymentRequest({
+    required this.orderId,
+    required this.cardNumber,
+    required this.cardHolderName,
+    required this.expiryMonth,
+    required this.expiryYear,
+    required this.cvv,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'orderId': orderId,
+      'cardNumber': cardNumber,
+      'cardHolderName': cardHolderName,
+      'expiryMonth': expiryMonth,
+      'expiryYear': expiryYear,
+      'cvv': cvv,
+    };
   }
 }
 

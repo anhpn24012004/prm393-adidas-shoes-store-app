@@ -5,7 +5,9 @@ import '../../models/wishlist_model.dart';
 import '../../localization/app_localization.dart';
 import '../../providers/badge_notifier.dart';
 import '../../services/wishlist_service.dart';
+import '../../utils/currency_formatter.dart';
 import '../../widgets/cart_wishlist_badges.dart';
+import '../../widgets/product_rating.dart';
 import '../product/product_detail_screen.dart';
 
 class WishlistScreen extends StatefulWidget {
@@ -33,7 +35,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
   }
 
   String _formatPrice(double price) {
-    return '${price.toStringAsFixed(0)} VND';
+    return formatVnd(price);
   }
 
   Future<void> _removeItem(WishlistModel item) async {
@@ -104,7 +106,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
     }
 
     return Image.network(
-      imageUrl,
+      AppConfig.resolveImageUrl(imageUrl),
       width: 80,
       height: 80,
       fit: BoxFit.cover,
@@ -148,6 +150,11 @@ class _WishlistScreenState extends State<WishlistScreen> {
                     Text(
                       _formatPrice(item.basePrice),
                       style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 6),
+                    ProductRating(
+                      averageRating: item.averageRating,
+                      reviewCount: item.reviewCount,
                     ),
                   ],
                 ),

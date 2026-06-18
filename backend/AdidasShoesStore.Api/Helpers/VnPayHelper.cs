@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Web;
 
 namespace AdidasShoesStore.Api.Helpers
 {
@@ -9,16 +10,17 @@ namespace AdidasShoesStore.Api.Helpers
         public string CreatePaymentUrl(
             string baseUrl,
             string hashSecret,
-            IDictionary<string, string> parameters)
+            IDictionary<string, string> parameters,
+            out string hashData)
         {
             var normalizedParameters = NormalizeParameters(parameters);
-            var query = BuildQueryString(normalizedParameters);
+            hashData = BuildQueryString(normalizedParameters);
             var secureHash = CreateSecureHash(
                 hashSecret,
-                query
+                hashData
             );
 
-            return $"{baseUrl}?{query}&vnp_SecureHash={secureHash}";
+            return $"{baseUrl}?{hashData}&vnp_SecureHash={secureHash}";
         }
 
         public bool ValidateSecureHash(
@@ -58,10 +60,10 @@ namespace AdidasShoesStore.Api.Helpers
             return Convert.ToHexString(hashBytes).ToLower(CultureInfo.InvariantCulture);
         }
 
-        private static SortedDictionary<string, string> NormalizeParameters(
+        private static SortedList<string, string> NormalizeParameters(
             IEnumerable<KeyValuePair<string, string>> parameters)
         {
-            return new SortedDictionary<string, string>(
+            return new SortedList<string, string>(
                 parameters
                     .Where(p =>
                         p.Key.StartsWith("vnp_", StringComparison.OrdinalIgnoreCase) &&
@@ -82,8 +84,13 @@ namespace AdidasShoesStore.Api.Helpers
             return string.Join(
                 "&",
                 parameters.Select(p =>
-                    $"{Uri.EscapeDataString(p.Key)}={Uri.EscapeDataString(p.Value)}")
+                    $"{VnPayEncode(p.Key)}={VnPayEncode(p.Value)}")
             );
+        }
+
+        private static string VnPayEncode(string value)
+        {
+            return HttpUtility.UrlEncode(value, Encoding.UTF8) ?? string.Empty;
         }
     }
 }

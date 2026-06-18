@@ -113,6 +113,67 @@ class AuthService {
     }
   }
 
+  Future<UserProfile> getProfile() async {
+    final token = await _storage.getToken();
+    if (token == null) {
+      throw Exception('Please sign in again.');
+    }
+
+    final response = await http.get(
+      Uri.parse('${ApiClient.baseUrl}/auth/profile'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    final data = _decode(response);
+    if (response.statusCode != 200) {
+      throw Exception(_message(data, response.statusCode));
+    }
+
+    return UserProfile.fromJson(data);
+  }
+
+  Future<UserProfile> updateProfile({
+    required String fullName,
+    required String email,
+    String? phone,
+    String? gender,
+    DateTime? dateOfBirth,
+  }) async {
+    final token = await _storage.getToken();
+    if (token == null) {
+      throw Exception('Please sign in again.');
+    }
+
+    final response = await http.put(
+      Uri.parse('${ApiClient.baseUrl}/auth/profile'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'fullName': fullName,
+        'email': email,
+        'phone': phone,
+        'gender': gender,
+        'dateOfBirth': dateOfBirth?.toIso8601String().split('T').first,
+      }),
+    );
+
+    final data = _decode(response);
+    if (response.statusCode != 200) {
+      throw Exception(_message(data, response.statusCode));
+    }
+
+    final profile = UserProfile.fromJson(data);
+    await _storage.saveProfile(
+      fullName: profile.fullName,
+      email: profile.email,
+      role: profile.role,
+    );
+
+    return profile;
+  }
+
   Future<AuthSession> _handleAuthResponse(http.Response response) async {
     final data = _decode(response);
     if (response.statusCode != 200) {

@@ -6,6 +6,7 @@ import '../../models/cart_model.dart';
 import '../../localization/app_localization.dart';
 import '../../providers/badge_notifier.dart';
 import '../../services/cart_service.dart';
+import '../../utils/currency_formatter.dart';
 import '../../widgets/cart_wishlist_badges.dart';
 
 class CartScreen extends StatefulWidget {
@@ -34,7 +35,7 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   String _formatPrice(double price) {
-    return '${price.toStringAsFixed(0)} VND';
+    return formatVnd(price);
   }
 
   Future<void> _updateQuantity(CartItemModel item, int newQuantity) async {
@@ -123,7 +124,7 @@ class _CartScreenState extends State<CartScreen> {
     }
 
     return Image.network(
-      imageUrl,
+      AppConfig.resolveImageUrl(imageUrl),
       width: 72,
       height: 72,
       fit: BoxFit.cover,

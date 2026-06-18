@@ -40,6 +40,10 @@ public class ProductsController : ControllerBase
                     .Where(i => i.IsMain == true)
                     .Select(i => i.ImageUrl)
                     .FirstOrDefault(),
+                AverageRating = p.Reviews.Any()
+                    ? p.Reviews.Average(r => r.Rating)
+                    : 0,
+                ReviewCount = p.Reviews.Count,
                 IsActive = p.IsActive ?? false
             })
             .ToListAsync();
@@ -67,6 +71,10 @@ public class ProductsController : ControllerBase
                 Brand = p.Brand,
                 Gender = p.Gender,
                 Material = p.Material,
+                AverageRating = p.Reviews.Any()
+                    ? p.Reviews.Average(r => r.Rating)
+                    : 0,
+                ReviewCount = p.Reviews.Count,
                 IsActive = p.IsActive ?? false,
 
                 Images = p.ProductImages.Select(i => new ProductImageDto
@@ -125,6 +133,10 @@ public class ProductsController : ControllerBase
                     .Where(i => i.IsMain == true)
                     .Select(i => i.ImageUrl)
                     .FirstOrDefault(),
+                AverageRating = p.Reviews.Any()
+                    ? p.Reviews.Average(r => r.Rating)
+                    : 0,
+                ReviewCount = p.Reviews.Count,
                 IsActive = p.IsActive ?? false
             })
             .ToListAsync();
@@ -155,6 +167,10 @@ public class ProductsController : ControllerBase
                     .Where(i => i.IsMain == true)
                     .Select(i => i.ImageUrl)
                     .FirstOrDefault(),
+                AverageRating = p.Reviews.Any()
+                    ? p.Reviews.Average(r => r.Rating)
+                    : 0,
+                ReviewCount = p.Reviews.Count,
                 IsActive = p.IsActive ?? false
             })
             .ToListAsync();
