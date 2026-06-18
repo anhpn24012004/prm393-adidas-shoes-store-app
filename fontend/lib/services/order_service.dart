@@ -103,6 +103,20 @@ class OrderService {
     throw Exception(_errorMessage(response));
   }
 
+  Future<PaymentStatus> payWithVisa(VisaPaymentRequest request) async {
+    final response = await http.post(
+      Uri.parse('${ApiClient.baseUrl}/payments/visa/pay'),
+      headers: await _headers(),
+      body: jsonEncode(request.toJson()),
+    );
+
+    if (response.statusCode == 200) {
+      return PaymentStatus.fromJson(jsonDecode(response.body));
+    }
+
+    throw Exception(_errorMessage(response));
+  }
+
   Future<PaymentStatus> getPaymentStatus(int orderId) async {
     final response = await http.get(
       Uri.parse('${ApiClient.baseUrl}/payments/order/$orderId/status'),

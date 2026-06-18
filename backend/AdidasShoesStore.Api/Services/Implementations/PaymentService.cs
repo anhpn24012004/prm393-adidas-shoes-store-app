@@ -13,17 +13,20 @@ namespace AdidasShoesStore.Api.Services.Implementations
         private readonly IConfiguration _configuration;
         private readonly VnPayHelper _vnPayHelper;
         private readonly IEmailService _emailService;
+        private readonly ILogger<PaymentService> _logger;
 
         public PaymentService(
             AdidasShoesStoreContext context,
             IConfiguration configuration,
             VnPayHelper vnPayHelper,
-            IEmailService emailService)
+            IEmailService emailService,
+            ILogger<PaymentService> logger)
         {
             _context = context;
             _configuration = configuration;
             _vnPayHelper = vnPayHelper;
             _emailService = emailService;
+            _logger = logger;
         }
 
         public async Task<PaymentServiceResult<VnPayPaymentResponseDto>> CreateVnPayPaymentUrlAsync(
@@ -94,7 +97,15 @@ namespace AdidasShoesStore.Api.Services.Implementations
             var paymentUrl = _vnPayHelper.CreatePaymentUrl(
                 config.BaseUrl,
                 config.HashSecret,
-                parameters
+                parameters,
+                out var hashData
+            );
+
+            _logger.LogInformation(
+                "Created VNPay payment URL for order {OrderCode}. HashData: {HashData}. PaymentUrl: {PaymentUrl}",
+                order.OrderCode,
+                hashData,
+                paymentUrl
             );
 
             return PaymentServiceResult<VnPayPaymentResponseDto>.Ok(new VnPayPaymentResponseDto
@@ -180,6 +191,84 @@ namespace AdidasShoesStore.Api.Services.Implementations
             };
         }
 
+        public async Task<PaymentServiceResult<PaymentStatusDto>> PayWithVisaAsync(
+            int userId,
+            CreateVisaPaymentDto dto)
+        {
+            var validationError = ValidateVisaPayment(dto);
+
+            if (validationError != null)
+            {
+                return PaymentServiceResult<PaymentStatusDto>.Fail(validationError);
+            }
+
+            var order = await _context.Orders
+                .Include(o => o.Payment)
+                .Include(o => o.User)
+                .Include(o => o.OrderItems)
+                .FirstOrDefaultAsync(o =>
+                    o.OrderId == dto.OrderId &&
+                    o.UserId == userId);
+
+            if (order == null)
+            {
+                return PaymentServiceResult<PaymentStatusDto>.Fail(
+                    "Order not found",
+                    "NotFound"
+                );
+            }
+
+            if (order.Status != "PendingPayment")
+            {
+                return PaymentServiceResult<PaymentStatusDto>.Fail(
+                    "Only pending payment orders can be paid with Visa"
+                );
+            }
+
+            if (order.Payment == null)
+            {
+                return PaymentServiceResult<PaymentStatusDto>.Fail(
+                    "Payment not found",
+                    "NotFound"
+                );
+            }
+
+            if (!string.Equals(order.Payment.PaymentMethod, "VISA", StringComparison.OrdinalIgnoreCase))
+            {
+                return PaymentServiceResult<PaymentStatusDto>.Fail(
+                    "Payment method must be VISA"
+                );
+            }
+
+            order.Payment.Status = "Success";
+            order.Payment.TransactionCode = $"VISA{DateTime.Now:yyyyMMddHHmmssfff}";
+            order.Payment.PaidAt = DateTime.Now;
+            order.Status = "Paid";
+
+            await _context.SaveChangesAsync();
+
+            try
+            {
+                await _emailService.SendInvoiceEmailAsync(order);
+            }
+            catch
+            {
+                // Payment is already completed; email failure should not rollback the order.
+            }
+
+            return PaymentServiceResult<PaymentStatusDto>.Ok(new PaymentStatusDto
+            {
+                OrderId = order.OrderId,
+                OrderCode = order.OrderCode,
+                OrderStatus = order.Status,
+                PaymentMethod = order.Payment.PaymentMethod,
+                PaymentStatus = order.Payment.Status,
+                Amount = order.Payment.Amount,
+                TransactionCode = order.Payment.TransactionCode,
+                PaidAt = order.Payment.PaidAt
+            });
+        }
+
         public async Task<PaymentStatusDto?> GetPaymentStatusAsync(
             int userId,
             int orderId)
@@ -229,6 +318,88 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 BaseUrl = baseUrl,
                 ReturnUrl = returnUrl
             };
+        }
+
+        private static string? ValidateVisaPayment(CreateVisaPaymentDto dto)
+        {
+            var cardNumber = DigitsOnly(dto.CardNumber);
+
+            if (cardNumber.Length < 13 ||
+                cardNumber.Length > 19 ||
+                !cardNumber.StartsWith("4", StringComparison.Ordinal) ||
+                !PassesLuhn(cardNumber))
+            {
+                return "Invalid Visa card number";
+            }
+
+            if (string.IsNullOrWhiteSpace(dto.CardHolderName))
+            {
+                return "Card holder name is required";
+            }
+
+            if (!int.TryParse(dto.ExpiryMonth, out var month) ||
+                month < 1 ||
+                month > 12)
+            {
+                return "Invalid expiry month";
+            }
+
+            if (!int.TryParse(dto.ExpiryYear, out var year))
+            {
+                return "Invalid expiry year";
+            }
+
+            if (year < 100)
+            {
+                year += 2000;
+            }
+
+            var lastValidDate = new DateTime(year, month, 1).AddMonths(1).AddDays(-1);
+
+            if (lastValidDate < DateTime.Today)
+            {
+                return "Visa card is expired";
+            }
+
+            var cvv = DigitsOnly(dto.Cvv);
+
+            if (cvv.Length < 3 || cvv.Length > 4)
+            {
+                return "Invalid CVV";
+            }
+
+            return null;
+        }
+
+        private static string DigitsOnly(string? value)
+        {
+            return string.Concat((value ?? string.Empty).Where(char.IsDigit));
+        }
+
+        private static bool PassesLuhn(string value)
+        {
+            var sum = 0;
+            var doubleDigit = false;
+
+            for (var index = value.Length - 1; index >= 0; index--)
+            {
+                var digit = value[index] - '0';
+
+                if (doubleDigit)
+                {
+                    digit *= 2;
+
+                    if (digit > 9)
+                    {
+                        digit -= 9;
+                    }
+                }
+
+                sum += digit;
+                doubleDigit = !doubleDigit;
+            }
+
+            return sum % 10 == 0;
         }
 
         private class VnPayConfig

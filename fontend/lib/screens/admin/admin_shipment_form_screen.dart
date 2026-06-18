@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../localization/app_localization.dart';
 import '../../models/shipment_model.dart';
 import '../../services/shipment_service.dart';
 
@@ -111,8 +112,8 @@ class _AdminShipmentFormScreenState extends State<AdminShipmentFormScreen> {
         SnackBar(
           content: Text(
             widget.createMode
-                ? 'Shipment saved successfully'
-                : 'Tracking info updated successfully',
+                ? context.tr('shipmentSaved')
+                : context.tr('trackingUpdated'),
           ),
         ),
       );
@@ -138,7 +139,9 @@ class _AdminShipmentFormScreenState extends State<AdminShipmentFormScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          widget.createMode ? 'Create Shipment' : 'Update Tracking Info',
+          widget.createMode
+              ? context.tr('createShipment')
+              : context.tr('updateTrackingInfo'),
         ),
       ),
       body: Form(
@@ -150,15 +153,15 @@ class _AdminShipmentFormScreenState extends State<AdminShipmentFormScreen> {
               controller: _orderIdController,
               enabled: widget.createMode && !_submitting,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Order ID',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: context.tr('orderId'),
+                border: const OutlineInputBorder(),
               ),
               validator: widget.createMode
                   ? (value) {
                       final orderId = int.tryParse(value?.trim() ?? '');
                       if (orderId == null || orderId <= 0) {
-                        return 'Order ID is required';
+                        return context.tr('orderIdRequired');
                       }
                       return null;
                     }
@@ -168,13 +171,13 @@ class _AdminShipmentFormScreenState extends State<AdminShipmentFormScreen> {
             TextFormField(
               controller: _carrierController,
               enabled: !_submitting,
-              decoration: const InputDecoration(
-                labelText: 'Carrier',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: context.tr('carrier'),
+                border: const OutlineInputBorder(),
               ),
               validator: (value) {
                 if ((value ?? '').trim().isEmpty) {
-                  return 'Carrier is required';
+                  return context.tr('carrierRequired');
                 }
                 return null;
               },
@@ -183,13 +186,13 @@ class _AdminShipmentFormScreenState extends State<AdminShipmentFormScreen> {
             TextFormField(
               controller: _trackingController,
               enabled: !_submitting,
-              decoration: const InputDecoration(
-                labelText: 'Tracking Number',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: context.tr('trackingNumber'),
+                border: const OutlineInputBorder(),
               ),
               validator: (value) {
                 if ((value ?? '').trim().isEmpty) {
-                  return 'Tracking number is required';
+                  return context.tr('trackingNumberRequired');
                 }
                 return null;
               },
@@ -198,10 +201,10 @@ class _AdminShipmentFormScreenState extends State<AdminShipmentFormScreen> {
             TextFormField(
               controller: _estimatedController,
               enabled: !_submitting,
-              decoration: const InputDecoration(
-                labelText: 'Estimated Delivery Date',
-                helperText: 'Optional, format: YYYY-MM-DD',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: context.tr('estimatedDelivery'),
+                helperText: context.tr('optionalDateFormat'),
+                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 16),
@@ -209,9 +212,9 @@ class _AdminShipmentFormScreenState extends State<AdminShipmentFormScreen> {
               controller: _noteController,
               enabled: !_submitting,
               maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Note',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: context.tr('note'),
+                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 24),
@@ -226,7 +229,9 @@ class _AdminShipmentFormScreenState extends State<AdminShipmentFormScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : Text(
-                        widget.createMode ? 'Create Shipment' : 'Save Changes',
+                        widget.createMode
+                            ? context.tr('createShipment')
+                            : context.tr('saveChanges'),
                       ),
               ),
             ),

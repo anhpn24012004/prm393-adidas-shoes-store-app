@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../localization/app_localization.dart';
 import '../../models/admin_model.dart';
 import '../../services/admin_service.dart';
 import '../../theme/app_theme.dart';
@@ -57,10 +58,24 @@ class _AdminOrderListScreenState extends State<AdminOrderListScreen> {
     super.dispose();
   }
 
+  String _statusLabel(String? status) {
+    return switch (status) {
+      'PendingPayment' => context.tr('statusPendingPayment'),
+      'Paid' => context.tr('statusPaid'),
+      'Processing' => context.tr('statusProcessing'),
+      'Shipping' => context.tr('statusShipping'),
+      'Delivered' => context.tr('statusDelivered'),
+      'Completed' => context.tr('statusCompleted'),
+      'Cancelled' => context.tr('statusCancelled'),
+      null => context.tr('notAvailable'),
+      _ => status,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('ORDER MANAGEMENT')),
+      appBar: AppBar(title: Text(context.tr('orderManagement'))),
       body: Column(
         children: [
           Padding(
@@ -69,7 +84,7 @@ class _AdminOrderListScreenState extends State<AdminOrderListScreen> {
               controller: _searchController,
               onSubmitted: (_) => setState(_reload),
               decoration: InputDecoration(
-                hintText: 'Order code, customer or email',
+                hintText: context.tr('adminOrderSearchHint'),
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: IconButton(
                   onPressed: () => setState(_reload),
@@ -85,7 +100,7 @@ class _AdminOrderListScreenState extends State<AdminOrderListScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               children: [
                 ChoiceChip(
-                  label: const Text('All'),
+                  label: Text(context.tr('all')),
                   selected: _status == null,
                   onSelected: (_) => setState(() {
                     _status = null;
@@ -97,7 +112,7 @@ class _AdminOrderListScreenState extends State<AdminOrderListScreen> {
                   (status) => Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: ChoiceChip(
-                      label: Text(status),
+                      label: Text(_statusLabel(status)),
                       selected: _status == status,
                       onSelected: (_) => setState(() {
                         _status = status;
@@ -125,7 +140,7 @@ class _AdminOrderListScreenState extends State<AdminOrderListScreen> {
                 }
                 final orders = snapshot.data ?? [];
                 if (orders.isEmpty) {
-                  return const Center(child: Text('No orders found.'));
+                  return Center(child: Text(context.tr('adminNoOrders')));
                 }
                 return RefreshIndicator(
                   onRefresh: () async {
@@ -147,7 +162,7 @@ class _AdminOrderListScreenState extends State<AdminOrderListScreen> {
                             style: const TextStyle(fontWeight: FontWeight.w900),
                           ),
                           subtitle: Text(
-                            '${order.customerName}\n${order.status} • ${order.paymentStatus ?? 'Unpaid'}',
+                            '${order.customerName}\n${_statusLabel(order.status)} - ${order.paymentStatus ?? context.tr('unpaid')}',
                           ),
                           isThreeLine: true,
                           trailing: Column(
@@ -207,18 +222,35 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
     _future = _service.getOrder(widget.orderId);
   }
 
+  String _statusLabel(String? status) {
+    return switch (status) {
+      'PendingPayment' => context.tr('statusPendingPayment'),
+      'Paid' => context.tr('statusPaid'),
+      'Processing' => context.tr('statusProcessing'),
+      'Shipping' => context.tr('statusShipping'),
+      'Delivered' => context.tr('statusDelivered'),
+      'Completed' => context.tr('statusCompleted'),
+      'Cancelled' => context.tr('statusCancelled'),
+      null => context.tr('notAvailable'),
+      _ => status,
+    };
+  }
+
   Future<void> _changeStatus(AdminOrderDetail order) async {
     var selected = order.summary.status;
     final status = await showDialog<String>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Update order status'),
+          title: Text(context.tr('updateOrderStatus')),
           content: DropdownButtonFormField<String>(
             initialValue: _statuses.contains(selected) ? selected : null,
             items: _statuses
                 .map(
-                  (value) => DropdownMenuItem(value: value, child: Text(value)),
+                  (value) => DropdownMenuItem(
+                    value: value,
+                    child: Text(_statusLabel(value)),
+                  ),
                 )
                 .toList(),
             onChanged: (value) =>
@@ -227,11 +259,11 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('CANCEL'),
+              child: Text(context.tr('cancel').toUpperCase()),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(context, selected),
-              child: const Text('UPDATE'),
+              child: Text(context.tr('update').toUpperCase()),
             ),
           ],
         ),
@@ -257,7 +289,7 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('ORDER DETAIL')),
+      appBar: AppBar(title: Text(context.tr('orderDetail'))),
       body: FutureBuilder<AdminOrderDetail>(
         future: _future,
         builder: (context, snapshot) {
@@ -277,18 +309,18 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                order.summary.status,
+                _statusLabel(order.summary.status),
                 style: const TextStyle(
                   color: AppColors.blue,
                   fontWeight: FontWeight.w900,
                 ),
               ),
               const Divider(height: 36),
-              _line('Customer', order.summary.customerName),
+              _line(context.tr('customer'), order.summary.customerName),
               _line('Email', order.summary.customerEmail),
-              _line('Receiver', order.summary.receiverName),
-              _line('Phone', order.summary.receiverPhone),
-              _line('Address', order.shippingAddress),
+              _line(context.tr('receiver'), order.summary.receiverName),
+              _line(context.tr('phoneNumber'), order.summary.receiverPhone),
+              _line(context.tr('address'), order.shippingAddress),
               const Divider(height: 36),
               ...order.items.map(
                 (item) => ListTile(
@@ -298,24 +330,25 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
                     style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
                   subtitle: Text(
-                    '${item.size} / ${item.color} • ${item.quantity} pcs',
+                    '${item.size} / ${item.color} - ${item.quantity} ${context.tr('items')}',
                   ),
                   trailing: Text(formatVnd(item.subtotal)),
                 ),
               ),
               const Divider(height: 36),
+              _line(context.tr('total'), formatVnd(order.summary.finalAmount)),
               _line(
-                'Total',
-                formatVnd(order.summary.finalAmount),
-              ),
-              _line(
-                'Payment',
-                '${order.summary.paymentMethod ?? 'N/A'} / ${order.summary.paymentStatus ?? 'N/A'}',
+                context.tr('payment'),
+                '${order.summary.paymentMethod ?? context.tr('notAvailable')} / ${order.summary.paymentStatus ?? context.tr('notAvailable')}',
               ),
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _updating ? null : () => _changeStatus(order),
-                child: Text(_updating ? 'UPDATING...' : 'UPDATE ORDER STATUS'),
+                child: Text(
+                  _updating
+                      ? context.tr('updating').toUpperCase()
+                      : context.tr('updateOrderStatus').toUpperCase(),
+                ),
               ),
             ],
           );

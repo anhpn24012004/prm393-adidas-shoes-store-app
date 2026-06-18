@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../config/app_config.dart';
 import '../../localization/app_localization.dart';
 import '../../models/order_model.dart';
 import '../../services/order_service.dart';
@@ -16,6 +17,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
   final OrderService _orderService = OrderService();
 
   late Future<List<OrderListItem>> _ordersFuture;
+  String _selectedFilter = 'all';
 
   @override
   void initState() {
@@ -54,6 +56,38 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     };
   }
 
+  List<_OrderFilter> get _filters {
+    return const [
+      _OrderFilter('all', 'Tất cả'),
+      _OrderFilter('confirming', 'Chờ xác nhận'),
+      _OrderFilter('pickup', 'Chờ lấy hàng'),
+      _OrderFilter('shipping', 'Chờ giao hàng'),
+      _OrderFilter('delivered', 'Đã giao'),
+      _OrderFilter('returning', 'Trả hàng'),
+      _OrderFilter('cancelled', 'Đã hủy'),
+    ];
+  }
+
+  bool _matchesFilterKey(OrderListItem order, String filterKey) {
+    if (filterKey == 'all') return true;
+    if (filterKey == 'returning') return order.hasReturnRequest;
+    if (order.hasReturnRequest) return false;
+
+    return switch (filterKey) {
+      'confirming' =>
+        order.status == 'PendingPayment' || order.status == 'Paid',
+      'pickup' => order.status == 'Processing',
+      'shipping' => order.status == 'Shipping',
+      'delivered' => order.status == 'Delivered' || order.status == 'Completed',
+      'cancelled' => order.status == 'Cancelled',
+      _ => true,
+    };
+  }
+
+  bool _matchesFilter(OrderListItem order) {
+    return _matchesFilterKey(order, _selectedFilter);
+  }
+
   Future<void> _refresh() async {
     setState(() {
       _loadOrders();
@@ -68,25 +102,146 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     ).then((_) => _refresh());
   }
 
+  Widget _buildItemImage(String? imageUrl) {
+    if (imageUrl == null || imageUrl.trim().isEmpty) {
+      return Container(
+        width: 64,
+        height: 64,
+        color: Colors.grey.shade200,
+        child: const Icon(Icons.image_outlined),
+      );
+    }
+
+    return Image.network(
+      AppConfig.resolveImageUrl(imageUrl),
+      width: 64,
+      height: 64,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return Container(
+          width: 64,
+          height: 64,
+          color: Colors.grey.shade200,
+          child: const Icon(Icons.broken_image_outlined),
+        );
+      },
+    );
+  }
+
+  Widget _buildPurchasedItem(OrderItem item) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: _buildItemImage(item.imageUrl),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.productName,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${context.tr('productSize')}: ${item.size}  '
+                  '${context.tr('productColor')}: ${item.color}',
+                ),
+                const SizedBox(height: 2),
+                Text('${context.tr('quantity')}: ${item.quantity}'),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            formatPrice(item.subtotal),
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildOrderItem(OrderListItem order) {
     return Card(
-      child: ListTile(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: InkWell(
         onTap: () => _goToDetail(order),
-        title: Text(
-          order.orderCode,
-          style: const TextStyle(fontWeight: FontWeight.bold),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      order.orderCode,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    formatPrice(order.finalAmount),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '${context.tr('orderStatus')}: ${_statusLabel(order.status)}',
+              ),
+              Text(
+                '${context.tr('payment')}: '
+                '${order.paymentMethod ?? context.tr('notAvailable')}'
+                ' / ${order.paymentStatus ?? context.tr('notAvailable')}',
+              ),
+              Text(
+                '${context.tr('createdAt')}: ${formatDate(order.createdAt)}',
+              ),
+              ...order.items.map(_buildPurchasedItem),
+            ],
+          ),
         ),
-        subtitle: Text(
-          '${context.tr('orderStatus')}: ${_statusLabel(order.status)}\n'
-          '${context.tr('payment')}: ${order.paymentMethod ?? context.tr('notAvailable')}'
-          ' / ${order.paymentStatus ?? context.tr('notAvailable')}\n'
-          '${context.tr('createdAt')}: ${formatDate(order.createdAt)}',
-        ),
-        isThreeLine: true,
-        trailing: Text(
-          formatPrice(order.finalAmount),
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
+      ),
+    );
+  }
+
+  Widget _buildFilters(List<OrderListItem> orders) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+      child: Row(
+        children: _filters.map((filter) {
+          final count = filter.key == 'all'
+              ? orders.length
+              : orders
+                    .where((order) => _matchesFilterKey(order, filter.key))
+                    .length;
+
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label: Text('${filter.label} ($count)'),
+              selected: _selectedFilter == filter.key,
+              onSelected: (_) {
+                setState(() => _selectedFilter = filter.key);
+              },
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -134,15 +289,35 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
           return Center(child: Text(context.tr('noOrdersYet')));
         }
 
-        return RefreshIndicator(
-          onRefresh: _refresh,
-          child: ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: orders.length,
-            itemBuilder: (context, index) {
-              return _buildOrderItem(orders[index]);
-            },
-          ),
+        final filteredOrders = orders.where(_matchesFilter).toList();
+
+        return Column(
+          children: [
+            _buildFilters(orders),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _refresh,
+                child: filteredOrders.isEmpty
+                    ? ListView(
+                        children: [
+                          SizedBox(
+                            height: MediaQuery.of(context).size.height * 0.55,
+                            child: Center(
+                              child: Text(context.tr('noOrdersYet')),
+                            ),
+                          ),
+                        ],
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(12),
+                        itemCount: filteredOrders.length,
+                        itemBuilder: (context, index) {
+                          return _buildOrderItem(filteredOrders[index]);
+                        },
+                      ),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -155,4 +330,11 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
       body: _buildBody(),
     );
   }
+}
+
+class _OrderFilter {
+  final String key;
+  final String label;
+
+  const _OrderFilter(this.key, this.label);
 }

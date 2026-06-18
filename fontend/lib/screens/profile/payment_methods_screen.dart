@@ -24,6 +24,12 @@ class PaymentMethodsScreen extends StatelessWidget {
             title: 'VNPAY',
             subtitle: context.tr('vnpayDescription'),
           ),
+          const SizedBox(height: 12),
+          _PaymentMethodTile(
+            icon: Icons.credit_card_outlined,
+            title: 'Visa',
+            subtitle: context.tr('visaDescription'),
+          ),
         ],
       ),
     );

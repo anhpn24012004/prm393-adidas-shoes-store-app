@@ -18,6 +18,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final OrderService _orderService = OrderService();
   final AddressService _addressService = AddressService();
   final TextEditingController _noteController = TextEditingController();
+  final TextEditingController _visaCardNumberController =
+      TextEditingController();
+  final TextEditingController _visaCardHolderController =
+      TextEditingController();
+  final TextEditingController _visaExpiryController = TextEditingController();
+  final TextEditingController _visaCvvController = TextEditingController();
 
   late Future<List<UserAddress>> _addresses;
   int? _selectedAddressId;
@@ -47,6 +53,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   void dispose() {
     _noteController.dispose();
+    _visaCardNumberController.dispose();
+    _visaCardHolderController.dispose();
+    _visaExpiryController.dispose();
+    _visaCvvController.dispose();
     super.dispose();
   }
 
@@ -56,6 +66,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         SnackBar(content: Text(context.tr('selectShippingAddress'))),
       );
       return;
+    }
+
+    VisaPaymentRequest? visaPayment;
+
+    if (_paymentMethod == 'VISA') {
+      visaPayment = await _collectVisaPayment();
+
+      if (visaPayment == null) {
+        return;
+      }
     }
 
     setState(() {
@@ -80,6 +100,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         return;
       }
 
+      if (_paymentMethod == 'VISA') {
+        await _handleVisa(order, visaPayment!);
+        return;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(context.tr('orderCreated'))),
       );
@@ -100,6 +125,111 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         });
       }
     }
+  }
+
+  Future<VisaPaymentRequest?> _collectVisaPayment() async {
+    final formKey = GlobalKey<FormState>();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Visa'),
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: _visaCardNumberController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: context.tr('visaCardNumber'),
+                      prefixIcon: const Icon(Icons.credit_card),
+                    ),
+                    validator: _validateVisaCardNumber,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _visaCardHolderController,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: InputDecoration(
+                      labelText: context.tr('visaCardHolder'),
+                      prefixIcon: const Icon(Icons.person_outline),
+                    ),
+                    validator: (value) {
+                      if ((value ?? '').trim().isEmpty) {
+                        return context.tr('requiredField');
+                      }
+
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _visaExpiryController,
+                          keyboardType: TextInputType.datetime,
+                          decoration: InputDecoration(
+                            labelText: context.tr('visaExpiry'),
+                            hintText: 'MM/YY',
+                          ),
+                          validator: _validateVisaExpiry,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _visaCvvController,
+                          keyboardType: TextInputType.number,
+                          obscureText: true,
+                          decoration: InputDecoration(
+                            labelText: context.tr('visaCvv'),
+                          ),
+                          validator: _validateVisaCvv,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(context.tr('cancel').toUpperCase()),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (formKey.currentState?.validate() ?? false) {
+                  Navigator.pop(context, true);
+                }
+              },
+              child: Text(context.tr('confirm').toUpperCase()),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return null;
+    }
+
+    final expiryParts = _visaExpiryController.text.trim().split('/');
+
+    return VisaPaymentRequest(
+      orderId: 0,
+      cardNumber: _visaCardNumberController.text.trim(),
+      cardHolderName: _visaCardHolderController.text.trim(),
+      expiryMonth: expiryParts[0].trim(),
+      expiryYear: expiryParts[1].trim(),
+      cvv: _visaCvvController.text.trim(),
+    );
   }
 
   Future<void> _openAddressPicker(List<UserAddress> addresses) async {
@@ -320,12 +450,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Future<void> _handleVnPay(OrderDetail order) async {
+    final unavailableMessage = context.tr('vnpayUnavailable');
+    final cannotOpenMessage = context.tr('cannotOpenVnpay');
+
     try {
       final response = await _orderService.createVnPayPayment(order.orderId);
       final uri = Uri.tryParse(response.paymentUrl);
 
       if (uri == null || response.paymentUrl.isEmpty) {
-        _showError(context.tr('vnpayUnavailable'));
+        _showError(unavailableMessage);
         return;
       }
 
@@ -334,7 +467,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       if (!mounted) return;
 
       if (!opened) {
-        _showError(context.tr('cannotOpenVnpay'));
+        _showError(cannotOpenMessage);
         return;
       }
 
@@ -348,6 +481,119 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
       _showError(e.toString());
     }
+  }
+
+  Future<void> _handleVisa(
+    OrderDetail order,
+    VisaPaymentRequest payment,
+  ) async {
+    try {
+      await _orderService.payWithVisa(
+        VisaPaymentRequest(
+          orderId: order.orderId,
+          cardNumber: payment.cardNumber,
+          cardHolderName: payment.cardHolderName,
+          expiryMonth: payment.expiryMonth,
+          expiryYear: payment.expiryYear,
+          cvv: payment.cvv,
+        ),
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('paymentCompleted'))),
+      );
+
+      Navigator.pushReplacementNamed(
+        context,
+        '/order-detail',
+        arguments: order.orderId,
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      _showError(e.toString());
+    }
+  }
+
+  String? _validateVisaCardNumber(String? value) {
+    final digits = _digitsOnly(value);
+
+    if (digits.length < 13 ||
+        digits.length > 19 ||
+        !digits.startsWith('4') ||
+        !_passesLuhn(digits)) {
+      return context.tr('invalidVisaCard');
+    }
+
+    return null;
+  }
+
+  String? _validateVisaExpiry(String? value) {
+    final match = RegExp(r'^(\d{1,2})/(\d{2}|\d{4})$').firstMatch(
+      (value ?? '').trim(),
+    );
+
+    if (match == null) {
+      return context.tr('invalidVisaExpiry');
+    }
+
+    final month = int.tryParse(match.group(1)!);
+    var year = int.tryParse(match.group(2)!);
+
+    if (month == null || month < 1 || month > 12 || year == null) {
+      return context.tr('invalidVisaExpiry');
+    }
+
+    if (year < 100) {
+      year += 2000;
+    }
+
+    final lastValidDate = DateTime(year, month + 1, 0);
+    final today = DateTime.now();
+
+    if (lastValidDate.isBefore(DateTime(today.year, today.month, today.day))) {
+      return context.tr('invalidVisaExpiry');
+    }
+
+    return null;
+  }
+
+  String? _validateVisaCvv(String? value) {
+    final digits = _digitsOnly(value);
+
+    if (digits.length < 3 || digits.length > 4) {
+      return context.tr('invalidVisaCvv');
+    }
+
+    return null;
+  }
+
+  String _digitsOnly(String? value) {
+    return (value ?? '').replaceAll(RegExp(r'\D'), '');
+  }
+
+  bool _passesLuhn(String value) {
+    var sum = 0;
+    var doubleDigit = false;
+
+    for (var index = value.length - 1; index >= 0; index--) {
+      var digit = int.parse(value[index]);
+
+      if (doubleDigit) {
+        digit *= 2;
+
+        if (digit > 9) {
+          digit -= 9;
+        }
+      }
+
+      sum += digit;
+      doubleDigit = !doubleDigit;
+    }
+
+    return sum % 10 == 0;
   }
 
   void _showError(String message) {
@@ -391,6 +637,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         ),
         paymentOption('COD', 'COD'),
         paymentOption('VNPAY', 'VNPAY'),
+        paymentOption('VISA', 'Visa'),
       ],
     );
   }

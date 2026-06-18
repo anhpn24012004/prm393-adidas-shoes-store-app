@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../localization/app_localization.dart';
 import '../../models/category_model.dart';
 import '../../models/product_model.dart';
 import '../../services/category_service.dart';
@@ -73,7 +74,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
     if (_selectedCategoryId == null) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Please select category')));
+      ).showSnackBar(SnackBar(content: Text(context.tr('selectCategory'))));
       return;
     }
 
@@ -119,8 +120,8 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
         SnackBar(
           content: Text(
             isEditMode
-                ? 'Product updated successfully'
-                : 'Product created successfully',
+                ? context.tr('productUpdated')
+                : context.tr('productCreated'),
           ),
         ),
       );
@@ -131,7 +132,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      ).showSnackBar(SnackBar(content: Text('${context.tr('error')}: $e')));
     } finally {
       if (mounted) {
         setState(() {
@@ -153,16 +154,18 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
         }
 
         if (snapshot.hasError) {
-          return Text('Failed to load categories: ${snapshot.error}');
+          return Text(
+            '${context.tr('failedLoadCategories')}: ${snapshot.error}',
+          );
         }
 
         final categories = snapshot.data ?? [];
 
         return DropdownButtonFormField<int>(
-          value: _selectedCategoryId,
-          decoration: const InputDecoration(
-            labelText: 'Category',
-            border: OutlineInputBorder(),
+          initialValue: _selectedCategoryId,
+          decoration: InputDecoration(
+            labelText: context.tr('categories'),
+            border: const OutlineInputBorder(),
           ),
           items: categories.map((category) {
             return DropdownMenuItem<int>(
@@ -177,7 +180,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
           },
           validator: (value) {
             if (value == null) {
-              return 'Please select category';
+              return context.tr('selectCategory');
             }
             return null;
           },
@@ -203,13 +206,13 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
       ),
       validator: (value) {
         if (requiredField && (value == null || value.trim().isEmpty)) {
-          return '$label is required';
+          return context.tr('requiredField');
         }
 
-        if (label == 'Base Price') {
+        if (label == context.tr('basePrice')) {
           final price = double.tryParse(value ?? '');
           if (price == null || price < 0) {
-            return 'Base price must be a valid number';
+            return context.tr('invalidBasePrice');
           }
         }
 
@@ -220,7 +223,9 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final title = isEditMode ? 'Edit Product' : 'Create Product';
+    final title = isEditMode
+        ? context.tr('editProduct')
+        : context.tr('createProduct');
 
     return Scaffold(
       appBar: AppBar(title: Text(title)),
@@ -235,21 +240,21 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                 children: [
                   _buildTextField(
                     controller: _productNameController,
-                    label: 'Product Name',
+                    label: context.tr('productName'),
                     requiredField: true,
                   ),
                   const SizedBox(height: 16),
 
                   _buildTextField(
                     controller: _descriptionController,
-                    label: 'Description',
+                    label: context.tr('productDescription'),
                     maxLines: 3,
                   ),
                   const SizedBox(height: 16),
 
                   _buildTextField(
                     controller: _basePriceController,
-                    label: 'Base Price',
+                    label: context.tr('basePrice'),
                     requiredField: true,
                     keyboardType: TextInputType.number,
                   ),
@@ -258,24 +263,27 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                   _buildCategoryDropdown(),
                   const SizedBox(height: 16),
 
-                  _buildTextField(controller: _brandController, label: 'Brand'),
+                  _buildTextField(
+                    controller: _brandController,
+                    label: context.tr('brand'),
+                  ),
                   const SizedBox(height: 16),
 
                   _buildTextField(
                     controller: _genderController,
-                    label: 'Gender',
+                    label: context.tr('gender'),
                   ),
                   const SizedBox(height: 16),
 
                   _buildTextField(
                     controller: _materialController,
-                    label: 'Material',
+                    label: context.tr('material'),
                   ),
                   const SizedBox(height: 16),
 
                   if (isEditMode)
                     SwitchListTile(
-                      title: const Text('Active'),
+                      title: Text(context.tr('active')),
                       value: _isActive,
                       onChanged: (value) {
                         setState(() {
@@ -294,7 +302,9 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                       child: _isSubmitting
                           ? const CircularProgressIndicator()
                           : Text(
-                              isEditMode ? 'Update Product' : 'Create Product',
+                              isEditMode
+                                  ? context.tr('updateProduct')
+                                  : context.tr('createProduct'),
                             ),
                     ),
                   ),

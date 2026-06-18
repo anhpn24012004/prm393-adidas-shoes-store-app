@@ -201,7 +201,24 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     Status = o.Status,
                     PaymentMethod = o.Payment == null ? null : o.Payment.PaymentMethod,
                     PaymentStatus = o.Payment == null ? null : o.Payment.Status,
-                    CreatedAt = o.CreatedAt
+                    CreatedAt = o.CreatedAt,
+                    HasReturnRequest = o.ReturnRequests.Any(),
+                    Items = o.OrderItems.Select(i => new OrderItemDto
+                    {
+                        OrderItemId = i.OrderItemId,
+                        VariantId = i.VariantId,
+                        ProductId = i.Variant.ProductId,
+                        ProductName = i.ProductName,
+                        ImageUrl = i.Variant.Product.ProductImages
+                            .OrderByDescending(img => img.IsMain == true)
+                            .Select(img => img.ImageUrl)
+                            .FirstOrDefault(),
+                        Size = i.Size,
+                        Color = i.Color,
+                        Quantity = i.Quantity,
+                        UnitPrice = i.UnitPrice,
+                        Subtotal = i.UnitPrice * i.Quantity
+                    }).ToList()
                 })
                 .ToListAsync();
         }
@@ -241,6 +258,10 @@ namespace AdidasShoesStore.Api.Services.Implementations
                         VariantId = i.VariantId,
                         ProductId = i.Variant.ProductId,
                         ProductName = i.ProductName,
+                        ImageUrl = i.Variant.Product.ProductImages
+                            .OrderByDescending(img => img.IsMain == true)
+                            .Select(img => img.ImageUrl)
+                            .FirstOrDefault(),
                         Size = i.Size,
                         Color = i.Color,
                         Quantity = i.Quantity,
@@ -442,6 +463,10 @@ namespace AdidasShoesStore.Api.Services.Implementations
                         VariantId = i.VariantId,
                         ProductId = i.Variant.ProductId,
                         ProductName = i.ProductName,
+                        ImageUrl = i.Variant.Product.ProductImages
+                            .OrderByDescending(img => img.IsMain == true)
+                            .Select(img => img.ImageUrl)
+                            .FirstOrDefault(),
                         Size = i.Size,
                         Color = i.Color,
                         Quantity = i.Quantity,

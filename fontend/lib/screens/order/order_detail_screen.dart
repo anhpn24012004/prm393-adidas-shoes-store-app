@@ -75,7 +75,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       'Completed' => context.tr('statusCompleted'),
       'Pending' => context.tr('statusPendingPayment'),
       null => context.tr('notAvailable'),
-      _ => status ?? context.tr('notAvailable'),
+      _ => status,
     };
   }
 
@@ -91,7 +91,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       builder: (context) {
         return AlertDialog(
           title: Text(context.tr('cancelOrder')),
-          content: Text('${context.tr('cancelOrderQuestion')} ${order.orderCode}?'),
+          content: Text(
+            '${context.tr('cancelOrderQuestion')} ${order.orderCode}?',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -117,9 +119,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('orderCancelled'))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.tr('orderCancelled'))));
 
       await _refresh();
     } catch (e) {
@@ -147,9 +149,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         _paymentStatus = status;
       });
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(context.tr('paymentStatusRefreshed'))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('paymentStatusRefreshed'))),
+      );
 
       await _refresh();
     } catch (e) {
@@ -198,9 +200,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
 
     if (created == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('reviewSubmitted'))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.tr('reviewSubmitted'))));
     }
   }
 
@@ -217,9 +219,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
 
     if (updated == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('reviewSubmitted'))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.tr('reviewSubmitted'))));
       setState(() {});
     }
   }
@@ -296,9 +298,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('orderCompleted'))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.tr('orderCompleted'))));
 
       await _refresh();
     } catch (e) {
@@ -312,6 +314,32 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
+  Widget _buildItemImage(String? imageUrl) {
+    if (imageUrl == null || imageUrl.trim().isEmpty) {
+      return Container(
+        width: 64,
+        height: 64,
+        color: Colors.grey.shade200,
+        child: const Icon(Icons.image_outlined),
+      );
+    }
+
+    return Image.network(
+      AppConfig.resolveImageUrl(imageUrl),
+      width: 64,
+      height: 64,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return Container(
+          width: 64,
+          height: 64,
+          color: Colors.grey.shade200,
+          child: const Icon(Icons.broken_image_outlined),
+        );
+      },
+    );
+  }
+
   Widget _buildItem(OrderItem item, {required bool canReview}) {
     return Card(
       child: Padding(
@@ -319,6 +347,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: _buildItemImage(item.imageUrl),
+            ),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -390,16 +423,28 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _sectionTitle(context.tr('shipping')),
-        _infoRow(context.tr('shipmentStatus'), _statusLabel(shipment.shipmentStatus)),
-        _infoRow(context.tr('carrier'), shipment.carrier ?? context.tr('notAvailable')),
-        _infoRow(context.tr('trackingNumber'), shipment.trackingNumber ?? context.tr('notAvailable')),
+        _infoRow(
+          context.tr('shipmentStatus'),
+          _statusLabel(shipment.shipmentStatus),
+        ),
+        _infoRow(
+          context.tr('carrier'),
+          shipment.carrier ?? context.tr('notAvailable'),
+        ),
+        _infoRow(
+          context.tr('trackingNumber'),
+          shipment.trackingNumber ?? context.tr('notAvailable'),
+        ),
         _infoRow(
           context.tr('estimatedDelivery'),
           formatDate(shipment.estimatedDeliveryDate),
         ),
         _infoRow(context.tr('shippedAt'), formatDate(shipment.shippedAt)),
         _infoRow(context.tr('deliveredAt'), formatDate(shipment.deliveredAt)),
-        _infoRow(context.tr('receiver'), shipment.receiverName ?? order.receiverName),
+        _infoRow(
+          context.tr('receiver'),
+          shipment.receiverName ?? order.receiverName,
+        ),
         _infoRow(
           context.tr('receiverPhone'),
           shipment.receiverPhone ?? order.receiverPhone,
@@ -449,7 +494,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           ...order.items.map((item) => _buildItem(item, canReview: canReview)),
           _buildShipmentSection(order, shipment),
           _sectionTitle(context.tr('payment')),
-          _infoRow(context.tr('paymentMethod'), order.payment.paymentMethod ?? context.tr('notAvailable')),
+          _infoRow(
+            context.tr('paymentMethod'),
+            order.payment.paymentMethod ?? context.tr('notAvailable'),
+          ),
           _infoRow(context.tr('paymentStatus'), _statusLabel(paymentStatus)),
           _infoRow(context.tr('paidAt'), formatDate(paidAt)),
           _sectionTitle(context.tr('totals')),

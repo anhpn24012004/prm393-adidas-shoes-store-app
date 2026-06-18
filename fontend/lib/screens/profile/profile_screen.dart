@@ -115,7 +115,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 },
               ),
               const SizedBox(height: 24),
-              if (signedIn) ...[
+              if (signedIn && !isAdmin) ...[
                 _ProfileItem(
                   icon: Icons.receipt_long_outlined,
                   title: context.tr('myOrders'),
@@ -144,22 +144,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   icon: Icons.credit_card_outlined,
                   title: context.tr('paymentMethods'),
                   subtitle: context.tr('paymentMethodsSubtitle'),
-                  onTap: () =>
-                      Navigator.pushNamed(context, '/payment-methods'),
+                  onTap: () => Navigator.pushNamed(context, '/payment-methods'),
                 ),
                 _ProfileItem(
                   icon: Icons.lock_outline,
                   title: context.tr('changePassword'),
                   subtitle: context.tr('changePasswordSubtitle'),
-                  onTap: () =>
-                      Navigator.pushNamed(context, '/change-password'),
+                  onTap: () => Navigator.pushNamed(context, '/change-password'),
                 ),
               ],
+              if (signedIn && isAdmin)
+                _ProfileItem(
+                  icon: Icons.lock_outline,
+                  title: context.tr('changePassword'),
+                  subtitle: context.tr('changePasswordSubtitle'),
+                  onTap: () => Navigator.pushNamed(context, '/change-password'),
+                ),
               _ProfileItem(
                 icon: Icons.support_agent_outlined,
                 title: context.tr('helpSupport'),
                 subtitle: context.tr('helpSupportSubtitle'),
-                onTap: () {},
+                onTap: () => Navigator.pushNamed(context, '/help-support'),
               ),
               _ProfileItem(
                 icon: Icons.settings_outlined,
@@ -199,6 +204,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   title: context.tr('adminDashboard'),
                   subtitle: context.tr('businessOverview'),
                   onTap: () => Navigator.pushNamed(context, '/admin/dashboard'),
+                ),
+                _ProfileItem(
+                  icon: Icons.people_outline,
+                  title: context.tr('userManagement'),
+                  subtitle: context.tr('userManagementSubtitle'),
+                  onTap: () => Navigator.pushNamed(context, '/admin/users'),
                 ),
                 _ProfileItem(
                   icon: Icons.receipt_long_outlined,

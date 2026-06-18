@@ -58,6 +58,33 @@ class AdminService {
     if (response.statusCode != 200) throw Exception(_message(response));
   }
 
+  Future<List<AdminUserSummary>> getUsers({
+    String? keyword,
+    bool? isActive,
+  }) async {
+    final uri = Uri.parse('${ApiClient.baseUrl}/admin/users').replace(
+      queryParameters: {
+        if (keyword != null && keyword.isNotEmpty) 'keyword': keyword,
+        if (isActive != null) 'isActive': isActive.toString(),
+      },
+    );
+    final response = await http.get(uri, headers: await _headers());
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as List;
+      return data.map((item) => AdminUserSummary.fromJson(item)).toList();
+    }
+    throw Exception(_message(response));
+  }
+
+  Future<void> updateUserStatus(int userId, bool isActive) async {
+    final response = await http.put(
+      Uri.parse('${ApiClient.baseUrl}/admin/users/$userId/status'),
+      headers: await _headers(),
+      body: jsonEncode({'isActive': isActive}),
+    );
+    if (response.statusCode != 200) throw Exception(_message(response));
+  }
+
   Future<Map<String, String>> _headers() async {
     final token = await _storage.getToken();
     if (token == null) throw Exception('Admin login required');

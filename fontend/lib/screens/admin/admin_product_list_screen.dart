@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../config/app_config.dart';
+import '../../localization/app_localization.dart';
 import '../../models/product_model.dart';
 import '../../services/product_service.dart';
 import '../../utils/currency_formatter.dart';
@@ -39,18 +40,18 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Delete product'),
+          title: Text(context.tr('deleteProduct')),
           content: Text(
-            'Are you sure you want to delete "${product.productName}"?',
+            '${context.tr('deleteProductQuestion')} "${product.productName}"?',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
+              child: Text(context.tr('cancel')),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Delete'),
+              child: Text(context.tr('delete')),
             ),
           ],
         );
@@ -64,9 +65,9 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Product deleted successfully')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.tr('productDeleted'))));
 
       setState(() {
         _loadProducts();
@@ -76,7 +77,7 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      ).showSnackBar(SnackBar(content: Text('${context.tr('error')}: $e')));
     }
   }
 
@@ -183,30 +184,30 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
         ),
         subtitle: Text(
           '${formatPrice(product.basePrice)}\n'
-          '${product.categoryName ?? 'No category'}\n'
-          'Status: ${product.isActive ? 'Active' : 'Inactive'}',
+          '${product.categoryName ?? context.tr('noCategory')}\n'
+          '${context.tr('orderStatus')}: ${product.isActive ? context.tr('active') : context.tr('inactive')}',
         ),
         isThreeLine: true,
         trailing: Wrap(
           spacing: 4,
           children: [
             IconButton(
-              tooltip: 'Manage images',
+              tooltip: context.tr('manageImages'),
               icon: const Icon(Icons.image),
               onPressed: () => _goToImages(product),
             ),
             IconButton(
-              tooltip: 'Manage variants',
+              tooltip: context.tr('manageVariants'),
               icon: const Icon(Icons.inventory_2),
               onPressed: () => _goToVariants(product),
             ),
             IconButton(
-              tooltip: 'Edit product',
+              tooltip: context.tr('editProduct'),
               icon: const Icon(Icons.edit),
               onPressed: () => _goToEdit(product),
             ),
             IconButton(
-              tooltip: 'Delete product',
+              tooltip: context.tr('deleteProduct'),
               icon: const Icon(Icons.delete),
               onPressed: () => _deleteProduct(product),
             ),
@@ -228,7 +229,7 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Text('Error: ${snapshot.error}'),
+              child: Text('${context.tr('error')}: ${snapshot.error}'),
             ),
           );
         }
@@ -236,7 +237,7 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
         final products = snapshot.data ?? [];
 
         if (products.isEmpty) {
-          return const Center(child: Text('No products found'));
+          return Center(child: Text(context.tr('noProductsFound')));
         }
 
         return RefreshIndicator(
@@ -261,15 +262,15 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Admin Product Management'),
+        title: Text(context.tr('productManagement')),
         actions: [
           IconButton(
-            tooltip: 'Manage Categories',
+            tooltip: context.tr('categoryManagement'),
             icon: const Icon(Icons.category),
             onPressed: _goToCategories,
           ),
           IconButton(
-            tooltip: 'Shipment Management',
+            tooltip: context.tr('shipmentManagement'),
             icon: const Icon(Icons.local_shipping),
             onPressed: _goToShipments,
           ),

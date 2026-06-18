@@ -109,3 +109,44 @@ class AdminOrderDetail {
     );
   }
 }
+
+class AdminUserSummary {
+  final int userId;
+  final String fullName;
+  final String email;
+  final String? phone;
+  final String? gender;
+  final String roleName;
+  final bool isActive;
+  final DateTime? createdAt;
+  final int orderCount;
+  final int returnRequestCount;
+
+  const AdminUserSummary({
+    required this.userId,
+    required this.fullName,
+    required this.email,
+    this.phone,
+    this.gender,
+    required this.roleName,
+    required this.isActive,
+    this.createdAt,
+    required this.orderCount,
+    required this.returnRequestCount,
+  });
+
+  factory AdminUserSummary.fromJson(Map<String, dynamic> json) {
+    return AdminUserSummary(
+      userId: json['userId'] ?? 0,
+      fullName: json['fullName'] ?? '',
+      email: json['email'] ?? '',
+      phone: json['phone'],
+      gender: json['gender'],
+      roleName: json['roleName'] ?? '',
+      isActive: json['isActive'] ?? false,
+      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
+      orderCount: json['orderCount'] ?? 0,
+      returnRequestCount: json['returnRequestCount'] ?? 0,
+    );
+  }
+}

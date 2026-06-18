@@ -35,6 +35,8 @@ class OrderListItem {
   final String? paymentMethod;
   final String? paymentStatus;
   final DateTime? createdAt;
+  final bool hasReturnRequest;
+  final List<OrderItem> items;
 
   OrderListItem({
     required this.orderId,
@@ -47,6 +49,8 @@ class OrderListItem {
     this.paymentMethod,
     this.paymentStatus,
     this.createdAt,
+    required this.hasReturnRequest,
+    required this.items,
   });
 
   factory OrderListItem.fromJson(Map<String, dynamic> json) {
@@ -61,6 +65,10 @@ class OrderListItem {
       paymentMethod: json['paymentMethod'],
       paymentStatus: json['paymentStatus'],
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
+      hasReturnRequest: json['hasReturnRequest'] ?? false,
+      items: (json['items'] as List? ?? [])
+          .map((item) => OrderItem.fromJson(item))
+          .toList(),
     );
   }
 }
@@ -128,6 +136,7 @@ class OrderItem {
   final int variantId;
   final int productId;
   final String productName;
+  final String? imageUrl;
   final String size;
   final String color;
   final int quantity;
@@ -139,6 +148,7 @@ class OrderItem {
     required this.variantId,
     required this.productId,
     required this.productName,
+    this.imageUrl,
     required this.size,
     required this.color,
     required this.quantity,
@@ -152,6 +162,7 @@ class OrderItem {
       variantId: json['variantId'] ?? 0,
       productId: json['productId'] ?? 0,
       productName: json['productName'] ?? '',
+      imageUrl: json['imageUrl'],
       size: json['size'] ?? '',
       color: json['color'] ?? '',
       quantity: json['quantity'] ?? 0,
@@ -197,6 +208,35 @@ class CreateVnPayPaymentResponse {
 
   factory CreateVnPayPaymentResponse.fromJson(Map<String, dynamic> json) {
     return CreateVnPayPaymentResponse(paymentUrl: json['paymentUrl'] ?? '');
+  }
+}
+
+class VisaPaymentRequest {
+  final int orderId;
+  final String cardNumber;
+  final String cardHolderName;
+  final String expiryMonth;
+  final String expiryYear;
+  final String cvv;
+
+  VisaPaymentRequest({
+    required this.orderId,
+    required this.cardNumber,
+    required this.cardHolderName,
+    required this.expiryMonth,
+    required this.expiryYear,
+    required this.cvv,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'orderId': orderId,
+      'cardNumber': cardNumber,
+      'cardHolderName': cardHolderName,
+      'expiryMonth': expiryMonth,
+      'expiryYear': expiryYear,
+      'cvv': cvv,
+    };
   }
 }
 

@@ -10,6 +10,8 @@ namespace AdidasShoesStore.Api.DTOs.Order
 
         public string ProductName { get; set; } = null!;
 
+        public string? ImageUrl { get; set; }
+
         public string Size { get; set; } = null!;
 
         public string Color { get; set; } = null!;

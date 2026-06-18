@@ -21,6 +21,7 @@ import 'screens/ai/ai_assistant_screen.dart';
 import 'screens/category/category_list_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/profile/edit_profile_screen.dart';
+import 'screens/profile/help_support_screen.dart';
 import 'screens/profile/payment_methods_screen.dart';
 import 'screens/profile/address_list_screen.dart';
 import 'screens/profile/address_form_screen.dart';
@@ -34,6 +35,7 @@ import 'screens/admin/admin_shipment_form_screen.dart';
 import 'screens/admin/admin_dashboard_screen.dart';
 import 'screens/admin/admin_order_list_screen.dart';
 import 'screens/admin/admin_returns_refunds_screen.dart';
+import 'screens/admin/admin_user_list_screen.dart';
 import 'theme/app_theme.dart';
 import 'config/app_config.dart';
 import 'services/auth_storage.dart';
@@ -70,8 +72,7 @@ class AdidasShoesStoreApp extends StatelessWidget {
           '/checkout': (context) => const CheckoutScreen(),
           '/orders': (context) => const OrderHistoryScreen(),
           '/order-detail': (context) => const OrderDetailScreen(),
-          '/shipment-tracking': (context) =>
-              const UserShipmentTrackingScreen(),
+          '/shipment-tracking': (context) => const UserShipmentTrackingScreen(),
           '/payment-result': (context) {
             final argument = ModalRoute.of(context)?.settings.arguments;
             final orderId = argument is int ? argument : 0;
@@ -83,12 +84,14 @@ class AdidasShoesStoreApp extends StatelessWidget {
           '/ai-assistant': (context) => const AiAssistantScreen(),
           '/profile': (context) => const ProfileScreen(),
           '/edit-profile': (context) => const EditProfileScreen(),
+          '/help-support': (context) => const HelpSupportScreen(),
           '/payment-methods': (context) => const PaymentMethodsScreen(),
           '/addresses': (context) => const AddressListScreen(),
           '/address-form': (context) => const AddressFormScreen(),
           '/settings': (context) => const SettingsScreen(),
           '/admin/products': (context) => const AdminProductListScreen(),
           '/admin/dashboard': (context) => const AdminDashboardScreen(),
+          '/admin/users': (context) => const AdminUserListScreen(),
           '/admin/orders': (context) => const AdminOrderListScreen(),
           '/admin/returns-refunds': (context) =>
               const AdminReturnsRefundsScreen(),
