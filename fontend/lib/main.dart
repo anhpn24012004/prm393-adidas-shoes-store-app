@@ -27,6 +27,9 @@ import 'screens/profile/address_list_screen.dart';
 import 'screens/profile/address_form_screen.dart';
 import 'screens/settings/settings_screen.dart';
 import 'screens/admin/admin_product_list_screen.dart';
+import 'screens/admin/admin_product_form_screen.dart';
+import 'screens/admin/admin_product_image_list_screen.dart';
+import 'screens/admin/admin_variant_list_screen.dart';
 import 'screens/admin/admin_category_list_screen.dart';
 import 'screens/review/create_review_screen.dart';
 import 'screens/admin/admin_shipment_list_screen.dart';
@@ -38,6 +41,7 @@ import 'screens/admin/admin_returns_refunds_screen.dart';
 import 'screens/admin/admin_user_list_screen.dart';
 import 'theme/app_theme.dart';
 import 'config/app_config.dart';
+import 'models/product_model.dart';
 import 'services/auth_storage.dart';
 
 Future<void> main() async {
@@ -91,6 +95,37 @@ class AdidasShoesStoreApp extends StatelessWidget {
           '/settings': (context) => const SettingsScreen(),
           '/admin/products': (context) => const AdminProductListScreen(),
           '/admin/dashboard': (context) => const AdminDashboardScreen(),
+          '/admin/products/create': (context) =>
+              const AdminProductFormScreen(createMode: true),
+          '/admin/products/edit': (context) {
+            final argument = ModalRoute.of(context)?.settings.arguments;
+            if (argument is ProductRouteArgs) {
+              return AdminProductFormScreen(product: argument.product);
+            }
+            throw ArgumentError('ProductRouteArgs required for edit product');
+          },
+          '/admin/products/images': (context) {
+            final argument = ModalRoute.of(context)?.settings.arguments;
+            if (argument is ProductRouteArgs) {
+              return AdminProductImageListScreen(
+                product: argument.product,
+                fromCreateFlow: argument.fromCreateFlow,
+              );
+            }
+            throw ArgumentError('ProductRouteArgs required for product images');
+          },
+          '/admin/products/variants': (context) {
+            final argument = ModalRoute.of(context)?.settings.arguments;
+            if (argument is ProductRouteArgs) {
+              return AdminVariantListScreen(
+                product: argument.product,
+                fromCreateFlow: argument.fromCreateFlow,
+              );
+            }
+            throw ArgumentError(
+              'ProductRouteArgs required for product variants',
+            );
+          },
           '/admin/users': (context) => const AdminUserListScreen(),
           '/admin/orders': (context) => const AdminOrderListScreen(),
           '/admin/returns-refunds': (context) =>

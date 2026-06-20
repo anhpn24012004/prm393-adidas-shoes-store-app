@@ -53,6 +53,9 @@ public class CartController : ControllerBase
             ImageUrl = x.Variant.Product.ProductImages
                 .Where(i => i.IsMain == true)
                 .Select(i => i.ImageUrl)
+                .FirstOrDefault() ?? x.Variant.Product.ProductImages
+                .OrderBy(i => i.ImageId)
+                .Select(i => i.ImageUrl)
                 .FirstOrDefault(),
             Quantity = x.Quantity
         }).ToList();
@@ -86,6 +89,27 @@ public class CartController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> AddToCart(AddToCartDto request)
     {
+        if (request.Quantity <= 0)
+        {
+            return BadRequest(new { message = "Quantity must be greater than 0" });
+        }
+
+        var variant = await _context.ProductVariants
+            .Include(v => v.Product)
+            .FirstOrDefaultAsync(v => v.VariantId == request.VariantId);
+
+        if (variant == null)
+        {
+            return NotFound(new { message = "Product variant not found" });
+        }
+
+        if (variant.IsActive != true || variant.Product.IsActive != true)
+        {
+            return BadRequest(new { message = "Product variant is not available" });
+        }
+
+        var stockQuantity = variant.StockQuantity ?? 0;
+
         var cart = await _context.Carts
             .Include(c => c.CartItems)
             .FirstOrDefaultAsync(c => c.UserId == request.UserId);
@@ -106,6 +130,12 @@ public class CartController : ControllerBase
             .FirstOrDefaultAsync(x =>
                 x.CartId == cart.CartId &&
                 x.VariantId == request.VariantId);
+
+        var currentCartQuantity = existingItem?.Quantity ?? 0;
+        if (currentCartQuantity + request.Quantity > stockQuantity)
+        {
+            return BadRequest(new { message = $"Not enough stock. Available quantity: {stockQuantity}" });
+        }
 
         if (existingItem != null)
         {
@@ -141,6 +171,8 @@ public class CartController : ControllerBase
         UpdateCartItemDto dto)
     {
         var item = await _context.CartItems
+            .Include(x => x.Variant)
+                .ThenInclude(v => v.Product)
             .FirstOrDefaultAsync(x => x.CartItemId == cartItemId);
 
         if (item == null)
@@ -152,6 +184,17 @@ public class CartController : ControllerBase
         }
         else
         {
+            if (item.Variant.IsActive != true || item.Variant.Product.IsActive != true)
+            {
+                return BadRequest(new { message = "Product variant is not available" });
+            }
+
+            var stockQuantity = item.Variant.StockQuantity ?? 0;
+            if (dto.Quantity > stockQuantity)
+            {
+                return BadRequest(new { message = $"Not enough stock. Available quantity: {stockQuantity}" });
+            }
+
             item.Quantity = dto.Quantity;
         }
 

@@ -116,6 +116,8 @@ if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 
+app.UseStaticFiles();
+
 // CORS should be before Authentication/Authorization
 app.UseCors("AllowFlutterWeb");
 
@@ -124,8 +126,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-
-app.UseStaticFiles();
 
 // Seed admin in Development
 if (app.Environment.IsDevelopment())

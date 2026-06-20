@@ -17,4 +17,6 @@ public class CreateProductVariantDto
     public int StockQuantity { get; set; }
 
     public string? Sku { get; set; }
+
+    public bool IsActive { get; set; } = true;
 }

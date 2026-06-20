@@ -30,7 +30,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _products = _productService.getProducts();
+    _products = _productService.getProductList();
     _categories = _categoryService.getCategories();
     BadgeNotifier.instance.refreshCounts();
   }
