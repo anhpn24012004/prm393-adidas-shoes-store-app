@@ -1,9 +1,30 @@
 import 'package:flutter/material.dart';
 
+import '../config/app_config.dart';
 import '../providers/badge_notifier.dart';
+import '../services/auth_storage.dart';
 
 class CartWishlistBadges extends StatelessWidget {
   const CartWishlistBadges({super.key});
+
+  Future<void> _openProtectedRoute(
+    BuildContext context,
+    String routeName,
+  ) async {
+    final authStorage = AuthStorage();
+    final token = await authStorage.getToken();
+    final userId = await authStorage.getUserId();
+
+    if (!context.mounted) return;
+
+    if (token == null || userId == null || userId <= 0) {
+      Navigator.pushNamed(context, '/login');
+      return;
+    }
+
+    AppConfig.currentUserId = userId;
+    Navigator.pushNamed(context, routeName);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -17,14 +38,14 @@ class CartWishlistBadges extends StatelessWidget {
               icon: Icons.favorite_border,
               count: BadgeNotifier.instance.wishlistCount,
               onPressed: () {
-                Navigator.pushNamed(context, '/wishlist');
+                _openProtectedRoute(context, '/wishlist');
               },
             ),
             _BadgeIconButton(
               icon: Icons.shopping_cart_outlined,
               count: BadgeNotifier.instance.cartCount,
               onPressed: () {
-                Navigator.pushNamed(context, '/cart');
+                _openProtectedRoute(context, '/cart');
               },
             ),
           ],

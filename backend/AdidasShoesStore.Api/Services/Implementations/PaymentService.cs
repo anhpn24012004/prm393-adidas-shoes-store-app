@@ -1,9 +1,13 @@
 using AdidasShoesStore.Api.Data;
 using AdidasShoesStore.Api.DTOs.Payment;
 using AdidasShoesStore.Api.Helpers;
+using AdidasShoesStore.Api.Models;
 using AdidasShoesStore.Api.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using System.Net.Http.Headers;
 using System.Globalization;
+using System.Text;
+using System.Text.Json;
 
 namespace AdidasShoesStore.Api.Services.Implementations
 {
@@ -13,6 +17,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
         private readonly IConfiguration _configuration;
         private readonly VnPayHelper _vnPayHelper;
         private readonly IEmailService _emailService;
+        private readonly IHttpClientFactory _httpClientFactory;
         private readonly ILogger<PaymentService> _logger;
 
         public PaymentService(
@@ -20,12 +25,14 @@ namespace AdidasShoesStore.Api.Services.Implementations
             IConfiguration configuration,
             VnPayHelper vnPayHelper,
             IEmailService emailService,
+            IHttpClientFactory httpClientFactory,
             ILogger<PaymentService> logger)
         {
             _context = context;
             _configuration = configuration;
             _vnPayHelper = vnPayHelper;
             _emailService = emailService;
+            _httpClientFactory = httpClientFactory;
             _logger = logger;
         }
 
@@ -90,7 +97,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 ["vnp_Locale"] = "vn",
                 ["vnp_OrderInfo"] = $"Payment for order {order.OrderCode}",
                 ["vnp_OrderType"] = "other",
-                ["vnp_ReturnUrl"] = config.ReturnUrl,
+                ["vnp_ReturnUrl"] = GetReturnUrl(dto.ReturnUrl, config.ReturnUrl),
                 ["vnp_TxnRef"] = order.OrderCode
             };
 
@@ -189,6 +196,399 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 OrderCode = order.OrderCode,
                 Message = isValidHash ? "Payment failed" : "Invalid payment signature"
             };
+        }
+
+        public async Task<PaymentServiceResult<PayPalPaymentResponseDto>> CreatePayPalPaymentUrlAsync(
+            int userId,
+            CreatePayPalPaymentDto dto)
+        {
+            var config = GetPayPalConfig();
+
+            if (config == null)
+            {
+                return PaymentServiceResult<PayPalPaymentResponseDto>.Fail("PayPal configuration is missing or invalid");
+            }
+
+            var order = await _context.Orders
+                .Include(o => o.Payment)
+                .FirstOrDefaultAsync(o =>
+                    o.OrderId == dto.OrderId &&
+                    o.UserId == userId);
+
+            if (order == null)
+            {
+                return PaymentServiceResult<PayPalPaymentResponseDto>.Fail(
+                    "Order not found",
+                    "NotFound"
+                );
+            }
+
+            if (order.Status != "PendingPayment")
+            {
+                return PaymentServiceResult<PayPalPaymentResponseDto>.Fail(
+                    "Only pending payment orders can be paid with PayPal"
+                );
+            }
+
+            if (order.Payment == null)
+            {
+                return PaymentServiceResult<PayPalPaymentResponseDto>.Fail(
+                    "Payment not found",
+                    "NotFound"
+                );
+            }
+
+            if (!string.Equals(order.Payment.PaymentMethod, "PAYPAL", StringComparison.OrdinalIgnoreCase))
+            {
+                return PaymentServiceResult<PayPalPaymentResponseDto>.Fail(
+                    "Payment method must be PAYPAL"
+                );
+            }
+
+            try
+            {
+                var accessToken = await GetPayPalAccessTokenAsync(config);
+                var returnUrl = AddOrderIdToUrl(GetReturnUrl(dto.ReturnUrl, config.ReturnUrl), order.OrderId);
+                var cancelUrl = AddOrderIdToUrl(GetReturnUrl(dto.CancelUrl, config.CancelUrl), order.OrderId);
+                var amount = ConvertVndToPayPalAmount(order.FinalAmount, config.VndToUsdRate);
+                var client = _httpClientFactory.CreateClient();
+                var request = new HttpRequestMessage(
+                    HttpMethod.Post,
+                    $"{config.BaseUrl}/v2/checkout/orders"
+                );
+
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+                request.Content = JsonContent(new
+                {
+                    intent = "CAPTURE",
+                    purchase_units = new[]
+                    {
+                        new
+                        {
+                            reference_id = order.OrderCode,
+                            custom_id = order.OrderId.ToString(CultureInfo.InvariantCulture),
+                            description = $"Adidas Shoes Store order {order.OrderCode}",
+                            amount = new
+                            {
+                                currency_code = config.Currency,
+                                value = amount
+                            }
+                        }
+                    },
+                    application_context = new
+                    {
+                        brand_name = "Adidas Shoes Store",
+                        landing_page = "LOGIN",
+                        user_action = "PAY_NOW",
+                        return_url = returnUrl,
+                        cancel_url = cancelUrl
+                    }
+                });
+
+                var response = await client.SendAsync(request);
+                var content = await response.Content.ReadAsStringAsync();
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning(
+                        "Could not create PayPal order for {OrderCode}. Status: {Status}. Response: {Response}",
+                        order.OrderCode,
+                        response.StatusCode,
+                        content
+                    );
+
+                    return PaymentServiceResult<PayPalPaymentResponseDto>.Fail("Could not create PayPal payment");
+                }
+
+                using var document = JsonDocument.Parse(content);
+                var root = document.RootElement;
+                var paypalOrderId = root.GetProperty("id").GetString();
+                var approvalUrl = GetPayPalApprovalUrl(root);
+
+                if (string.IsNullOrWhiteSpace(paypalOrderId) ||
+                    string.IsNullOrWhiteSpace(approvalUrl))
+                {
+                    return PaymentServiceResult<PayPalPaymentResponseDto>.Fail("PayPal approval URL was not returned");
+                }
+
+                order.Payment.TransactionCode = paypalOrderId;
+                await _context.SaveChangesAsync();
+
+                return PaymentServiceResult<PayPalPaymentResponseDto>.Ok(new PayPalPaymentResponseDto
+                {
+                    ApprovalUrl = approvalUrl,
+                    PayPalOrderId = paypalOrderId
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Could not create PayPal payment for order {OrderCode}", order.OrderCode);
+
+                return PaymentServiceResult<PayPalPaymentResponseDto>.Fail("Could not create PayPal payment");
+            }
+        }
+
+        public async Task<PayPalPaymentResponseDto> ProcessPayPalReturnAsync(
+            IReadOnlyDictionary<string, string> queryParameters)
+        {
+            var config = GetPayPalConfig();
+
+            if (config == null)
+            {
+                return new PayPalPaymentResponseDto
+                {
+                    Success = false,
+                    Message = "PayPal configuration is missing or invalid"
+                };
+            }
+
+            queryParameters.TryGetValue("token", out var paypalOrderId);
+            var order = await FindPayPalOrderAsync(queryParameters, paypalOrderId);
+
+            if (order == null || order.Payment == null)
+            {
+                return new PayPalPaymentResponseDto
+                {
+                    Success = false,
+                    Message = "Order or payment not found"
+                };
+            }
+
+            if (!string.Equals(order.Payment.PaymentMethod, "PAYPAL", StringComparison.OrdinalIgnoreCase))
+            {
+                return new PayPalPaymentResponseDto
+                {
+                    Success = false,
+                    OrderCode = order.OrderCode,
+                    Message = "Payment method must be PAYPAL"
+                };
+            }
+
+            try
+            {
+                var accessToken = await GetPayPalAccessTokenAsync(config);
+                var captureResult = await CapturePayPalOrderAsync(config, accessToken, paypalOrderId);
+
+                if (captureResult.Success)
+                {
+                    order.Payment.Status = "Success";
+                    order.Payment.TransactionCode = captureResult.TransactionCode ?? paypalOrderId;
+                    order.Payment.PaidAt = DateTime.Now;
+                    order.Status = "Paid";
+
+                    await _context.SaveChangesAsync();
+
+                    var message = "Payment successful";
+
+                    try
+                    {
+                        await _emailService.SendInvoiceEmailAsync(order);
+                    }
+                    catch
+                    {
+                        message = "Payment successful, but invoice email could not be sent";
+                    }
+
+                    return new PayPalPaymentResponseDto
+                    {
+                        Success = true,
+                        OrderCode = order.OrderCode,
+                        PayPalOrderId = paypalOrderId,
+                        Message = message
+                    };
+                }
+
+                order.Payment.Status = "Failed";
+                await _context.SaveChangesAsync();
+
+                return new PayPalPaymentResponseDto
+                {
+                    Success = false,
+                    OrderCode = order.OrderCode,
+                    PayPalOrderId = paypalOrderId,
+                    Message = captureResult.Message ?? "PayPal payment failed"
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Could not capture PayPal payment for order {OrderCode}", order.OrderCode);
+
+                return new PayPalPaymentResponseDto
+                {
+                    Success = false,
+                    OrderCode = order.OrderCode,
+                    PayPalOrderId = paypalOrderId,
+                    Message = "Could not capture PayPal payment"
+                };
+            }
+        }
+
+        public async Task<PayPalPaymentResponseDto> ProcessPayPalCancelAsync(
+            IReadOnlyDictionary<string, string> queryParameters)
+        {
+            queryParameters.TryGetValue("token", out var paypalOrderId);
+            var order = await FindPayPalOrderAsync(queryParameters, paypalOrderId);
+
+            if (order?.Payment == null)
+            {
+                return new PayPalPaymentResponseDto
+                {
+                    Success = false,
+                    Message = "Order or payment not found"
+                };
+            }
+
+            order.Payment.Status = "Failed";
+            await _context.SaveChangesAsync();
+
+            return new PayPalPaymentResponseDto
+            {
+                Success = false,
+                OrderCode = order.OrderCode,
+                PayPalOrderId = paypalOrderId,
+                Message = "PayPal payment was cancelled"
+            };
+        }
+
+        public async Task<PaymentServiceResult<QrPaymentResponseDto>> CreateQrPaymentAsync(
+            int userId,
+            CreateQrPaymentDto dto)
+        {
+            var config = GetQrPaymentConfig();
+
+            if (config == null)
+            {
+                return PaymentServiceResult<QrPaymentResponseDto>.Fail("QR payment configuration is missing or invalid");
+            }
+
+            var order = await _context.Orders
+                .Include(o => o.Payment)
+                .FirstOrDefaultAsync(o =>
+                    o.OrderId == dto.OrderId &&
+                    o.UserId == userId);
+
+            if (order == null)
+            {
+                return PaymentServiceResult<QrPaymentResponseDto>.Fail(
+                    "Order not found",
+                    "NotFound"
+                );
+            }
+
+            if (order.Status != "PendingPayment")
+            {
+                return PaymentServiceResult<QrPaymentResponseDto>.Fail(
+                    "Only pending payment orders can be paid with QR"
+                );
+            }
+
+            if (order.Payment == null)
+            {
+                return PaymentServiceResult<QrPaymentResponseDto>.Fail(
+                    "Payment not found",
+                    "NotFound"
+                );
+            }
+
+            if (!string.Equals(order.Payment.PaymentMethod, "QR", StringComparison.OrdinalIgnoreCase))
+            {
+                return PaymentServiceResult<QrPaymentResponseDto>.Fail(
+                    "Payment method must be QR"
+                );
+            }
+
+            var transferContent = $"{config.TransferPrefix}{order.OrderCode}";
+            var amount = ((long)Math.Round(order.FinalAmount, 0, MidpointRounding.AwayFromZero))
+                .ToString(CultureInfo.InvariantCulture);
+            var qrImageUrl =
+                $"https://img.vietqr.io/image/{Uri.EscapeDataString(config.BankBin)}-{Uri.EscapeDataString(config.AccountNo)}-{Uri.EscapeDataString(config.Template)}.png" +
+                $"?amount={amount}" +
+                $"&addInfo={Uri.EscapeDataString(transferContent)}" +
+                $"&accountName={Uri.EscapeDataString(config.AccountName)}";
+
+            order.Payment.TransactionCode = transferContent;
+            await _context.SaveChangesAsync();
+
+            return PaymentServiceResult<QrPaymentResponseDto>.Ok(new QrPaymentResponseDto
+            {
+                QrImageUrl = qrImageUrl,
+                BankBin = config.BankBin,
+                AccountNo = config.AccountNo,
+                AccountName = config.AccountName,
+                TransferContent = transferContent,
+                Amount = order.FinalAmount
+            });
+        }
+
+        public async Task<PaymentServiceResult<PaymentStatusDto>> ConfirmQrPaymentAsync(
+            int userId,
+            ConfirmQrPaymentDto dto)
+        {
+            var order = await _context.Orders
+                .Include(o => o.Payment)
+                .Include(o => o.User)
+                .Include(o => o.OrderItems)
+                .FirstOrDefaultAsync(o =>
+                    o.OrderId == dto.OrderId &&
+                    o.UserId == userId);
+
+            if (order == null)
+            {
+                return PaymentServiceResult<PaymentStatusDto>.Fail(
+                    "Order not found",
+                    "NotFound"
+                );
+            }
+
+            if (order.Status != "PendingPayment")
+            {
+                return PaymentServiceResult<PaymentStatusDto>.Fail(
+                    "Only pending payment orders can be confirmed"
+                );
+            }
+
+            if (order.Payment == null)
+            {
+                return PaymentServiceResult<PaymentStatusDto>.Fail(
+                    "Payment not found",
+                    "NotFound"
+                );
+            }
+
+            if (!string.Equals(order.Payment.PaymentMethod, "QR", StringComparison.OrdinalIgnoreCase))
+            {
+                return PaymentServiceResult<PaymentStatusDto>.Fail(
+                    "Payment method must be QR"
+                );
+            }
+
+            order.Payment.Status = "Success";
+            order.Payment.TransactionCode ??= $"QR{DateTime.Now:yyyyMMddHHmmssfff}";
+            order.Payment.PaidAt = DateTime.Now;
+            order.Status = "Paid";
+
+            await _context.SaveChangesAsync();
+
+            try
+            {
+                await _emailService.SendInvoiceEmailAsync(order);
+            }
+            catch
+            {
+                // Payment confirmation is already saved; email failure should not rollback it.
+            }
+
+            return PaymentServiceResult<PaymentStatusDto>.Ok(new PaymentStatusDto
+            {
+                OrderId = order.OrderId,
+                OrderCode = order.OrderCode,
+                OrderStatus = order.Status,
+                PaymentMethod = order.Payment.PaymentMethod,
+                PaymentStatus = order.Payment.Status,
+                Amount = order.Payment.Amount,
+                TransactionCode = order.Payment.TransactionCode,
+                PaidAt = order.Payment.PaidAt
+            });
         }
 
         public async Task<PaymentServiceResult<PaymentStatusDto>> PayWithVisaAsync(
@@ -320,6 +720,68 @@ namespace AdidasShoesStore.Api.Services.Implementations
             };
         }
 
+        private PayPalConfig? GetPayPalConfig()
+        {
+            var clientId = _configuration["PayPal:ClientId"];
+            var clientSecret = _configuration["PayPal:ClientSecret"];
+            var baseUrl = _configuration["PayPal:BaseUrl"];
+            var returnUrl = _configuration["PayPal:ReturnUrl"];
+            var cancelUrl = _configuration["PayPal:CancelUrl"];
+            var currency = _configuration["PayPal:Currency"] ?? "USD";
+            var rateText = _configuration["PayPal:VndToUsdRate"];
+
+            if (string.IsNullOrWhiteSpace(clientId) ||
+                string.IsNullOrWhiteSpace(clientSecret) ||
+                string.IsNullOrWhiteSpace(baseUrl) ||
+                string.IsNullOrWhiteSpace(returnUrl) ||
+                string.IsNullOrWhiteSpace(cancelUrl) ||
+                clientId.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase) ||
+                clientSecret.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase) ||
+                !decimal.TryParse(rateText, NumberStyles.Number, CultureInfo.InvariantCulture, out var vndToUsdRate) ||
+                vndToUsdRate <= 0)
+            {
+                return null;
+            }
+
+            return new PayPalConfig
+            {
+                ClientId = clientId,
+                ClientSecret = clientSecret,
+                BaseUrl = baseUrl.TrimEnd('/'),
+                ReturnUrl = returnUrl,
+                CancelUrl = cancelUrl,
+                Currency = currency,
+                VndToUsdRate = vndToUsdRate
+            };
+        }
+
+        private QrPaymentConfig? GetQrPaymentConfig()
+        {
+            var bankBin = _configuration["QrPayment:BankBin"];
+            var accountNo = _configuration["QrPayment:AccountNo"];
+            var accountName = _configuration["QrPayment:AccountName"];
+            var template = _configuration["QrPayment:Template"] ?? "compact2";
+            var transferPrefix = _configuration["QrPayment:TransferPrefix"] ?? "ADIDAS ";
+
+            if (string.IsNullOrWhiteSpace(bankBin) ||
+                string.IsNullOrWhiteSpace(accountNo) ||
+                string.IsNullOrWhiteSpace(accountName) ||
+                bankBin.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase) ||
+                accountNo.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            return new QrPaymentConfig
+            {
+                BankBin = bankBin.Trim(),
+                AccountNo = accountNo.Trim(),
+                AccountName = accountName.Trim(),
+                Template = template.Trim(),
+                TransferPrefix = transferPrefix.TrimEnd() + " "
+            };
+        }
+
         private static string? ValidateVisaPayment(CreateVisaPaymentDto dto)
         {
             var cardNumber = DigitsOnly(dto.CardNumber);
@@ -371,6 +833,226 @@ namespace AdidasShoesStore.Api.Services.Implementations
             return null;
         }
 
+        private static string GetReturnUrl(
+            string? requestReturnUrl,
+            string configuredReturnUrl)
+        {
+            if (Uri.TryCreate(requestReturnUrl, UriKind.Absolute, out var uri) &&
+                (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+            {
+                return uri.ToString();
+            }
+
+            return configuredReturnUrl;
+        }
+
+        private async Task<string> GetPayPalAccessTokenAsync(PayPalConfig config)
+        {
+            var client = _httpClientFactory.CreateClient();
+            var request = new HttpRequestMessage(
+                HttpMethod.Post,
+                $"{config.BaseUrl}/v1/oauth2/token"
+            );
+            var credentials = Convert.ToBase64String(
+                Encoding.ASCII.GetBytes($"{config.ClientId}:{config.ClientSecret}")
+            );
+
+            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", credentials);
+            request.Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["grant_type"] = "client_credentials"
+            });
+
+            var response = await client.SendAsync(request);
+            var content = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException($"PayPal token request failed: {content}");
+            }
+
+            using var document = JsonDocument.Parse(content);
+
+            return document.RootElement.GetProperty("access_token").GetString()
+                ?? throw new InvalidOperationException("PayPal access token was not returned");
+        }
+
+        private async Task<PayPalCaptureResult> CapturePayPalOrderAsync(
+            PayPalConfig config,
+            string accessToken,
+            string? paypalOrderId)
+        {
+            if (string.IsNullOrWhiteSpace(paypalOrderId))
+            {
+                return new PayPalCaptureResult
+                {
+                    Success = false,
+                    Message = "PayPal order ID is missing"
+                };
+            }
+
+            var client = _httpClientFactory.CreateClient();
+            var request = new HttpRequestMessage(
+                HttpMethod.Post,
+                $"{config.BaseUrl}/v2/checkout/orders/{paypalOrderId}/capture"
+            );
+
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            request.Content = JsonContent(new { });
+
+            var response = await client.SendAsync(request);
+            var content = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "Could not capture PayPal order {PayPalOrderId}. Status: {Status}. Response: {Response}",
+                    paypalOrderId,
+                    response.StatusCode,
+                    content
+                );
+
+                return new PayPalCaptureResult
+                {
+                    Success = false,
+                    Message = "PayPal capture failed"
+                };
+            }
+
+            using var document = JsonDocument.Parse(content);
+            var root = document.RootElement;
+            var status = root.TryGetProperty("status", out var statusElement)
+                ? statusElement.GetString()
+                : null;
+
+            return new PayPalCaptureResult
+            {
+                Success = string.Equals(status, "COMPLETED", StringComparison.OrdinalIgnoreCase),
+                TransactionCode = GetPayPalCaptureId(root) ?? paypalOrderId,
+                Message = string.Equals(status, "COMPLETED", StringComparison.OrdinalIgnoreCase)
+                    ? "Payment successful"
+                    : $"PayPal payment status: {status ?? "Unknown"}"
+            };
+        }
+
+        private async Task<Order?> FindPayPalOrderAsync(
+            IReadOnlyDictionary<string, string> queryParameters,
+            string? paypalOrderId)
+        {
+            Order? order = null;
+
+            if (queryParameters.TryGetValue("orderId", out var orderIdText) &&
+                int.TryParse(orderIdText, out var orderId))
+            {
+                order = await _context.Orders
+                    .Include(o => o.Payment)
+                    .Include(o => o.User)
+                    .Include(o => o.OrderItems)
+                    .FirstOrDefaultAsync(o => o.OrderId == orderId);
+            }
+
+            if (order != null || string.IsNullOrWhiteSpace(paypalOrderId))
+            {
+                return order;
+            }
+
+            return await _context.Orders
+                .Include(o => o.Payment)
+                .Include(o => o.User)
+                .Include(o => o.OrderItems)
+                .FirstOrDefaultAsync(o =>
+                    o.Payment != null &&
+                    o.Payment.TransactionCode == paypalOrderId);
+        }
+
+        private static string AddOrderIdToUrl(
+            string url,
+            int orderId)
+        {
+            var separator = url.Contains('?', StringComparison.Ordinal) ? "&" : "?";
+
+            return $"{url}{separator}orderId={orderId.ToString(CultureInfo.InvariantCulture)}";
+        }
+
+        private static string ConvertVndToPayPalAmount(
+            decimal amountVnd,
+            decimal vndToUsdRate)
+        {
+            var amount = Math.Round(amountVnd / vndToUsdRate, 2, MidpointRounding.AwayFromZero);
+
+            if (amount < 0.01m)
+            {
+                amount = 0.01m;
+            }
+
+            return amount.ToString("0.00", CultureInfo.InvariantCulture);
+        }
+
+        private static string? GetPayPalApprovalUrl(JsonElement root)
+        {
+            if (!root.TryGetProperty("links", out var links) ||
+                links.ValueKind != JsonValueKind.Array)
+            {
+                return null;
+            }
+
+            foreach (var link in links.EnumerateArray())
+            {
+                var rel = link.TryGetProperty("rel", out var relElement)
+                    ? relElement.GetString()
+                    : null;
+
+                if (!string.Equals(rel, "approve", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                return link.TryGetProperty("href", out var hrefElement)
+                    ? hrefElement.GetString()
+                    : null;
+            }
+
+            return null;
+        }
+
+        private static string? GetPayPalCaptureId(JsonElement root)
+        {
+            if (!root.TryGetProperty("purchase_units", out var purchaseUnits) ||
+                purchaseUnits.ValueKind != JsonValueKind.Array)
+            {
+                return null;
+            }
+
+            foreach (var purchaseUnit in purchaseUnits.EnumerateArray())
+            {
+                if (!purchaseUnit.TryGetProperty("payments", out var payments) ||
+                    !payments.TryGetProperty("captures", out var captures) ||
+                    captures.ValueKind != JsonValueKind.Array)
+                {
+                    continue;
+                }
+
+                foreach (var capture in captures.EnumerateArray())
+                {
+                    if (capture.TryGetProperty("id", out var idElement))
+                    {
+                        return idElement.GetString();
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private static StringContent JsonContent(object value)
+        {
+            return new StringContent(
+                JsonSerializer.Serialize(value),
+                Encoding.UTF8,
+                "application/json"
+            );
+        }
+
         private static string DigitsOnly(string? value)
         {
             return string.Concat((value ?? string.Empty).Where(char.IsDigit));
@@ -411,6 +1093,45 @@ namespace AdidasShoesStore.Api.Services.Implementations
             public string BaseUrl { get; set; } = null!;
 
             public string ReturnUrl { get; set; } = null!;
+        }
+
+        private class PayPalConfig
+        {
+            public string ClientId { get; set; } = null!;
+
+            public string ClientSecret { get; set; } = null!;
+
+            public string BaseUrl { get; set; } = null!;
+
+            public string ReturnUrl { get; set; } = null!;
+
+            public string CancelUrl { get; set; } = null!;
+
+            public string Currency { get; set; } = null!;
+
+            public decimal VndToUsdRate { get; set; }
+        }
+
+        private class PayPalCaptureResult
+        {
+            public bool Success { get; set; }
+
+            public string? TransactionCode { get; set; }
+
+            public string? Message { get; set; }
+        }
+
+        private class QrPaymentConfig
+        {
+            public string BankBin { get; set; } = null!;
+
+            public string AccountNo { get; set; } = null!;
+
+            public string AccountName { get; set; } = null!;
+
+            public string Template { get; set; } = null!;
+
+            public string TransferPrefix { get; set; } = null!;
         }
     }
 }

@@ -5,6 +5,7 @@ import '../../models/product_detail_model.dart';
 import '../../models/product_model.dart';
 import '../../localization/app_localization.dart';
 import '../../providers/badge_notifier.dart';
+import '../../services/auth_storage.dart';
 import '../../services/product_service.dart';
 import '../../services/cart_service.dart';
 import '../../services/wishlist_service.dart';
@@ -29,6 +30,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   final CartService _cartService = CartService();
   final WishlistService _wishlistService = WishlistService();
   final ReviewService _reviewService = ReviewService();
+  final AuthStorage _authStorage = AuthStorage();
 
   late Future<ProductDetailModel> _productFuture;
   late Future<List<ReviewResponse>> _reviewsFuture;
@@ -490,7 +492,24 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
+  Future<bool> _requireLogin() async {
+    final token = await _authStorage.getToken();
+    final userId = await _authStorage.getUserId();
+
+    if (!mounted) return false;
+
+    if (token == null || userId == null || userId <= 0) {
+      Navigator.pushNamed(context, '/login');
+      return false;
+    }
+
+    AppConfig.currentUserId = userId;
+    return true;
+  }
+
   Future<void> _addToCart() async {
+    if (!await _requireLogin()) return;
+
     if (selectedVariant == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(context.tr('selectSizeColorPrompt'))),
@@ -540,7 +559,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
   }
 
-  Future<void> _buyNow() async {
+  Future<void> _buyNow(ProductDetailModel product) async {
+    if (!await _requireLogin()) return;
+
     if (selectedVariant == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(context.tr('selectSizeColorPrompt'))),
@@ -558,11 +579,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     Navigator.pushNamed(
       context,
       '/checkout',
-      arguments: {'variantId': selectedVariant!.variantId, 'quantity': 1},
+      arguments: {
+        'variantId': selectedVariant!.variantId,
+        'quantity': 1,
+        'unitPrice': selectedVariant!.price,
+        'productName': product.productName,
+      },
     );
   }
 
   Future<void> _addToWishlist() async {
+    if (!await _requireLogin()) return;
+
     try {
       final totalItems = await _wishlistService.addWishlist(
         userId: AppConfig.currentUserId,
@@ -741,7 +769,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         child: ElevatedButton.icon(
                           onPressed: _isLoading || !canPurchase
                               ? null
-                              : _buyNow,
+                              : () => _buyNow(product),
                           icon: const Icon(Icons.flash_on_outlined),
                           label: Text(
                             (_isLoading

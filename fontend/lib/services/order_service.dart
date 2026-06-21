@@ -93,11 +93,60 @@ class OrderService {
     final response = await http.post(
       Uri.parse('${ApiClient.baseUrl}/payments/vnpay/create'),
       headers: await _headers(),
-      body: jsonEncode({'orderId': orderId}),
+      body: jsonEncode({
+        'orderId': orderId,
+        'returnUrl': '${ApiClient.staticBaseUrl}/api/payments/vnpay-return',
+      }),
     );
 
     if (response.statusCode == 200) {
       return CreateVnPayPaymentResponse.fromJson(jsonDecode(response.body));
+    }
+
+    throw Exception(_errorMessage(response));
+  }
+
+  Future<CreatePayPalPaymentResponse> createPayPalPayment(int orderId) async {
+    final response = await http.post(
+      Uri.parse('${ApiClient.baseUrl}/payments/paypal/create'),
+      headers: await _headers(),
+      body: jsonEncode({
+        'orderId': orderId,
+        'returnUrl': '${ApiClient.staticBaseUrl}/api/payments/paypal-return',
+        'cancelUrl': '${ApiClient.staticBaseUrl}/api/payments/paypal-cancel',
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return CreatePayPalPaymentResponse.fromJson(jsonDecode(response.body));
+    }
+
+    throw Exception(_errorMessage(response));
+  }
+
+  Future<QrPaymentResponse> createQrPayment(int orderId) async {
+    final response = await http.post(
+      Uri.parse('${ApiClient.baseUrl}/payments/qr/create'),
+      headers: await _headers(),
+      body: jsonEncode({'orderId': orderId}),
+    );
+
+    if (response.statusCode == 200) {
+      return QrPaymentResponse.fromJson(jsonDecode(response.body));
+    }
+
+    throw Exception(_errorMessage(response));
+  }
+
+  Future<PaymentStatus> confirmQrPayment(int orderId) async {
+    final response = await http.post(
+      Uri.parse('${ApiClient.baseUrl}/payments/qr/confirm'),
+      headers: await _headers(),
+      body: jsonEncode({'orderId': orderId}),
+    );
+
+    if (response.statusCode == 200) {
+      return PaymentStatus.fromJson(jsonDecode(response.body));
     }
 
     throw Exception(_errorMessage(response));

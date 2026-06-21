@@ -5,6 +5,7 @@ import '../../models/cart_item_model.dart';
 import '../../models/cart_model.dart';
 import '../../localization/app_localization.dart';
 import '../../providers/badge_notifier.dart';
+import '../../services/auth_storage.dart';
 import '../../services/cart_service.dart';
 import '../../utils/currency_formatter.dart';
 import '../../widgets/cart_wishlist_badges.dart';
@@ -18,14 +19,35 @@ class CartScreen extends StatefulWidget {
 
 class _CartScreenState extends State<CartScreen> {
   final CartService _cartService = CartService();
+  final AuthStorage _authStorage = AuthStorage();
 
-  late Future<CartModel> _cartFuture;
+  Future<CartModel>? _cartFuture;
+  bool _isCheckingAuth = true;
   bool _isUpdating = false;
 
   @override
   void initState() {
     super.initState();
-    _loadCart();
+    _checkAuthAndLoadCart();
+  }
+
+  Future<void> _checkAuthAndLoadCart() async {
+    final token = await _authStorage.getToken();
+    final userId = await _authStorage.getUserId();
+
+    if (!mounted) return;
+
+    if (token == null || userId == null || userId <= 0) {
+      Navigator.pushReplacementNamed(context, '/login');
+      return;
+    }
+
+    AppConfig.currentUserId = userId;
+
+    setState(() {
+      _isCheckingAuth = false;
+      _cartFuture = _cartService.getCart(userId);
+    });
   }
 
   void _loadCart() {
@@ -214,115 +236,119 @@ class _CartScreenState extends State<CartScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cartFuture = _cartFuture;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(context.tr('myCart')),
         actions: const [CartWishlistBadges()],
       ),
-      body: FutureBuilder<CartModel>(
-        future: _cartFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: _isCheckingAuth || cartFuture == null
+          ? const Center(child: CircularProgressIndicator())
+          : FutureBuilder<CartModel>(
+              future: cartFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-          if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('${context.tr('error')}: ${snapshot.error}'),
+                          const SizedBox(height: 12),
+                          ElevatedButton(
+                            onPressed: _loadCart,
+                            child: Text(context.tr('retry')),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                final cart = snapshot.data!;
+
+                if (cart.cartItems.isEmpty) {
+                  return Center(child: Text(context.tr('cartEmpty')));
+                }
+
+                return Column(
                   children: [
-                    Text('${context.tr('error')}: ${snapshot.error}'),
-                    const SizedBox(height: 12),
-                    ElevatedButton(
-                      onPressed: _loadCart,
-                      child: Text(context.tr('retry')),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: cart.cartItems.length,
+                        itemBuilder: (context, index) {
+                          return _buildCartItem(cart.cartItems[index]);
+                        },
+                      ),
+                    ),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 8,
+                            offset: const Offset(0, -2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                context.tr('total'),
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                _formatPrice(cart.totalAmount),
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: _clearCart,
+                                  child: Text(context.tr('clearCart')),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: () {
+                                    Navigator.pushNamed(context, '/checkout');
+                                  },
+                                  child: Text(context.tr('checkout')),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ],
-                ),
-              ),
-            );
-          }
-
-          final cart = snapshot.data!;
-
-          if (cart.cartItems.isEmpty) {
-            return Center(child: Text(context.tr('cartEmpty')));
-          }
-
-          return Column(
-            children: [
-              Expanded(
-                child: ListView.builder(
-                  itemCount: cart.cartItems.length,
-                  itemBuilder: (context, index) {
-                    return _buildCartItem(cart.cartItems[index]);
-                  },
-                ),
-              ),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 8,
-                      offset: const Offset(0, -2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          context.tr('total'),
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          _formatPrice(cart.totalAmount),
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: _clearCart,
-                            child: Text(context.tr('clearCart')),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () {
-                              Navigator.pushNamed(context, '/checkout');
-                            },
-                            child: Text(context.tr('checkout')),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          );
-        },
-      ),
+                );
+              },
+            ),
     );
   }
 }

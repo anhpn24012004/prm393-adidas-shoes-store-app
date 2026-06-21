@@ -19,10 +19,14 @@ namespace AdidasShoesStore.Api.Services.Implementations
         };
 
         private readonly AdidasShoesStoreContext _context;
+        private readonly IEmailService _emailService;
 
-        public ShipmentService(AdidasShoesStoreContext context)
+        public ShipmentService(
+            AdidasShoesStoreContext context,
+            IEmailService emailService)
         {
             _context = context;
+            _emailService = emailService;
         }
 
         public async Task<ShipmentDetailDto?> GetUserShipmentAsync(
@@ -225,6 +229,10 @@ namespace AdidasShoesStore.Api.Services.Implementations
             var shipment = await _context.Shipments
                 .Include(s => s.Order)
                     .ThenInclude(o => o.Payment)
+                .Include(s => s.Order)
+                    .ThenInclude(o => o.User)
+                .Include(s => s.Order)
+                    .ThenInclude(o => o.OrderItems)
                 .FirstOrDefaultAsync(s => s.ShipmentId == shipmentId);
 
             if (shipment == null)
@@ -252,6 +260,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
             }
 
             shipment.Status = newStatus;
+            var shouldSendCodInvoice = false;
 
             if (newStatus == "Delivered")
             {
@@ -264,6 +273,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     shipment.Order.Payment.Status = "Success";
                     shipment.Order.Payment.PaidAt = DateTime.Now;
                     shipment.Order.Payment.TransactionCode = $"COD-{shipment.Order.OrderCode}";
+                    shouldSendCodInvoice = true;
                 }
             }
             else if (newStatus == "Returned")
@@ -272,6 +282,18 @@ namespace AdidasShoesStore.Api.Services.Implementations
             }
 
             await _context.SaveChangesAsync();
+
+            if (shouldSendCodInvoice)
+            {
+                try
+                {
+                    await _emailService.SendInvoiceEmailAsync(shipment.Order);
+                }
+                catch
+                {
+                    // Delivery status is already saved; email failure should not rollback it.
+                }
+            }
 
             var detail = await GetAdminShipmentAsync(shipmentId);
 

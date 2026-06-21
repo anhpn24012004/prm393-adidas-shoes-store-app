@@ -70,6 +70,123 @@ namespace AdidasShoesStore.Api.Controllers
         }
 
         [Authorize]
+        [HttpPost("paypal/create")]
+        public async Task<IActionResult> CreatePayPalPayment(CreatePayPalPaymentDto dto)
+        {
+            if (!TryGetUserId(out var userId))
+            {
+                return Unauthorized(new { message = "Invalid token" });
+            }
+
+            var result = await _paymentService.CreatePayPalPaymentUrlAsync(
+                userId,
+                dto
+            );
+
+            if (!result.Success)
+            {
+                if (result.ErrorType == "NotFound")
+                {
+                    return NotFound(new { message = result.Error });
+                }
+
+                return BadRequest(new { message = result.Error });
+            }
+
+            return Ok(new
+            {
+                approvalUrl = result.Data!.ApprovalUrl,
+                paypalOrderId = result.Data.PayPalOrderId
+            });
+        }
+
+        [AllowAnonymous]
+        [HttpGet("paypal-return")]
+        public async Task<IActionResult> PayPalReturn()
+        {
+            var queryParameters = Request.Query.ToDictionary(
+                p => p.Key,
+                p => p.Value.ToString()
+            );
+
+            var result = await _paymentService.ProcessPayPalReturnAsync(queryParameters);
+
+            return Ok(new
+            {
+                success = result.Success,
+                orderCode = result.OrderCode,
+                message = result.Message
+            });
+        }
+
+        [AllowAnonymous]
+        [HttpGet("paypal-cancel")]
+        public async Task<IActionResult> PayPalCancel()
+        {
+            var queryParameters = Request.Query.ToDictionary(
+                p => p.Key,
+                p => p.Value.ToString()
+            );
+
+            var result = await _paymentService.ProcessPayPalCancelAsync(queryParameters);
+
+            return Ok(new
+            {
+                success = result.Success,
+                orderCode = result.OrderCode,
+                message = result.Message
+            });
+        }
+
+        [Authorize]
+        [HttpPost("qr/create")]
+        public async Task<IActionResult> CreateQrPayment(CreateQrPaymentDto dto)
+        {
+            if (!TryGetUserId(out var userId))
+            {
+                return Unauthorized(new { message = "Invalid token" });
+            }
+
+            var result = await _paymentService.CreateQrPaymentAsync(userId, dto);
+
+            if (!result.Success)
+            {
+                if (result.ErrorType == "NotFound")
+                {
+                    return NotFound(new { message = result.Error });
+                }
+
+                return BadRequest(new { message = result.Error });
+            }
+
+            return Ok(result.Data);
+        }
+
+        [Authorize]
+        [HttpPost("qr/confirm")]
+        public async Task<IActionResult> ConfirmQrPayment(ConfirmQrPaymentDto dto)
+        {
+            if (!TryGetUserId(out var userId))
+            {
+                return Unauthorized(new { message = "Invalid token" });
+            }
+
+            var result = await _paymentService.ConfirmQrPaymentAsync(userId, dto);
+
+            if (!result.Success)
+            {
+                if (result.ErrorType == "NotFound")
+                {
+                    return NotFound(new { message = result.Error });
+                }
+
+                return BadRequest(new { message = result.Error });
+            }
+
+            return Ok(result.Data);
+        }
+
+        [Authorize]
         [HttpPost("visa/pay")]
         public async Task<IActionResult> PayWithVisa(CreateVisaPaymentDto dto)
         {
