@@ -211,6 +211,52 @@ class CreateVnPayPaymentResponse {
   }
 }
 
+class CreatePayPalPaymentResponse {
+  final String approvalUrl;
+  final String? paypalOrderId;
+
+  CreatePayPalPaymentResponse({
+    required this.approvalUrl,
+    this.paypalOrderId,
+  });
+
+  factory CreatePayPalPaymentResponse.fromJson(Map<String, dynamic> json) {
+    return CreatePayPalPaymentResponse(
+      approvalUrl: json['approvalUrl'] ?? '',
+      paypalOrderId: json['paypalOrderId'],
+    );
+  }
+}
+
+class QrPaymentResponse {
+  final String qrImageUrl;
+  final String bankBin;
+  final String accountNo;
+  final String accountName;
+  final String transferContent;
+  final double amount;
+
+  QrPaymentResponse({
+    required this.qrImageUrl,
+    required this.bankBin,
+    required this.accountNo,
+    required this.accountName,
+    required this.transferContent,
+    required this.amount,
+  });
+
+  factory QrPaymentResponse.fromJson(Map<String, dynamic> json) {
+    return QrPaymentResponse(
+      qrImageUrl: json['qrImageUrl'] ?? '',
+      bankBin: json['bankBin'] ?? '',
+      accountNo: json['accountNo'] ?? '',
+      accountName: json['accountName'] ?? '',
+      transferContent: json['transferContent'] ?? '',
+      amount: (json['amount'] as num? ?? 0).toDouble(),
+    );
+  }
+}
+
 class VisaPaymentRequest {
   final int orderId;
   final String cardNumber;

@@ -46,6 +46,29 @@ namespace AdidasShoesStore.Api.Services.Interfaces
             IReadOnlyDictionary<string, string> queryParameters
         );
 
+        Task<PaymentServiceResult<PayPalPaymentResponseDto>> CreatePayPalPaymentUrlAsync(
+            int userId,
+            CreatePayPalPaymentDto dto
+        );
+
+        Task<PayPalPaymentResponseDto> ProcessPayPalReturnAsync(
+            IReadOnlyDictionary<string, string> queryParameters
+        );
+
+        Task<PayPalPaymentResponseDto> ProcessPayPalCancelAsync(
+            IReadOnlyDictionary<string, string> queryParameters
+        );
+
+        Task<PaymentServiceResult<QrPaymentResponseDto>> CreateQrPaymentAsync(
+            int userId,
+            CreateQrPaymentDto dto
+        );
+
+        Task<PaymentServiceResult<PaymentStatusDto>> ConfirmQrPaymentAsync(
+            int userId,
+            ConfirmQrPaymentDto dto
+        );
+
         Task<PaymentServiceResult<PaymentStatusDto>> PayWithVisaAsync(
             int userId,
             CreateVisaPaymentDto dto

@@ -14,18 +14,43 @@ class PaymentResultScreen extends StatefulWidget {
   State<PaymentResultScreen> createState() => _PaymentResultScreenState();
 }
 
-class _PaymentResultScreenState extends State<PaymentResultScreen> {
+class _PaymentResultScreenState extends State<PaymentResultScreen>
+    with WidgetsBindingObserver {
   final OrderService _orderService = OrderService();
 
   PaymentStatus? _paymentStatus;
   bool _isLoading = false;
   String? _error;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refreshPaymentStatus();
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshPaymentStatus();
+    }
+  }
+
   String formatPrice(double price) {
     return formatVnd(price);
   }
 
   Future<void> _refreshPaymentStatus() async {
+    if (widget.orderId <= 0 || _isLoading) return;
+
     setState(() {
       _isLoading = true;
       _error = null;

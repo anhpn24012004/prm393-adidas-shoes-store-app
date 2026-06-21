@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../config/app_config.dart';
 import '../../models/address_model.dart';
 import '../../models/order_model.dart';
 import '../../localization/app_localization.dart';
 import '../../services/address_service.dart';
+import '../../services/cart_service.dart';
 import '../../services/order_service.dart';
+import '../../utils/currency_formatter.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -15,8 +18,12 @@ class CheckoutScreen extends StatefulWidget {
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
+  static const double _shippingFee = 30000;
+  static const double _discountAmount = 0;
+
   final OrderService _orderService = OrderService();
   final AddressService _addressService = AddressService();
+  final CartService _cartService = CartService();
   final TextEditingController _noteController = TextEditingController();
   final TextEditingController _visaCardNumberController =
       TextEditingController();
@@ -29,8 +36,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   int? _selectedAddressId;
   int? _buyNowVariantId;
   int? _buyNowQuantity;
+  double? _buyNowUnitPrice;
+  String? _buyNowProductName;
+  Future<_CheckoutSummary>? _summaryFuture;
   String _paymentMethod = 'COD';
   bool _isSubmitting = false;
+  bool _showPaymentStep = false;
+  bool _routeArgumentsLoaded = false;
 
   @override
   void initState() {
@@ -42,12 +54,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
 
+    if (_routeArgumentsLoaded) return;
+    _routeArgumentsLoaded = true;
+
     final arguments = ModalRoute.of(context)?.settings.arguments;
 
     if (arguments is Map) {
       _buyNowVariantId = arguments['variantId'] as int?;
       _buyNowQuantity = arguments['quantity'] as int?;
+      _buyNowUnitPrice = (arguments['unitPrice'] as num?)?.toDouble();
+      _buyNowProductName = arguments['productName']?.toString();
     }
+
+    _summaryFuture = _loadCheckoutSummary();
   }
 
   @override
@@ -97,6 +116,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
       if (_paymentMethod == 'VNPAY') {
         await _handleVnPay(order);
+        return;
+      }
+
+      if (_paymentMethod == 'PAYPAL') {
+        await _handlePayPal(order);
+        return;
+      }
+
+      if (_paymentMethod == 'QR') {
+        await _handleQrPayment(order);
         return;
       }
 
@@ -517,6 +546,311 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
+  Future<_CheckoutSummary> _loadCheckoutSummary() async {
+    if (_buyNowVariantId != null) {
+      final quantity = _buyNowQuantity ?? 1;
+      final subtotal = (_buyNowUnitPrice ?? 0) * quantity;
+
+      return _CheckoutSummary(
+        subtotal: subtotal,
+        shippingFee: _shippingFee,
+        discountAmount: _discountAmount,
+        finalAmount: subtotal + _shippingFee - _discountAmount,
+        totalItems: quantity,
+        title: _buyNowProductName ?? 'Buy now item',
+      );
+    }
+
+    final cart = await _cartService.getCart(AppConfig.currentUserId);
+
+    return _CheckoutSummary(
+      subtotal: cart.totalAmount,
+      shippingFee: _shippingFee,
+      discountAmount: _discountAmount,
+      finalAmount: cart.totalAmount + _shippingFee - _discountAmount,
+      totalItems: cart.totalItems,
+      title: 'Cart items',
+    );
+  }
+
+  Widget _buildOrderSummary({bool compact = false}) {
+    final summaryFuture = _summaryFuture;
+
+    if (summaryFuture == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return FutureBuilder<_CheckoutSummary>(
+      future: summaryFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(snapshot.error.toString().replaceFirst('Exception: ', '')),
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _summaryFuture = _loadCheckoutSummary();
+                  });
+                },
+                child: Text(context.tr('retry').toUpperCase()),
+              ),
+            ],
+          );
+        }
+
+        final summary = snapshot.data!;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              compact ? 'Order total' : 'Order summary',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            if (!compact) ...[
+              _summaryRow('Items', '${summary.totalItems}'),
+              _summaryRow('Product', summary.title),
+            ],
+            _summaryRow('Subtotal', formatVnd(summary.subtotal)),
+            _summaryRow('Shipping', formatVnd(summary.shippingFee)),
+            if (summary.discountAmount > 0)
+              _summaryRow('Discount', '-${formatVnd(summary.discountAmount)}'),
+            const Divider(height: 22),
+            _summaryRow(
+              'Total',
+              formatVnd(summary.finalAmount),
+              emphasized: true,
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _summaryRow(
+    String label,
+    String value, {
+    bool emphasized = false,
+  }) {
+    final style = TextStyle(
+      fontSize: emphasized ? 17 : 14,
+      fontWeight: emphasized ? FontWeight.w900 : FontWeight.w500,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: Text(label, style: style)),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: style,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _continueToPayment() {
+    if (_selectedAddressId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('selectShippingAddress'))),
+      );
+      return;
+    }
+
+    setState(() {
+      _showPaymentStep = true;
+    });
+  }
+
+  void _backToReview() {
+    setState(() {
+      _showPaymentStep = false;
+    });
+  }
+
+  Future<void> _handlePayPal(OrderDetail order) async {
+    try {
+      final response = await _orderService.createPayPalPayment(order.orderId);
+      final uri = Uri.tryParse(response.approvalUrl);
+
+      if (uri == null || response.approvalUrl.isEmpty) {
+        _showError('PayPal integration is not available yet');
+        return;
+      }
+
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+
+      if (!mounted) return;
+
+      if (!opened) {
+        _showError('Could not open PayPal payment page');
+        return;
+      }
+
+      Navigator.pushReplacementNamed(
+        context,
+        '/payment-result',
+        arguments: order.orderId,
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      _showError(e.toString());
+    }
+  }
+
+  Future<void> _handleQrPayment(OrderDetail order) async {
+    try {
+      final payment = await _orderService.createQrPayment(order.orderId);
+
+      if (!mounted) return;
+
+      final confirmed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('QR Payment'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Image.network(
+                      payment.qrImageUrl,
+                      width: 240,
+                      height: 240,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) {
+                        return const SizedBox(
+                          width: 240,
+                          height: 240,
+                          child: Center(
+                            child: Text('Could not load QR image'),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _qrInfoRow('Amount', formatVnd(payment.amount)),
+                  _qrInfoRow('Account', payment.accountNo),
+                  _qrInfoRow('Name', payment.accountName),
+                  _qrInfoRow('Content', payment.transferContent),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Scan this QR with your banking app. Your order will stay pending until the transfer is confirmed.',
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  try {
+                    await _orderService.confirmQrPayment(order.orderId);
+
+                    if (!context.mounted) return;
+
+                    Navigator.pop(context, true);
+                  } catch (e) {
+                    if (!context.mounted) return;
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          e.toString().replaceFirst('Exception: ', ''),
+                        ),
+                      ),
+                    );
+                  }
+                },
+                child: const Text('I have transferred'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (!mounted) return;
+
+      if (confirmed != true) {
+        Navigator.pushReplacementNamed(
+          context,
+          '/order-detail',
+          arguments: order.orderId,
+        );
+        return;
+      }
+
+      await showDialog<void>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('Payment successful'),
+            content: const Text('Your QR payment has been confirmed.'),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('View order'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (!mounted) return;
+
+      Navigator.pushReplacementNamed(
+        context,
+        '/order-detail',
+        arguments: order.orderId,
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      _showError(e.toString());
+    }
+  }
+
+  Widget _qrInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 78,
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+          Expanded(child: SelectableText(value)),
+        ],
+      ),
+    );
+  }
+
   String? _validateVisaCardNumber(String? value) {
     final digits = _digitsOnly(value);
 
@@ -637,6 +971,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         ),
         paymentOption('COD', 'COD'),
         paymentOption('VNPAY', 'VNPAY'),
+        paymentOption('PAYPAL', 'PayPal'),
+        paymentOption('QR', 'QR'),
         paymentOption('VISA', 'Visa'),
       ],
     );
@@ -645,48 +981,103 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(context.tr('checkout'))),
+      appBar: AppBar(
+        title: Text(_showPaymentStep ? context.tr('paymentMethod') : context.tr('checkout')),
+        leading: _showPaymentStep
+            ? IconButton(
+                onPressed: _isSubmitting ? null : _backToReview,
+                icon: const Icon(Icons.arrow_back),
+              )
+            : null,
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              context.tr('shippingAddress'),
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            _buildAddressSelector(),
-            const SizedBox(height: 20),
-            _buildPaymentMethod(),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _noteController,
-              enabled: !_isSubmitting,
-              maxLines: 3,
-              decoration: InputDecoration(
-                labelText: context.tr('note'),
-                border: const OutlineInputBorder(),
+        child: _showPaymentStep
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildOrderSummary(compact: true),
+                  const SizedBox(height: 20),
+                  _buildPaymentMethod(),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: _isSubmitting ? null : _placeOrder,
+                      child: _isSubmitting
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Text(context.tr('placeOrder')),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton(
+                      onPressed: _isSubmitting ? null : _backToReview,
+                      child: const Text('Back to review'),
+                    ),
+                  ),
+                ],
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    context.tr('shippingAddress'),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildAddressSelector(),
+                  const SizedBox(height: 20),
+                  _buildOrderSummary(),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _noteController,
+                    enabled: !_isSubmitting,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      labelText: context.tr('note'),
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: _isSubmitting ? null : _continueToPayment,
+                      child: const Text('Continue to payment'),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                onPressed: _isSubmitting ? null : _placeOrder,
-                child: _isSubmitting
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text(context.tr('placeOrder')),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
+}
+
+class _CheckoutSummary {
+  final double subtotal;
+  final double shippingFee;
+  final double discountAmount;
+  final double finalAmount;
+  final int totalItems;
+  final String title;
+
+  const _CheckoutSummary({
+    required this.subtotal,
+    required this.shippingFee,
+    required this.discountAmount,
+    required this.finalAmount,
+    required this.totalItems,
+    required this.title,
+  });
 }
