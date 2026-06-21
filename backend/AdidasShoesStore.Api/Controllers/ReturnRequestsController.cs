@@ -47,16 +47,17 @@ public class ReturnRequestsController : ControllerBase
     }
 
     [HttpPost("evidence")]
+    [Consumes("multipart/form-data")]
     [RequestSizeLimit(50_000_000)]
-    public async Task<IActionResult> UploadEvidence([FromForm] IFormFile file)
+    public async Task<IActionResult> UploadEvidence(IFormFile file)
     {
         if (file == null || file.Length == 0)
             return BadRequest(new { message = "File is required." });
 
         var allowedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp4", ".mov", ".webm"
-        };
+    {
+        ".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp4", ".mov", ".webm"
+    };
 
         var extension = Path.GetExtension(file.FileName);
 
@@ -65,6 +66,7 @@ public class ReturnRequestsController : ControllerBase
 
         var webRoot = _environment.WebRootPath ??
             Path.Combine(_environment.ContentRootPath, "wwwroot");
+
         var uploadsRoot = Path.Combine(webRoot, "uploads", "returns");
 
         Directory.CreateDirectory(uploadsRoot);

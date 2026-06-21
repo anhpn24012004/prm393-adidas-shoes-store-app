@@ -26,15 +26,19 @@ class _ProductListScreenState extends State<ProductListScreen> {
   final CategoryService _categoryService = CategoryService();
   final TextEditingController _searchController = TextEditingController();
 
-  late Future<List<ProductModel>> _productsFuture;
+  late Future<PagedProductResponse> _productsFuture;
   late Future<List<CategoryModel>> _categoriesFuture;
 
+  int _currentPage = 1;
+  final int _pageSize = 8;
+  int _totalPages = 0;
+  String? _keyword;
   int? selectedCategoryId;
 
   @override
   void initState() {
     super.initState();
-    _productsFuture = _productService.getProducts();
+    _loadProducts();
     _categoriesFuture = _categoryService.getCategories();
     BadgeNotifier.instance.refreshCounts();
   }
@@ -53,26 +57,36 @@ class _ProductListScreenState extends State<ProductListScreen> {
     final keyword = _searchController.text.trim();
 
     setState(() {
+      _currentPage = 1;
+      _keyword = keyword.isEmpty ? null : keyword;
       selectedCategoryId = null;
-
-      if (keyword.isEmpty) {
-        _productsFuture = _productService.getProducts();
-      } else {
-        _productsFuture = _productService.searchProducts(keyword);
-      }
+      _loadProducts();
     });
   }
 
   void _filterByCategory(int? categoryId) {
     setState(() {
+      _currentPage = 1;
+      _keyword = null;
       selectedCategoryId = categoryId;
       _searchController.clear();
+      _loadProducts();
+    });
+  }
 
-      if (categoryId == null) {
-        _productsFuture = _productService.getProducts();
-      } else {
-        _productsFuture = _productService.getProductsByCategory(categoryId);
-      }
+  void _loadProducts() {
+    _productsFuture = _productService.getProducts(
+      pageNumber: _currentPage,
+      pageSize: _pageSize,
+      keyword: _keyword,
+      categoryId: selectedCategoryId,
+    );
+  }
+
+  void _changePage(int pageNumber) {
+    setState(() {
+      _currentPage = pageNumber;
+      _loadProducts();
     });
   }
 
@@ -219,7 +233,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
   }
 
   Widget _buildBody() {
-    return FutureBuilder<List<ProductModel>>(
+    return FutureBuilder<PagedProductResponse>(
       future: _productsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -235,26 +249,80 @@ class _ProductListScreenState extends State<ProductListScreen> {
           );
         }
 
-        final products = snapshot.data ?? [];
+        final pagedResult = snapshot.data;
+        final products = pagedResult?.items ?? [];
+        _totalPages = pagedResult?.totalPages ?? 0;
 
         if (products.isEmpty) {
           return Center(child: Text(context.tr('noProductsFound')));
         }
 
-        return GridView.builder(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          itemCount: products.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: MediaQuery.sizeOf(context).width > 700 ? 4 : 2,
-            mainAxisSpacing: 24,
-            crossAxisSpacing: 12,
-            childAspectRatio: 0.64,
-          ),
-          itemBuilder: (context, index) {
-            return _buildProductCard(products[index]);
-          },
+        return Column(
+          children: [
+            Expanded(
+              child: GridView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                itemCount: products.length,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: MediaQuery.sizeOf(context).width > 700
+                      ? 4
+                      : 2,
+                  mainAxisSpacing: 24,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: 0.64,
+                ),
+                itemBuilder: (context, index) {
+                  return _buildProductCard(products[index]);
+                },
+              ),
+            ),
+            _buildPagination(pagedResult),
+          ],
         );
       },
+    );
+  }
+
+  Widget _buildPagination(PagedProductResponse? pagedResult) {
+    final totalPages = pagedResult?.totalPages ?? _totalPages;
+    final hasPreviousPage = pagedResult?.hasPreviousPage ?? _currentPage > 1;
+    final hasNextPage =
+        pagedResult?.hasNextPage ??
+        (totalPages > 0 && _currentPage < totalPages);
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: Colors.grey.shade200)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            OutlinedButton(
+              onPressed: hasPreviousPage
+                  ? () => _changePage(_currentPage - 1)
+                  : null,
+              child: const Text('Previous'),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'Page $_currentPage / ${totalPages == 0 ? 1 : totalPages}',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            OutlinedButton(
+              onPressed: hasNextPage
+                  ? () => _changePage(_currentPage + 1)
+                  : null,
+              child: const Text('Next'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

@@ -1,6 +1,8 @@
 using AdidasShoesStore.Api.Data;
+using AdidasShoesStore.Api.DTOs;
 using AdidasShoesStore.Api.DTOs.Products;
 using AdidasShoesStore.Api.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,13 +20,104 @@ public class ProductsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<ProductDto>>> GetProducts()
+    public async Task<ActionResult<PagedResultDto<ProductDto>>> GetProducts(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 8,
+        [FromQuery] string? keyword = null,
+        [FromQuery] int? categoryId = null)
     {
-        var products = await _context.Products
+        var result = await GetPagedProductsAsync(
+            pageNumber,
+            pageSize,
+            keyword,
+            categoryId,
+            userVisibleOnly: true);
+        return Ok(result);
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpGet("admin")]
+    public async Task<ActionResult<PagedResultDto<ProductDto>>> GetAdminProducts(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? keyword = null,
+        [FromQuery] int? categoryId = null,
+        [FromQuery] bool? isActive = null)
+    {
+        var result = await GetPagedProductsAsync(
+            pageNumber,
+            pageSize,
+            keyword,
+            categoryId,
+            userVisibleOnly: false,
+            isActive);
+
+        return Ok(result);
+    }
+
+    private async Task<PagedResultDto<ProductDto>> GetPagedProductsAsync(
+        int pageNumber,
+        int pageSize,
+        string? keyword = null,
+        int? categoryId = null,
+        bool userVisibleOnly = true,
+        bool? isActive = null)
+    {
+        const int defaultPageSize = 8;
+        const int maxPageSize = 50;
+
+        if (pageNumber < 1)
+        {
+            pageNumber = 1;
+        }
+
+        if (pageSize < 1)
+        {
+            pageSize = defaultPageSize;
+        }
+
+        pageSize = Math.Min(pageSize, maxPageSize);
+
+        var query = _context.Products
             .AsNoTracking()
             .Include(p => p.Category)
             .Include(p => p.ProductImages)
-            .Where(p => p.IsActive == true)
+            .Include(p => p.Reviews)
+            .Include(p => p.ProductVariants)
+            .AsQueryable();
+
+        if (userVisibleOnly)
+        {
+            query = query.Where(p =>
+                p.IsActive == true &&
+                p.ProductImages.Any() &&
+                p.ProductVariants.Any(v =>
+                    v.IsActive == true &&
+                    (v.StockQuantity ?? 0) > 0));
+        }
+        else if (isActive.HasValue)
+        {
+            query = query.Where(p => (p.IsActive ?? false) == isActive.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            query = query.Where(p => p.ProductName.Contains(keyword));
+        }
+
+        if (categoryId.HasValue)
+        {
+            query = query.Where(p => p.CategoryId == categoryId.Value);
+        }
+
+        var totalItems = await query.CountAsync();
+        var totalPages = (int)Math.Ceiling(totalItems / (double)pageSize);
+
+        var products = await query
+            .OrderByDescending(p => p.CreatedAt)
+            .ThenBy(p => p.ProductId)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .Select(p => new ProductDto
             {
                 ProductId = p.ProductId,
@@ -39,19 +132,36 @@ public class ProductsController : ControllerBase
                 MainImageUrl = p.ProductImages
                     .Where(i => i.IsMain == true)
                     .Select(i => i.ImageUrl)
+                    .FirstOrDefault() ?? p.ProductImages
+                    .OrderBy(i => i.ImageId)
+                    .Select(i => i.ImageUrl)
                     .FirstOrDefault(),
                 AverageRating = p.Reviews.Any()
                     ? p.Reviews.Average(r => r.Rating)
                     : 0,
                 ReviewCount = p.Reviews.Count,
-                IsActive = p.IsActive ?? false
+                IsActive = p.IsActive ?? false,
+                ImageCount = p.ProductImages.Count,
+                ActiveVariantCount = p.ProductVariants.Count(v => v.IsActive == true),
+                TotalStock = p.ProductVariants
+                    .Where(v => v.IsActive == true)
+                    .Sum(v => v.StockQuantity ?? 0)
             })
             .ToListAsync();
 
-        return Ok(products);
+        return new PagedResultDto<ProductDto>
+        {
+            Items = products,
+            PageNumber = pageNumber,
+            PageSize = pageSize,
+            TotalItems = totalItems,
+            TotalPages = totalPages,
+            HasPreviousPage = pageNumber > 1,
+            HasNextPage = pageNumber < totalPages
+        };
     }
 
-    [HttpGet("{id}")]
+    [HttpGet("{id:int}")]
     public async Task<ActionResult<ProductDetailDto>> GetProductById(int id)
     {
         var product = await _context.Products
@@ -59,7 +169,13 @@ public class ProductsController : ControllerBase
             .Include(p => p.Category)
             .Include(p => p.ProductImages)
             .Include(p => p.ProductVariants)
-            .Where(p => p.ProductId == id && p.IsActive == true)
+            .Where(p =>
+                p.ProductId == id &&
+                p.IsActive == true &&
+                p.ProductImages.Any() &&
+                p.ProductVariants.Any(v =>
+                    v.IsActive == true &&
+                    (v.StockQuantity ?? 0) > 0))
             .Select(p => new ProductDetailDto
             {
                 ProductId = p.ProductId,
@@ -77,23 +193,28 @@ public class ProductsController : ControllerBase
                 ReviewCount = p.Reviews.Count,
                 IsActive = p.IsActive ?? false,
 
-                Images = p.ProductImages.Select(i => new ProductImageDto
-                {
-                    ImageId = i.ImageId,
-                    ImageUrl = i.ImageUrl,
-                    IsMain = i.IsMain ?? false
-                }).ToList(),
+                Images = p.ProductImages
+                    .OrderByDescending(i => i.IsMain == true)
+                    .ThenBy(i => i.ImageId)
+                    .Select(i => new ProductImageDto
+                    {
+                        ImageId = i.ImageId,
+                        ImageUrl = i.ImageUrl,
+                        IsMain = i.IsMain ?? false
+                    }).ToList(),
 
-                Variants = p.ProductVariants.Select(v => new ProductVariantDto
-                {
-                    VariantId = v.VariantId,
-                    Size = v.Size,
-                    Color = v.Color,
-                    Price = v.Price,
-                    StockQuantity = v.StockQuantity ?? 0,
-                    Sku = v.Sku,
-                    IsActive = v.IsActive ?? false
-                }).ToList()
+                Variants = p.ProductVariants
+                    .Where(v => v.IsActive == true)
+                    .Select(v => new ProductVariantDto
+                    {
+                        VariantId = v.VariantId,
+                        Size = v.Size,
+                        Color = v.Color,
+                        Price = v.Price,
+                        StockQuantity = v.StockQuantity ?? 0,
+                        Sku = v.Sku,
+                        IsActive = v.IsActive ?? false
+                    }).ToList()
             })
             .FirstOrDefaultAsync();
 
@@ -113,33 +234,11 @@ public class ProductsController : ControllerBase
             return BadRequest(new { message = "Keyword is required" });
         }
 
-        var products = await _context.Products
-            .AsNoTracking()
-            .Include(p => p.Category)
-            .Include(p => p.ProductImages)
-            .Where(p => p.IsActive == true && p.ProductName.Contains(keyword))
-            .Select(p => new ProductDto
-            {
-                ProductId = p.ProductId,
-                ProductName = p.ProductName,
-                Description = p.Description,
-                BasePrice = p.BasePrice,
-                CategoryId = p.CategoryId,
-                CategoryName = p.Category.CategoryName,
-                Brand = p.Brand,
-                Gender = p.Gender,
-                Material = p.Material,
-                MainImageUrl = p.ProductImages
-                    .Where(i => i.IsMain == true)
-                    .Select(i => i.ImageUrl)
-                    .FirstOrDefault(),
-                AverageRating = p.Reviews.Any()
-                    ? p.Reviews.Average(r => r.Rating)
-                    : 0,
-                ReviewCount = p.Reviews.Count,
-                IsActive = p.IsActive ?? false
-            })
-            .ToListAsync();
+        var products = (await GetPagedProductsAsync(
+            1,
+            50,
+            keyword,
+            userVisibleOnly: true)).Items;
 
         return Ok(products);
     }
@@ -147,38 +246,17 @@ public class ProductsController : ControllerBase
     [HttpGet("category/{categoryId}")]
     public async Task<ActionResult<IEnumerable<ProductDto>>> GetProductsByCategory(int categoryId)
     {
-        var products = await _context.Products
-            .AsNoTracking()
-            .Include(p => p.Category)
-            .Include(p => p.ProductImages)
-            .Where(p => p.IsActive == true && p.CategoryId == categoryId)
-            .Select(p => new ProductDto
-            {
-                ProductId = p.ProductId,
-                ProductName = p.ProductName,
-                Description = p.Description,
-                BasePrice = p.BasePrice,
-                CategoryId = p.CategoryId,
-                CategoryName = p.Category.CategoryName,
-                Brand = p.Brand,
-                Gender = p.Gender,
-                Material = p.Material,
-                MainImageUrl = p.ProductImages
-                    .Where(i => i.IsMain == true)
-                    .Select(i => i.ImageUrl)
-                    .FirstOrDefault(),
-                AverageRating = p.Reviews.Any()
-                    ? p.Reviews.Average(r => r.Rating)
-                    : 0,
-                ReviewCount = p.Reviews.Count,
-                IsActive = p.IsActive ?? false
-            })
-            .ToListAsync();
+        var products = (await GetPagedProductsAsync(
+            1,
+            50,
+            categoryId: categoryId,
+            userVisibleOnly: true)).Items;
 
         return Ok(products);
     }
 
     [HttpPost]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> CreateProduct(CreateProductDto dto)
     {
         var categoryExists = await _context.Categories
@@ -198,7 +276,7 @@ public class ProductsController : ControllerBase
             Brand = dto.Brand ?? "Adidas",
             Gender = dto.Gender,
             Material = dto.Material,
-            IsActive = true,
+            IsActive = false,
             CreatedAt = DateTime.Now
         };
 
@@ -210,13 +288,14 @@ public class ProductsController : ControllerBase
             new { id = product.ProductId },
             new
             {
-                message = "Product created successfully",
+                message = "Product created as draft",
                 productId = product.ProductId
             }
         );
     }
 
-    [HttpPut("{id}")]
+    [HttpPut("{id:int}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> UpdateProduct(int id, UpdateProductDto dto)
     {
         var product = await _context.Products.FindAsync(id);
@@ -241,6 +320,15 @@ public class ProductsController : ControllerBase
         product.Brand = dto.Brand ?? "Adidas";
         product.Gender = dto.Gender;
         product.Material = dto.Material;
+        if (dto.IsActive)
+        {
+            var validationMessage = await GetPublishValidationMessageAsync(id);
+            if (validationMessage != null)
+            {
+                return BadRequest(new { message = validationMessage });
+            }
+        }
+
         product.IsActive = dto.IsActive;
 
         await _context.SaveChangesAsync();
@@ -248,7 +336,33 @@ public class ProductsController : ControllerBase
         return Ok(new { message = "Product updated successfully" });
     }
 
-    [HttpDelete("{id}")]
+    [HttpPost("{id:int}/publish")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> PublishProduct(int id)
+    {
+        var product = await _context.Products.FindAsync(id);
+
+        if (product == null)
+        {
+            return NotFound(new { message = "Product not found" });
+        }
+
+        var validationMessage = await GetPublishValidationMessageAsync(id);
+        if (validationMessage != null)
+        {
+            product.IsActive = false;
+            await _context.SaveChangesAsync();
+            return BadRequest(new { message = validationMessage });
+        }
+
+        product.IsActive = true;
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "Product published successfully" });
+    }
+
+    [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> DeleteProduct(int id)
     {
         var product = await _context.Products.FindAsync(id);
@@ -262,5 +376,37 @@ public class ProductsController : ControllerBase
         await _context.SaveChangesAsync();
 
         return Ok(new { message = "Product deleted successfully" });
+    }
+
+    private async Task<string?> GetPublishValidationMessageAsync(int productId)
+    {
+        var hasImage = await _context.ProductImages
+            .AnyAsync(i => i.ProductId == productId);
+
+        if (!hasImage)
+        {
+            return "Product must have at least one image before publishing.";
+        }
+
+        var hasActiveVariant = await _context.ProductVariants
+            .AnyAsync(v => v.ProductId == productId && v.IsActive == true);
+
+        if (!hasActiveVariant)
+        {
+            return "Product must have at least one active variant before publishing.";
+        }
+
+        var hasStock = await _context.ProductVariants
+            .AnyAsync(v =>
+                v.ProductId == productId &&
+                v.IsActive == true &&
+                (v.StockQuantity ?? 0) > 0);
+
+        if (!hasStock)
+        {
+            return "Product must have stock before publishing.";
+        }
+
+        return null;
     }
 }

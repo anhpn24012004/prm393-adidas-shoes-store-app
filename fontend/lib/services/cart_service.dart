@@ -23,7 +23,7 @@ class CartService {
     );
 
     if (response.statusCode != 200 && response.statusCode != 201) {
-      throw Exception(response.body);
+      throw Exception(_message(response));
     }
 
     final data = jsonDecode(response.body);
@@ -34,7 +34,7 @@ class CartService {
     final response = await http.get(Uri.parse('$baseUrl/user/$userId'));
 
     if (response.statusCode != 200) {
-      throw Exception(response.body);
+      throw Exception(_message(response));
     }
 
     return CartModel.fromJson(jsonDecode(response.body));
@@ -44,7 +44,7 @@ class CartService {
     final response = await http.get(Uri.parse('$baseUrl/user/$userId/count'));
 
     if (response.statusCode != 200) {
-      throw Exception(response.body);
+      throw Exception(_message(response));
     }
 
     final data = jsonDecode(response.body);
@@ -59,7 +59,7 @@ class CartService {
     );
 
     if (response.statusCode != 200) {
-      throw Exception(response.body);
+      throw Exception(_message(response));
     }
 
     final data = jsonDecode(response.body);
@@ -70,7 +70,7 @@ class CartService {
     final response = await http.delete(Uri.parse('$baseUrl/item/$cartItemId'));
 
     if (response.statusCode != 200 && response.statusCode != 204) {
-      throw Exception(response.body);
+      throw Exception(_message(response));
     }
 
     if (response.body.isEmpty) {
@@ -85,7 +85,7 @@ class CartService {
     final response = await http.delete(Uri.parse('$baseUrl/user/$userId'));
 
     if (response.statusCode != 200 && response.statusCode != 204) {
-      throw Exception(response.body);
+      throw Exception(_message(response));
     }
 
     if (response.body.isEmpty) {
@@ -94,5 +94,16 @@ class CartService {
 
     final data = jsonDecode(response.body);
     return data['totalItems'] ?? 0;
+  }
+
+  String _message(http.Response response) {
+    try {
+      final data = jsonDecode(response.body);
+      if (data is Map && data['message'] != null) {
+        return data['message'].toString();
+      }
+    } catch (_) {}
+
+    return 'Request failed (${response.statusCode})';
   }
 }

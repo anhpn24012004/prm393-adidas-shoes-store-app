@@ -1,10 +1,9 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
-import '../../localization/app_localization.dart';
 import '../../models/admin_model.dart';
+import '../../models/product_model.dart';
 import '../../services/admin_service.dart';
+import '../../services/product_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/currency_formatter.dart';
 
@@ -16,228 +15,263 @@ class AdminDashboardScreen extends StatefulWidget {
 }
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
-  final _service = AdminService();
-  late Future<AdminDashboardModel> _future;
-  String _chartRange = 'weekly';
+  final _adminService = AdminService();
+  final _productService = ProductService();
+
+  late Future<_DashboardSnapshot> _future;
 
   @override
   void initState() {
     super.initState();
-    _future = _service.getDashboard();
+    _future = _loadDashboard();
+  }
+
+  Future<_DashboardSnapshot> _loadDashboard() async {
+    AdminDashboardModel dashboard = _DashboardSnapshot.emptyDashboard;
+    List<AdminOrderSummary> orders = const [];
+    PagedProductResponse? products;
+    final errors = <String>[];
+
+    try {
+      dashboard = await _adminService.getDashboard();
+    } catch (error) {
+      errors.add('Unable to load dashboard data');
+    }
+
+    try {
+      orders = await _adminService.getOrders();
+      orders.sort((a, b) {
+        final first = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final second = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return second.compareTo(first);
+      });
+    } catch (error) {
+      errors.add('Unable to load recent orders');
+    }
+
+    try {
+      products = await _productService.getAdminProducts(pageSize: 50);
+    } catch (error) {
+      errors.add('Unable to load product health');
+    }
+
+    return _DashboardSnapshot(
+      dashboard: dashboard,
+      recentOrders: orders.take(5).toList(),
+      products: products?.items ?? const [],
+      errors: errors,
+    );
   }
 
   void _reload() {
-    setState(() => _future = _service.getDashboard());
+    setState(() {
+      _future = _loadDashboard();
+    });
+  }
+
+  Future<void> _openAddProduct() async {
+    final result = await Navigator.pushNamed(context, '/admin/products/create');
+
+    if (result == true) {
+      _reload();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F3F3),
-      body: SafeArea(
-        child: FutureBuilder<AdminDashboardModel>(
-          future: _future,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
+      backgroundColor: const Color(0xFFF6F6F6),
+      appBar: AppBar(
+        title: const Text('Admin Dashboard'),
+        actions: [
+          IconButton(
+            tooltip: 'Notifications',
+            onPressed: () {},
+            icon: const Icon(Icons.notifications_none_outlined),
+          ),
+          IconButton(
+            tooltip: 'Account',
+            onPressed: () => Navigator.pushNamed(context, '/profile'),
+            icon: const Icon(Icons.account_circle_outlined),
+          ),
+          const SizedBox(width: 6),
+        ],
+      ),
+      body: FutureBuilder<_DashboardSnapshot>(
+        future: _future,
+        builder: (context, snapshot) {
+          final loading = snapshot.connectionState == ConnectionState.waiting;
+          final data = snapshot.data ?? _DashboardSnapshot.empty();
 
-            if (snapshot.hasError) {
-              return Center(
-                child: ElevatedButton(
-                  onPressed: _reload,
-                  child: Text(context.tr('retry').toUpperCase()),
-                ),
-              );
-            }
+          return RefreshIndicator(
+            onRefresh: () async => _reload(),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = constraints.maxWidth;
+                  final statColumns = width >= 1000
+                      ? 4
+                      : width >= 600
+                      ? 3
+                      : 2;
+                  final actionColumns = width >= 900
+                      ? 3
+                      : width >= 600
+                      ? 2
+                      : 1;
 
-            return _DashboardContent(
-              data: snapshot.data!,
-              chartRange: _chartRange,
-              onRangeChanged: (value) => setState(() => _chartRange = value),
-            );
-          },
-        ),
+                  return Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1180),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _Header(loading: loading, onRefresh: _reload),
+                          const SizedBox(height: 16),
+                          if (data.errors.isNotEmpty)
+                            _InlineErrorCard(messages: data.errors),
+                          if (data.errors.isNotEmpty)
+                            const SizedBox(height: 16),
+                          _SummaryGrid(
+                            loading: loading,
+                            columns: statColumns,
+                            cards: _summaryCards(data),
+                          ),
+                          const SizedBox(height: 22),
+                          _SectionHeader(
+                            title: 'Quick Actions',
+                            subtitle: 'Common admin workflows',
+                          ),
+                          const SizedBox(height: 12),
+                          _QuickActionGrid(
+                            columns: actionColumns,
+                            actions: [
+                              _QuickAction(
+                                icon: Icons.inventory_2_outlined,
+                                title: 'Manage Products',
+                                subtitle: 'Edit catalog, images and variants',
+                                onTap: () => Navigator.pushNamed(
+                                  context,
+                                  '/admin/products',
+                                ),
+                              ),
+                              _QuickAction(
+                                icon: Icons.add_box_outlined,
+                                title: 'Add Product',
+                                subtitle: 'Create a draft product',
+                                onTap: _openAddProduct,
+                              ),
+                              _QuickAction(
+                                icon: Icons.receipt_long_outlined,
+                                title: 'Manage Orders',
+                                subtitle: 'Review and update order status',
+                                onTap: () => Navigator.pushNamed(
+                                  context,
+                                  '/admin/orders',
+                                ),
+                              ),
+                              _QuickAction(
+                                icon: Icons.people_outline,
+                                title: 'Manage Users',
+                                subtitle: 'Customers and admin accounts',
+                                onTap: () => Navigator.pushNamed(
+                                  context,
+                                  '/admin/users',
+                                ),
+                              ),
+                              _QuickAction(
+                                icon: Icons.local_shipping_outlined,
+                                title: 'Shipments',
+                                subtitle: 'Tracking and delivery updates',
+                                onTap: () => Navigator.pushNamed(
+                                  context,
+                                  '/admin/shipments',
+                                ),
+                              ),
+                              _QuickAction(
+                                icon: Icons.assignment_return_outlined,
+                                title: 'Refund Requests',
+                                subtitle: 'Returns, refunds and decisions',
+                                onTap: () => Navigator.pushNamed(
+                                  context,
+                                  '/admin/returns-refunds',
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 22),
+                          _ResponsiveTwoColumn(
+                            wide: width >= 850,
+                            left: _RecentOrdersPanel(
+                              orders: data.recentOrders,
+                              loading: loading,
+                            ),
+                            right: _ProductHealthPanel(
+                              products: data.products,
+                              loading: loading,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          );
+        },
       ),
     );
   }
-}
 
-class _DashboardContent extends StatelessWidget {
-  final AdminDashboardModel data;
-  final String chartRange;
-  final ValueChanged<String> onRangeChanged;
+  List<_SummaryCardData> _summaryCards(_DashboardSnapshot data) {
+    final dashboard = data.dashboard;
+    final products = data.products;
+    final activeProducts = products.where((product) => product.isActive).length;
+    final lowStockItems = products
+        .where((product) => product.totalStock > 0 && product.totalStock <= 5)
+        .length;
 
-  const _DashboardContent({
-    required this.data,
-    required this.chartRange,
-    required this.onRangeChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final revenue = formatVnd(data.totalRevenue);
-    final totalActivity =
-        data.totalOrders + data.totalProducts + data.totalUsers;
-    final chartValues = _chartValues(data);
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-      children: [
-        Row(
-          children: [
-            IconButton(
-              onPressed: () => Navigator.maybePop(context),
-              icon: const Icon(Icons.arrow_back),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-            ),
-            const SizedBox(width: 4),
-            Expanded(
-              child: Text(
-                context.tr('adminDashboard'),
-                style: const TextStyle(
-                  fontSize: 27,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0,
-                ),
-              ),
-            ),
-            IconButton.filledTonal(
-              onPressed: () => Navigator.pushNamed(context, '/profile'),
-              icon: const Icon(Icons.person_outline),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
-          childAspectRatio: 1.32,
-          children: [
-            _MetricCard(
-              value: '${data.totalProducts}',
-              label: context.tr('metricProducts'),
-              progress: _ratio(data.totalProducts, totalActivity),
-              dark: true,
-            ),
-            _MetricCard(
-              value: '${data.totalOrders}',
-              label: context.tr('metricOrders'),
-              progress: _ratio(data.totalOrders, totalActivity),
-              color: AppColors.blue,
-            ),
-            _MetricCard(
-              value: '${data.totalUsers}',
-              label: context.tr('metricCustomers'),
-              progress: _ratio(data.totalUsers, totalActivity),
-            ),
-            _MetricCard(
-              value: _compactMoney(data.totalRevenue),
-              label: context.tr('metricRevenue'),
-              progress: data.totalRevenue <= 0
-                  ? 0
-                  : math.min(data.totalRevenue / 100000000, 1),
-              color: const Color(0xFFE1AEC1),
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                context.tr('metricRevenue'),
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            _RangeSelector(value: chartRange, onChanged: onRangeChanged),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Container(
-          height: 190,
-          padding: const EdgeInsets.fromLTRB(10, 12, 10, 8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                revenue,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: CustomPaint(
-                  painter: _RevenueChartPainter(
-                    values: chartValues,
-                    accentValues: chartValues.reversed.toList(),
-                  ),
-                  child: const SizedBox.expand(),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 18),
-        Text(
-          context.tr('adminTools').toUpperCase(),
-          style: const TextStyle(fontWeight: FontWeight.w900),
-        ),
-        const SizedBox(height: 10),
-        _AdminActionGrid(
-          actions: [
-            _AdminAction(
-              icon: Icons.people_outline,
-              label: context.tr('userManagement'),
-              route: '/admin/users',
-            ),
-            _AdminAction(
-              icon: Icons.receipt_long_outlined,
-              label: context.tr('orderManagement'),
-              route: '/admin/orders',
-            ),
-            _AdminAction(
-              icon: Icons.inventory_2_outlined,
-              label: context.tr('productManagement'),
-              route: '/admin/products',
-            ),
-            _AdminAction(
-              icon: Icons.assignment_return_outlined,
-              label: context.tr('returnsRefunds'),
-              route: '/admin/returns-refunds',
-            ),
-            _AdminAction(
-              icon: Icons.local_shipping_outlined,
-              label: context.tr('shipmentManagement'),
-              route: '/admin/shipments',
-            ),
-            _AdminAction(
-              icon: Icons.category_outlined,
-              label: context.tr('categoryManagement'),
-              route: '/admin/categories',
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  static double _ratio(num value, num total) {
-    if (total <= 0) return 0;
-    return math.min(value / total, 1).toDouble();
+    return [
+      _SummaryCardData(
+        icon: Icons.inventory_2_outlined,
+        label: 'Total Products',
+        value: '${dashboard.totalProducts}',
+        color: Colors.black,
+      ),
+      _SummaryCardData(
+        icon: Icons.verified_outlined,
+        label: 'Active Products',
+        value: '$activeProducts',
+        color: const Color(0xFF1F7A4D),
+      ),
+      _SummaryCardData(
+        icon: Icons.pending_actions_outlined,
+        label: 'Pending Orders',
+        value: '${dashboard.pendingOrders}',
+        color: const Color(0xFF805C00),
+      ),
+      _SummaryCardData(
+        icon: Icons.people_outline,
+        label: 'Total Users',
+        value: '${dashboard.totalUsers}',
+        color: const Color(0xFF3A4A66),
+      ),
+      _SummaryCardData(
+        icon: Icons.payments_outlined,
+        label: 'Total Revenue',
+        value: _compactMoney(dashboard.totalRevenue),
+        color: const Color(0xFF345A45),
+      ),
+      _SummaryCardData(
+        icon: Icons.warning_amber_outlined,
+        label: 'Low Stock Items',
+        value: '$lowStockItems',
+        color: const Color(0xFF7A3E24),
+      ),
+    ];
   }
 
   static String _compactMoney(double value) {
@@ -252,92 +286,158 @@ class _DashboardContent extends StatelessWidget {
     }
     return value.toStringAsFixed(0);
   }
+}
 
-  static List<double> _chartValues(AdminDashboardModel data) {
-    final revenueUnit = data.totalRevenue <= 0
-        ? 18.0
-        : data.totalRevenue / 1000000;
-    return [
-      math.max(14.0, data.totalOrders + 14.0),
-      math.max(18.0, data.totalUsers / 2),
-      math.max(20.0, data.totalProducts + data.pendingOrders + 10.0),
-      math.max(16.0, data.completedOrders + 15.0),
-      math.max(22.0, revenueUnit + data.totalRefundRequests + 18.0),
-      math.max(15.0, data.totalReviews + 12.0),
-      math.max(18.0, data.pendingOrders + data.totalOrders + 12.0),
-    ];
+class _Header extends StatelessWidget {
+  final bool loading;
+  final VoidCallback onRefresh;
+
+  const _Header({required this.loading, required this.onRefresh});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.black,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1F000000),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Welcome back, Admin',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  loading
+                      ? 'Loading store operations...'
+                      : 'Your store overview is ready',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton.filled(
+            tooltip: 'Refresh dashboard',
+            onPressed: loading ? null : onRefresh,
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black,
+            ),
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+    );
   }
 }
 
-class _MetricCard extends StatelessWidget {
-  final String value;
-  final String label;
-  final double progress;
-  final bool dark;
-  final Color? color;
+class _SummaryGrid extends StatelessWidget {
+  final bool loading;
+  final int columns;
+  final List<_SummaryCardData> cards;
 
-  const _MetricCard({
-    required this.value,
-    required this.label,
-    required this.progress,
-    this.dark = false,
-    this.color,
+  const _SummaryGrid({
+    required this.loading,
+    required this.columns,
+    required this.cards,
   });
 
   @override
   Widget build(BuildContext context) {
-    final background = dark ? Colors.black : Colors.white;
-    final textColor = dark ? Colors.white : Colors.black;
-    final mutedColor = dark ? Colors.white70 : AppColors.muted;
-    final barColor = dark ? Colors.white : color ?? const Color(0xFFDDE4E8);
+    return GridView.builder(
+      itemCount: cards.length,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: columns,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: columns == 2 ? 1.28 : 1.55,
+      ),
+      itemBuilder: (context, index) {
+        return _SummaryCard(data: cards[index], loading: loading);
+      },
+    );
+  }
+}
+
+class _SummaryCard extends StatelessWidget {
+  final _SummaryCardData data;
+  final bool loading;
+
+  const _SummaryCard({required this.data, required this.loading});
+
+  @override
+  Widget build(BuildContext context) {
+    final tint = data.color.withValues(alpha: .09);
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(9),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE8E8E8)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0D000000),
+            blurRadius: 14,
+            offset: Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: tint,
+              borderRadius: BorderRadius.circular(14),
             ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: mutedColor, fontSize: 13),
+            child: Icon(data.icon, color: data.color),
           ),
           const Spacer(),
-          Row(
-            children: [
-              Text('0%', style: TextStyle(color: mutedColor, fontSize: 11)),
-              const Spacer(),
-              Text(
-                '${(progress * 100).round()}%',
-                style: TextStyle(color: mutedColor, fontSize: 11),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: progress.clamp(0, 1),
-              minHeight: 10,
-              color: barColor,
-              backgroundColor: dark
-                  ? const Color(0xFF2D2D2D)
-                  : const Color(0xFFEDEDED),
+          loading
+              ? const _LoadingBar(width: 64, height: 22)
+              : Text(
+                  data.value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.black,
+                  ),
+                ),
+          const SizedBox(height: 4),
+          Text(
+            data.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.muted,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -346,211 +446,637 @@ class _MetricCard extends StatelessWidget {
   }
 }
 
-class _RangeSelector extends StatelessWidget {
+class _SummaryCardData {
+  final IconData icon;
+  final String label;
   final String value;
-  final ValueChanged<String> onChanged;
+  final Color color;
 
-  const _RangeSelector({required this.value, required this.onChanged});
+  const _SummaryCardData({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  const _SectionHeader({
+    required this.title,
+    this.subtitle,
+    this.actionLabel,
+    this.onAction,
+  });
 
   @override
   Widget build(BuildContext context) {
-    const items = [
-      ('monthly', 'Tháng'),
-      ('weekly', 'Tuần'),
-      ('today', 'Hôm nay'),
-    ];
-
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFFE1E1E1)),
-        borderRadius: BorderRadius.circular(5),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: items.map((item) {
-          final selected = value == item.$1;
-          return InkWell(
-            onTap: () => onChanged(item.$1),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              color: selected ? Colors.black : Colors.white,
-              child: Text(
-                item.$2,
-                style: TextStyle(
-                  color: selected ? Colors.white : Colors.black,
-                  fontSize: 12,
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
-            ),
-          );
-        }).toList(),
-      ),
+              if (subtitle != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  subtitle!,
+                  style: const TextStyle(
+                    color: AppColors.muted,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (actionLabel != null && onAction != null)
+          TextButton(onPressed: onAction, child: Text(actionLabel!)),
+      ],
     );
   }
 }
 
-class _AdminActionGrid extends StatelessWidget {
-  final List<_AdminAction> actions;
+class _QuickActionGrid extends StatelessWidget {
+  final int columns;
+  final List<_QuickAction> actions;
 
-  const _AdminActionGrid({required this.actions});
+  const _QuickActionGrid({required this.columns, required this.actions});
 
   @override
   Widget build(BuildContext context) {
     return GridView.builder(
+      itemCount: actions.length,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: actions.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 8,
-        crossAxisSpacing: 8,
-        childAspectRatio: 3.05,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: columns,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childAspectRatio: columns == 1 ? 4.1 : 3.2,
       ),
       itemBuilder: (context, index) {
-        final action = actions[index];
-        return InkWell(
-          onTap: () => Navigator.pushNamed(context, action.route),
-          borderRadius: BorderRadius.circular(10),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              children: [
-                Icon(action.icon, color: AppColors.black),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    action.label,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
+        return _QuickActionCard(action: actions[index]);
       },
     );
   }
 }
 
-class _AdminAction {
-  final IconData icon;
-  final String label;
-  final String route;
+class _QuickActionCard extends StatelessWidget {
+  final _QuickAction action;
 
-  const _AdminAction({
+  const _QuickActionCard({required this.action});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: action.onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFE8E8E8)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0F0F0),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(action.icon, color: AppColors.black),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    action.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    action.subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.muted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AppColors.muted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickAction {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _QuickAction({
     required this.icon,
-    required this.label,
-    required this.route,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
   });
 }
 
-class _RevenueChartPainter extends CustomPainter {
-  final List<double> values;
-  final List<double> accentValues;
+class _ResponsiveTwoColumn extends StatelessWidget {
+  final bool wide;
+  final Widget left;
+  final Widget right;
 
-  const _RevenueChartPainter({
-    required this.values,
-    required this.accentValues,
+  const _ResponsiveTwoColumn({
+    required this.wide,
+    required this.left,
+    required this.right,
   });
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final gridPaint = Paint()
-      ..color = const Color(0xFFDADADA)
-      ..strokeWidth = 1;
-    final labelPaint = TextPainter(
-      textDirection: TextDirection.ltr,
-      textAlign: TextAlign.center,
-    );
-    final chartRect = Rect.fromLTWH(28, 2, size.width - 34, size.height - 22);
-
-    for (var i = 0; i <= 5; i++) {
-      final y = chartRect.top + chartRect.height * i / 5;
-      canvas.drawLine(
-        Offset(chartRect.left, y),
-        Offset(chartRect.right, y),
-        gridPaint,
-      );
+  Widget build(BuildContext context) {
+    if (!wide) {
+      return Column(children: [left, const SizedBox(height: 16), right]);
     }
 
-    for (var i = 0; i <= 6; i++) {
-      final x = chartRect.left + chartRect.width * i / 6;
-      canvas.drawLine(
-        Offset(x, chartRect.top),
-        Offset(x, chartRect.bottom),
-        gridPaint,
-      );
-    }
-
-    final maxValue = [
-      ...values,
-      ...accentValues,
-    ].fold<double>(1, (max, value) => math.max(max, value).toDouble());
-    final minValue = [
-      ...values,
-      ...accentValues,
-    ].fold<double>(maxValue, (min, value) => math.min(min, value).toDouble());
-
-    final range = math.max(maxValue - minValue, 1).toDouble();
-    final primaryPath = _pathFor(values, chartRect, minValue, range);
-    final accentPath = _pathFor(accentValues, chartRect, minValue, range);
-
-    canvas.drawPath(
-      accentPath,
-      Paint()
-        ..color = const Color(0xFFE0B1C2)
-        ..strokeWidth = 3
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(flex: 3, child: left),
+        const SizedBox(width: 16),
+        Expanded(flex: 2, child: right),
+      ],
     );
-    canvas.drawPath(
-      primaryPath,
-      Paint()
-        ..color = Colors.black
-        ..strokeWidth = 3
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round,
-    );
-
-    const labels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-    for (var i = 0; i < labels.length; i++) {
-      final x = chartRect.left + chartRect.width * i / (labels.length - 1);
-      labelPaint.text = TextSpan(
-        text: labels[i],
-        style: const TextStyle(color: Colors.black, fontSize: 10),
-      );
-      labelPaint.layout();
-      labelPaint.paint(
-        canvas,
-        Offset(x - labelPaint.width / 2, chartRect.bottom + 7),
-      );
-    }
   }
+}
 
-  Path _pathFor(List<double> source, Rect rect, double minValue, double range) {
-    final path = Path();
-    for (var i = 0; i < source.length; i++) {
-      final x = rect.left + rect.width * i / (source.length - 1);
-      final normalized = (source[i] - minValue) / range;
-      final y = rect.bottom - rect.height * normalized;
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-    }
-    return path;
-  }
+class _RecentOrdersPanel extends StatelessWidget {
+  final List<AdminOrderSummary> orders;
+  final bool loading;
+
+  const _RecentOrdersPanel({required this.orders, required this.loading});
 
   @override
-  bool shouldRepaint(covariant _RevenueChartPainter oldDelegate) {
-    return oldDelegate.values != values ||
-        oldDelegate.accentValues != accentValues;
+  Widget build(BuildContext context) {
+    return _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionHeader(
+            title: 'Recent Orders',
+            subtitle: 'Latest customer purchases',
+            actionLabel: 'View all',
+            onAction: () => Navigator.pushNamed(context, '/admin/orders'),
+          ),
+          const SizedBox(height: 14),
+          if (loading)
+            ...List.generate(
+              3,
+              (_) => const Padding(
+                padding: EdgeInsets.only(bottom: 12),
+                child: _OrderSkeleton(),
+              ),
+            )
+          else if (orders.isEmpty)
+            const _EmptyState(
+              icon: Icons.receipt_long_outlined,
+              message: 'No recent activity yet',
+            )
+          else
+            ...orders.map((order) => _RecentOrderTile(order: order)),
+        ],
+      ),
+    );
   }
+}
+
+class _RecentOrderTile extends StatelessWidget {
+  final AdminOrderSummary order;
+
+  const _RecentOrderTile({required this.order});
+
+  @override
+  Widget build(BuildContext context) {
+    final orderCode = order.orderCode.isNotEmpty
+        ? order.orderCode
+        : '#${order.orderId}';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F8F8),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.shopping_bag_outlined),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  orderCode,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  order.customerName.isEmpty
+                      ? 'Unknown customer'
+                      : order.customerName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.muted,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                formatVnd(order.finalAmount),
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 5),
+              _StatusBadge(label: order.status),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProductHealthPanel extends StatelessWidget {
+  final List<ProductModel> products;
+  final bool loading;
+
+  const _ProductHealthPanel({required this.products, required this.loading});
+
+  @override
+  Widget build(BuildContext context) {
+    final draftProducts = products.where((product) => !product.isActive).length;
+    final missingImages = products
+        .where((product) => product.imageCount == 0)
+        .length;
+    final missingVariants = products
+        .where((product) => product.activeVariantCount == 0)
+        .length;
+    final outOfStock = products
+        .where((product) => product.totalStock <= 0)
+        .length;
+
+    return _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionHeader(
+            title: 'Product Health',
+            subtitle: 'Catalog readiness checks',
+            actionLabel: 'Products',
+            onAction: () => Navigator.pushNamed(context, '/admin/products'),
+          ),
+          const SizedBox(height: 14),
+          if (loading)
+            ...List.generate(
+              4,
+              (_) => const Padding(
+                padding: EdgeInsets.only(bottom: 10),
+                child: _LoadingBar(width: double.infinity, height: 54),
+              ),
+            )
+          else ...[
+            _HealthRow(
+              icon: Icons.drafts_outlined,
+              label: 'Draft products',
+              count: draftProducts,
+            ),
+            _HealthRow(
+              icon: Icons.image_not_supported_outlined,
+              label: 'Missing image',
+              count: missingImages,
+            ),
+            _HealthRow(
+              icon: Icons.inventory_outlined,
+              label: 'Missing variant',
+              count: missingVariants,
+            ),
+            _HealthRow(
+              icon: Icons.report_gmailerrorred_outlined,
+              label: 'Out of stock',
+              count: outOfStock,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _HealthRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final int count;
+
+  const _HealthRow({
+    required this.icon,
+    required this.label,
+    required this.count,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final attention = count > 0;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: attention ? const Color(0xFFFFF7E6) : const Color(0xFFF8F8F8),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            color: attention ? const Color(0xFF805C00) : AppColors.muted,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+          Text(
+            '$count',
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Panel extends StatelessWidget {
+  final Widget child;
+
+  const _Panel({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE8E8E8)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 16,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  final String label;
+
+  const _StatusBadge({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = label.toLowerCase();
+    final color = normalized.contains('pending')
+        ? const Color(0xFF805C00)
+        : normalized.contains('complete') || normalized.contains('delivered')
+        ? const Color(0xFF1F7A4D)
+        : normalized.contains('cancel') || normalized.contains('reject')
+        ? const Color(0xFF8A1F1F)
+        : const Color(0xFF3A4A66);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .1),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label.isEmpty ? 'Unknown' : label,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
+class _InlineErrorCard extends StatelessWidget {
+  final List<String> messages;
+
+  const _InlineErrorCard({required this.messages});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7E6),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFFE0A3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline, color: Color(0xFF805C00)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              messages.toSet().join('\n'),
+              style: const TextStyle(
+                color: Color(0xFF4A3600),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final IconData icon;
+  final String message;
+
+  const _EmptyState({required this.icon, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 34, horizontal: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F8F8),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 34, color: AppColors.muted),
+          const SizedBox(height: 10),
+          Text(
+            message,
+            style: const TextStyle(
+              color: AppColors.muted,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LoadingBar extends StatelessWidget {
+  final double width;
+  final double height;
+
+  const _LoadingBar({required this.width, required this.height});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: const Color(0xFFEDEDED),
+        borderRadius: BorderRadius.circular(12),
+      ),
+    );
+  }
+}
+
+class _OrderSkeleton extends StatelessWidget {
+  const _OrderSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F8F8),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: const Row(
+        children: [
+          _LoadingBar(width: 42, height: 42),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _LoadingBar(width: 120, height: 14),
+                SizedBox(height: 8),
+                _LoadingBar(width: 170, height: 12),
+              ],
+            ),
+          ),
+          SizedBox(width: 12),
+          _LoadingBar(width: 78, height: 24),
+        ],
+      ),
+    );
+  }
+}
+
+class _DashboardSnapshot {
+  final AdminDashboardModel dashboard;
+  final List<AdminOrderSummary> recentOrders;
+  final List<ProductModel> products;
+  final List<String> errors;
+
+  const _DashboardSnapshot({
+    required this.dashboard,
+    required this.recentOrders,
+    required this.products,
+    required this.errors,
+  });
+
+  factory _DashboardSnapshot.empty() {
+    return const _DashboardSnapshot(
+      dashboard: emptyDashboard,
+      recentOrders: [],
+      products: [],
+      errors: [],
+    );
+  }
+
+  static const emptyDashboard = AdminDashboardModel(
+    totalUsers: 0,
+    activeUsers: 0,
+    inactiveUsers: 0,
+    totalProducts: 0,
+    totalOrders: 0,
+    totalRevenue: 0,
+    pendingOrders: 0,
+    completedOrders: 0,
+    totalRefundRequests: 0,
+    totalReviews: 0,
+  );
 }

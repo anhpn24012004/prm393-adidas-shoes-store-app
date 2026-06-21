@@ -366,9 +366,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     children: List.generate(
                       5,
                       (index) => Icon(
-                        index < review.rating
-                            ? Icons.star
-                            : Icons.star_border,
+                        index < review.rating ? Icons.star : Icons.star_border,
                         size: 17,
                         color: Colors.amber.shade700,
                       ),
@@ -500,6 +498,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       return;
     }
 
+    if (selectedVariant!.stockQuantity <= 0) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Out of stock')));
+      return;
+    }
+
     try {
       setState(() {
         _isLoading = true;
@@ -543,13 +548,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       return;
     }
 
+    if (selectedVariant!.stockQuantity <= 0) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Out of stock')));
+      return;
+    }
+
     Navigator.pushNamed(
       context,
       '/checkout',
-      arguments: {
-        'variantId': selectedVariant!.variantId,
-        'quantity': 1,
-      },
+      arguments: {'variantId': selectedVariant!.variantId, 'quantity': 1},
     );
   }
 
@@ -608,6 +617,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
         final product = snapshot.data!;
         final displayPrice = selectedVariant?.price ?? product.basePrice;
+        final canPurchase =
+            selectedVariant != null && selectedVariant!.stockQuantity > 0;
 
         return Scaffold(
           appBar: AppBar(
@@ -689,6 +700,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   child: _buildSizeSelector(product),
                 ),
 
+                if (product.variants.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(20, 12, 20, 0),
+                    child: Text(
+                      'Out of stock',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+
                 if (selectedVariant != null)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
@@ -709,7 +729,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     children: [
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: _isLoading ? null : _addToCart,
+                          onPressed: _isLoading || !canPurchase
+                              ? null
+                              : _addToCart,
                           icon: const Icon(Icons.shopping_bag_outlined),
                           label: Text(context.tr('addToBag').toUpperCase()),
                         ),
@@ -717,7 +739,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: ElevatedButton.icon(
-                          onPressed: _isLoading ? null : _buyNow,
+                          onPressed: _isLoading || !canPurchase
+                              ? null
+                              : _buyNow,
                           icon: const Icon(Icons.flash_on_outlined),
                           label: Text(
                             (_isLoading

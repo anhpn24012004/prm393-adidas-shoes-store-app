@@ -1,27 +1,122 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/app_config.dart';
 import '../models/product_model.dart';
 import '../models/product_detail_model.dart';
 import 'api_client.dart';
+import 'auth_storage.dart';
 
 class ProductService {
+  final _authStorage = AuthStorage();
+
   String get baseUrl => AppConfig.apiBaseUrl;
 
   // =========================
   // PRODUCT USER API
   // =========================
 
-  Future<List<ProductModel>> getProducts() async {
-    final response = await http.get(Uri.parse('${ApiClient.baseUrl}/products'));
+  Future<PagedProductResponse> getProducts({
+    int pageNumber = 1,
+    int pageSize = 8,
+    String? keyword,
+    int? categoryId,
+  }) async {
+    final queryParameters = <String, String>{
+      'pageNumber': pageNumber.toString(),
+      'pageSize': pageSize.toString(),
+      if (keyword != null && keyword.trim().isNotEmpty) 'keyword': keyword,
+      if (categoryId != null) 'categoryId': categoryId.toString(),
+    };
+
+    final uri = Uri.parse(
+      '${ApiClient.baseUrl}/products',
+    ).replace(queryParameters: queryParameters);
+
+    debugPrint('GET products: $uri');
+
+    final response = await http.get(uri);
 
     if (response.statusCode == 200) {
-      final List data = jsonDecode(response.body);
-      return data.map((item) => ProductModel.fromJson(item)).toList();
+      final decoded = jsonDecode(response.body);
+      return _parseProductsResponse(decoded);
     }
 
     throw Exception('Failed to load products: ${response.body}');
+  }
+
+  PagedProductResponse _parseProductsResponse(Object? decoded) {
+    if (decoded is Map<String, dynamic>) {
+      return PagedProductResponse.fromJson(decoded);
+    }
+
+    if (decoded is List) {
+      final products = decoded
+          .map((item) => ProductModel.fromJson(item as Map<String, dynamic>))
+          .toList();
+
+      return PagedProductResponse(
+        items: products,
+        pageNumber: 1,
+        pageSize: products.length,
+        totalItems: products.length,
+        totalPages: 1,
+        hasPreviousPage: false,
+        hasNextPage: false,
+      );
+    }
+
+    throw Exception('Invalid products response format');
+  }
+
+  Future<List<ProductModel>> getProductList({
+    int pageNumber = 1,
+    int pageSize = 50,
+    String? keyword,
+    int? categoryId,
+  }) async {
+    final result = await getProducts(
+      pageNumber: pageNumber,
+      pageSize: pageSize,
+      keyword: keyword,
+      categoryId: categoryId,
+    );
+
+    return result.items;
+  }
+
+  Future<PagedProductResponse> getAdminProducts({
+    int pageNumber = 1,
+    int pageSize = 10,
+    String? keyword,
+    int? categoryId,
+    bool? isActive,
+  }) async {
+    final queryParameters = <String, String>{
+      'pageNumber': pageNumber.toString(),
+      'pageSize': pageSize.toString(),
+      if (keyword != null && keyword.trim().isNotEmpty) 'keyword': keyword,
+      if (categoryId != null) 'categoryId': categoryId.toString(),
+      if (isActive != null) 'isActive': isActive.toString(),
+    };
+
+    final uri = Uri.parse(
+      '${ApiClient.baseUrl}/products/admin',
+    ).replace(queryParameters: queryParameters);
+
+    debugPrint('GET admin products: $uri');
+
+    final response = await http.get(uri, headers: await _headers());
+
+    if (response.statusCode == 200) {
+      final decoded = jsonDecode(response.body);
+      return _parseProductsResponse(decoded);
+    }
+
+    throw Exception(
+      'Failed to load admin products (${response.statusCode}): ${response.body}',
+    );
   }
 
   Future<ProductDetailModel> getProductById(int id) async {
@@ -38,36 +133,18 @@ class ProductService {
   }
 
   Future<List<ProductModel>> searchProducts(String keyword) async {
-    final response = await http.get(
-      Uri.parse('${ApiClient.baseUrl}/products/search?keyword=$keyword'),
-    );
-
-    if (response.statusCode == 200) {
-      final List data = jsonDecode(response.body);
-      return data.map((item) => ProductModel.fromJson(item)).toList();
-    }
-
-    throw Exception('Failed to search products: ${response.body}');
+    return getProductList(keyword: keyword);
   }
 
   Future<List<ProductModel>> getProductsByCategory(int categoryId) async {
-    final response = await http.get(
-      Uri.parse('${ApiClient.baseUrl}/products/category/$categoryId'),
-    );
-
-    if (response.statusCode == 200) {
-      final List data = jsonDecode(response.body);
-      return data.map((item) => ProductModel.fromJson(item)).toList();
-    }
-
-    throw Exception('Failed to load products by category: ${response.body}');
+    return getProductList(categoryId: categoryId);
   }
 
   // =========================
   // ADMIN PRODUCT CRUD
   // =========================
 
-  Future<void> createProduct({
+  Future<int> createProduct({
     required String productName,
     String? description,
     required double basePrice,
@@ -78,7 +155,7 @@ class ProductService {
   }) async {
     final response = await http.post(
       Uri.parse('${ApiClient.baseUrl}/products'),
-      headers: {'Content-Type': 'application/json'},
+      headers: await _headers(),
       body: jsonEncode({
         'productName': productName,
         'description': description,
@@ -91,8 +168,18 @@ class ProductService {
     );
 
     if (response.statusCode != 200 && response.statusCode != 201) {
-      throw Exception('Failed to create product: ${response.body}');
+      throw Exception(_message(response, 'Failed to create product'));
     }
+
+    final data = jsonDecode(response.body);
+    final productId = data is Map<String, dynamic>
+        ? data['productId'] as int?
+        : null;
+    if (productId == null || productId <= 0) {
+      throw Exception('Create product response did not include productId');
+    }
+
+    return productId;
   }
 
   Future<void> updateProduct({
@@ -108,7 +195,7 @@ class ProductService {
   }) async {
     final response = await http.put(
       Uri.parse('${ApiClient.baseUrl}/products/$productId'),
-      headers: {'Content-Type': 'application/json'},
+      headers: await _headers(),
       body: jsonEncode({
         'productName': productName,
         'description': description,
@@ -122,17 +209,29 @@ class ProductService {
     );
 
     if (response.statusCode != 200 && response.statusCode != 204) {
-      throw Exception('Failed to update product: ${response.body}');
+      throw Exception(_message(response, 'Failed to update product'));
+    }
+  }
+
+  Future<void> publishProduct(int productId) async {
+    final response = await http.post(
+      Uri.parse('${ApiClient.baseUrl}/products/$productId/publish'),
+      headers: await _headers(),
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      throw Exception(_message(response, 'Failed to publish product'));
     }
   }
 
   Future<void> deleteProduct(int productId) async {
     final response = await http.delete(
       Uri.parse('${ApiClient.baseUrl}/products/$productId'),
+      headers: await _headers(includeContentType: false),
     );
 
     if (response.statusCode != 200 && response.statusCode != 204) {
-      throw Exception('Failed to delete product: ${response.body}');
+      throw Exception(_message(response, 'Failed to delete product'));
     }
   }
 
@@ -150,7 +249,7 @@ class ProductService {
       return data.map((item) => ProductVariantModel.fromJson(item)).toList();
     }
 
-    throw Exception('Failed to load variants: ${response.body}');
+    throw Exception(_message(response, 'Failed to load variants'));
   }
 
   Future<void> createVariant({
@@ -160,21 +259,23 @@ class ProductService {
     required double price,
     required int stockQuantity,
     String? sku,
+    bool isActive = true,
   }) async {
     final response = await http.post(
       Uri.parse('${ApiClient.baseUrl}/products/$productId/variants'),
-      headers: {'Content-Type': 'application/json'},
+      headers: await _headers(),
       body: jsonEncode({
         'size': size,
         'color': color,
         'price': price,
         'stockQuantity': stockQuantity,
         'sku': sku,
+        'isActive': isActive,
       }),
     );
 
     if (response.statusCode != 200 && response.statusCode != 201) {
-      throw Exception('Failed to create variant: ${response.body}');
+      throw Exception(_message(response, 'Failed to create variant'));
     }
   }
 
@@ -189,7 +290,7 @@ class ProductService {
   }) async {
     final response = await http.put(
       Uri.parse('${ApiClient.baseUrl}/productvariants/$variantId'),
-      headers: {'Content-Type': 'application/json'},
+      headers: await _headers(),
       body: jsonEncode({
         'size': size,
         'color': color,
@@ -201,17 +302,18 @@ class ProductService {
     );
 
     if (response.statusCode != 200 && response.statusCode != 204) {
-      throw Exception('Failed to update variant: ${response.body}');
+      throw Exception(_message(response, 'Failed to update variant'));
     }
   }
 
   Future<void> deleteVariant(int variantId) async {
     final response = await http.delete(
       Uri.parse('${ApiClient.baseUrl}/productvariants/$variantId'),
+      headers: await _headers(includeContentType: false),
     );
 
     if (response.statusCode != 200 && response.statusCode != 204) {
-      throw Exception('Failed to delete variant: ${response.body}');
+      throw Exception(_message(response, 'Failed to delete variant'));
     }
   }
 
@@ -229,7 +331,7 @@ class ProductService {
       return data.map((item) => ProductImageModel.fromJson(item)).toList();
     }
 
-    throw Exception('Failed to load images: ${response.body}');
+    throw Exception(_message(response, 'Failed to load images'));
   }
 
   Future<void> createProductImage({
@@ -239,13 +341,40 @@ class ProductService {
   }) async {
     final response = await http.post(
       Uri.parse('${ApiClient.baseUrl}/products/$productId/images'),
-      headers: {'Content-Type': 'application/json'},
+      headers: await _headers(),
       body: jsonEncode({'imageUrl': imageUrl, 'isMain': isMain}),
     );
 
     if (response.statusCode != 200 && response.statusCode != 201) {
-      throw Exception('Failed to create product image: ${response.body}');
+      throw Exception(_message(response, 'Failed to create product image'));
     }
+  }
+
+  Future<ProductImageModel> uploadProductImage({
+    required int productId,
+    required List<int> bytes,
+    required String fileName,
+    required bool isMain,
+  }) async {
+    final uri = Uri.parse(
+      '${ApiClient.baseUrl}/products/$productId/images/upload',
+    );
+    final request = http.MultipartRequest('POST', uri);
+    request.headers.addAll(await _headers(includeContentType: false));
+    request.fields['isMain'] = isMain.toString();
+    request.files.add(
+      http.MultipartFile.fromBytes('file', bytes, filename: fileName),
+    );
+
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final decoded = jsonDecode(response.body);
+      return ProductImageModel.fromJson(decoded as Map<String, dynamic>);
+    }
+
+    throw Exception(_message(response, 'Failed to upload product image'));
   }
 
   Future<void> updateProductImage({
@@ -255,22 +384,46 @@ class ProductService {
   }) async {
     final response = await http.put(
       Uri.parse('${ApiClient.baseUrl}/productimages/$imageId'),
-      headers: {'Content-Type': 'application/json'},
+      headers: await _headers(),
       body: jsonEncode({'imageUrl': imageUrl, 'isMain': isMain}),
     );
 
     if (response.statusCode != 200 && response.statusCode != 204) {
-      throw Exception('Failed to update product image: ${response.body}');
+      throw Exception(_message(response, 'Failed to update product image'));
     }
   }
 
   Future<void> deleteProductImage(int imageId) async {
     final response = await http.delete(
       Uri.parse('${ApiClient.baseUrl}/productimages/$imageId'),
+      headers: await _headers(includeContentType: false),
     );
 
     if (response.statusCode != 200 && response.statusCode != 204) {
-      throw Exception('Failed to delete product image: ${response.body}');
+      throw Exception(_message(response, 'Failed to delete product image'));
     }
+  }
+
+  Future<Map<String, String>> _headers({bool includeContentType = true}) async {
+    final token = await _authStorage.getToken();
+    if (token == null) {
+      throw Exception('Admin login required');
+    }
+
+    return {
+      if (includeContentType) 'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    };
+  }
+
+  String _message(http.Response response, String fallback) {
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map && decoded['message'] != null) {
+        return decoded['message'].toString();
+      }
+    } catch (_) {}
+
+    return '$fallback (${response.statusCode})';
   }
 }

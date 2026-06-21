@@ -1,6 +1,7 @@
 using AdidasShoesStore.Api.Data;
 using AdidasShoesStore.Api.DTOs.Products;
 using AdidasShoesStore.Api.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -21,7 +22,7 @@ public class ProductVariantsController : ControllerBase
     public async Task<ActionResult<IEnumerable<ProductVariantDto>>> GetVariantsByProduct(int productId)
     {
         var productExists = await _context.Products
-            .AnyAsync(p => p.ProductId == productId && p.IsActive == true);
+            .AnyAsync(p => p.ProductId == productId);
 
         if (!productExists)
         {
@@ -30,7 +31,7 @@ public class ProductVariantsController : ControllerBase
 
         var variants = await _context.ProductVariants
             .AsNoTracking()
-            .Where(v => v.ProductId == productId && v.IsActive == true)
+            .Where(v => v.ProductId == productId)
             .Select(v => new ProductVariantDto
             {
                 VariantId = v.VariantId,
@@ -47,14 +48,26 @@ public class ProductVariantsController : ControllerBase
     }
 
     [HttpPost("products/{productId}/variants")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> CreateVariant(int productId, CreateProductVariantDto dto)
     {
         var productExists = await _context.Products
-            .AnyAsync(p => p.ProductId == productId && p.IsActive == true);
+            .AnyAsync(p => p.ProductId == productId);
 
         if (!productExists)
         {
             return NotFound(new { message = "Product not found" });
+        }
+
+        var duplicateVariantExists = await _context.ProductVariants
+            .AnyAsync(v =>
+                v.ProductId == productId &&
+                v.Size == dto.Size &&
+                v.Color == dto.Color);
+
+        if (duplicateVariantExists)
+        {
+            return BadRequest(new { message = "Variant with this size and color already exists." });
         }
 
         if (!string.IsNullOrWhiteSpace(dto.Sku))
@@ -76,7 +89,7 @@ public class ProductVariantsController : ControllerBase
             Price = dto.Price,
             StockQuantity = dto.StockQuantity,
             Sku = dto.Sku,
-            IsActive = true
+            IsActive = dto.IsActive
         };
 
         _context.ProductVariants.Add(variant);
@@ -90,6 +103,7 @@ public class ProductVariantsController : ControllerBase
     }
 
     [HttpPut("productvariants/{variantId}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> UpdateVariant(int variantId, UpdateProductVariantDto dto)
     {
         var variant = await _context.ProductVariants.FindAsync(variantId);
@@ -97,6 +111,18 @@ public class ProductVariantsController : ControllerBase
         if (variant == null)
         {
             return NotFound(new { message = "Product variant not found" });
+        }
+
+        var duplicateVariantExists = await _context.ProductVariants
+            .AnyAsync(v =>
+                v.ProductId == variant.ProductId &&
+                v.VariantId != variantId &&
+                v.Size == dto.Size &&
+                v.Color == dto.Color);
+
+        if (duplicateVariantExists)
+        {
+            return BadRequest(new { message = "Variant with this size and color already exists." });
         }
 
         if (!string.IsNullOrWhiteSpace(dto.Sku))
@@ -123,6 +149,7 @@ public class ProductVariantsController : ControllerBase
     }
 
     [HttpDelete("productvariants/{variantId}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> DeleteVariant(int variantId)
     {
         var variant = await _context.ProductVariants.FindAsync(variantId);

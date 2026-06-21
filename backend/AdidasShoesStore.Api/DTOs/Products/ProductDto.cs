@@ -15,4 +15,7 @@ public class ProductDto
     public double AverageRating { get; set; }
     public int ReviewCount { get; set; }
     public bool IsActive { get; set; }
+    public int ImageCount { get; set; }
+    public int ActiveVariantCount { get; set; }
+    public int TotalStock { get; set; }
 }
