@@ -99,10 +99,11 @@ public class ProductImagesController : ControllerBase
     }
 
     [HttpPost("products/{productId}/images/upload")]
+    [Consumes("multipart/form-data")]
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<ProductImageDto>> UploadImage(
         int productId,
-        [FromForm] IFormFile file,
+        IFormFile file,
         [FromForm] bool isMain)
     {
         var productExists = await _context.Products

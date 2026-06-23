@@ -73,6 +73,11 @@ class _AdminVariantFormScreenState extends State<AdminVariantFormScreen> {
           variantId: widget.variant!.variantId,
           size: size,
           color: color,
+          imageUrl:
+              widget.variant!.color.trim().toLowerCase() ==
+                  color.toLowerCase()
+              ? widget.variant!.imageUrl
+              : null,
           price: price,
           stockQuantity: stockQuantity,
           sku: sku.isEmpty ? null : sku,

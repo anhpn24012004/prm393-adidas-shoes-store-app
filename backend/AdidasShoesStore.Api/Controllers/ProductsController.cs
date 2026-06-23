@@ -5,6 +5,7 @@ using AdidasShoesStore.Api.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace AdidasShoesStore.Api.Controllers;
 
@@ -192,6 +193,7 @@ public class ProductsController : ControllerBase
                     : 0,
                 ReviewCount = p.Reviews.Count,
                 IsActive = p.IsActive ?? false,
+                ClassificationGroupsJson = p.ClassificationGroupsJson,
 
                 Images = p.ProductImages
                     .OrderByDescending(i => i.IsMain == true)
@@ -210,6 +212,8 @@ public class ProductsController : ControllerBase
                         VariantId = v.VariantId,
                         Size = v.Size,
                         Color = v.Color,
+                        ImageUrl = v.ImageUrl,
+                        OptionValuesJson = v.OptionValuesJson,
                         Price = v.Price,
                         StockQuantity = v.StockQuantity ?? 0,
                         Sku = v.Sku,
@@ -221,6 +225,13 @@ public class ProductsController : ControllerBase
         if (product == null)
         {
             return NotFound(new { message = "Product not found" });
+        }
+
+        product.ClassificationGroups = DeserializeClassificationGroups(
+            product.ClassificationGroupsJson);
+        foreach (var variant in product.Variants)
+        {
+            variant.OptionValues = DeserializeOptionValues(variant.OptionValuesJson);
         }
 
         return Ok(product);
@@ -408,5 +419,32 @@ public class ProductsController : ControllerBase
         }
 
         return null;
+    }
+
+    private static List<ProductClassificationGroupDto> DeserializeClassificationGroups(
+        string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return new();
+        try
+        {
+            return JsonSerializer.Deserialize<List<ProductClassificationGroupDto>>(json) ?? new();
+        }
+        catch (JsonException)
+        {
+            return new();
+        }
+    }
+
+    private static List<string> DeserializeOptionValues(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return new();
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(json) ?? new();
+        }
+        catch (JsonException)
+        {
+            return new();
+        }
     }
 }

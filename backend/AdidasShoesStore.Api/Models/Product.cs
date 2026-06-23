@@ -21,6 +21,8 @@ public partial class Product
 
     public string? Material { get; set; }
 
+    public string? ClassificationGroupsJson { get; set; }
+
     public bool? IsActive { get; set; }
 
     public DateTime? CreatedAt { get; set; }

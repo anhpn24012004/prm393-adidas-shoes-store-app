@@ -6,6 +6,7 @@ using AdidasShoesStore.Api.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Net.Http.Headers;
 using Microsoft.OpenApi.Models;
 using System.Text;
 
@@ -116,10 +117,16 @@ if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 
-app.UseStaticFiles();
-
-// CORS should be before Authentication/Authorization
+// CORS must run before static files and Authentication/Authorization.
 app.UseCors("AllowFlutterWeb");
+
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = context =>
+    {
+        context.Context.Response.Headers[HeaderNames.AccessControlAllowOrigin] = "*";
+    }
+});
 
 // Authentication must be before Authorization
 app.UseAuthentication();

@@ -209,7 +209,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
                         VariantId = i.VariantId,
                         ProductId = i.Variant.ProductId,
                         ProductName = i.ProductName,
-                        ImageUrl = i.Variant.Product.ProductImages
+                        ImageUrl = i.Variant.ImageUrl ?? i.Variant.Product.ProductImages
                             .OrderByDescending(img => img.IsMain == true)
                             .Select(img => img.ImageUrl)
                             .FirstOrDefault(),
@@ -258,7 +258,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
                         VariantId = i.VariantId,
                         ProductId = i.Variant.ProductId,
                         ProductName = i.ProductName,
-                        ImageUrl = i.Variant.Product.ProductImages
+                        ImageUrl = i.Variant.ImageUrl ?? i.Variant.Product.ProductImages
                             .OrderByDescending(img => img.IsMain == true)
                             .Select(img => img.ImageUrl)
                             .FirstOrDefault(),
@@ -463,7 +463,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
                         VariantId = i.VariantId,
                         ProductId = i.Variant.ProductId,
                         ProductName = i.ProductName,
-                        ImageUrl = i.Variant.Product.ProductImages
+                        ImageUrl = i.Variant.ImageUrl ?? i.Variant.Product.ProductImages
                             .OrderByDescending(img => img.IsMain == true)
                             .Select(img => img.ImageUrl)
                             .FirstOrDefault(),

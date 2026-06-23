@@ -38,6 +38,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   int? _buyNowQuantity;
   double? _buyNowUnitPrice;
   String? _buyNowProductName;
+  String? _buyNowImageUrl;
+  String? _buyNowSize;
+  String? _buyNowColor;
   Future<_CheckoutSummary>? _summaryFuture;
   String _paymentMethod = 'COD';
   bool _isSubmitting = false;
@@ -64,6 +67,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       _buyNowQuantity = arguments['quantity'] as int?;
       _buyNowUnitPrice = (arguments['unitPrice'] as num?)?.toDouble();
       _buyNowProductName = arguments['productName']?.toString();
+      _buyNowImageUrl = arguments['imageUrl']?.toString();
+      _buyNowSize = arguments['size']?.toString();
+      _buyNowColor = arguments['color']?.toString();
     }
 
     _summaryFuture = _loadCheckoutSummary();
@@ -134,9 +140,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('orderCreated'))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.tr('orderCreated'))));
 
       Navigator.pushReplacementNamed(
         context,
@@ -368,9 +374,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                snapshot.error.toString().replaceFirst('Exception: ', ''),
-              ),
+              Text(snapshot.error.toString().replaceFirst('Exception: ', '')),
               TextButton(
                 onPressed: () => setState(() {
                   _addresses = _addressService.getAddresses();
@@ -530,9 +534,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('paymentCompleted'))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.tr('paymentCompleted'))));
 
       Navigator.pushReplacementNamed(
         context,
@@ -558,6 +562,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         finalAmount: subtotal + _shippingFee - _discountAmount,
         totalItems: quantity,
         title: _buyNowProductName ?? 'Buy now item',
+        imageUrl: _buyNowImageUrl,
+        variantLabel: [
+          if (_buyNowSize?.isNotEmpty == true) 'Size $_buyNowSize',
+          if (_buyNowColor?.isNotEmpty == true) _buyNowColor!,
+        ].join(' / '),
       );
     }
 
@@ -615,6 +624,37 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ),
             const SizedBox(height: 10),
             if (!compact) ...[
+              if (summary.imageUrl?.isNotEmpty == true) ...[
+                Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        AppConfig.resolveImageUrl(summary.imageUrl!),
+                        width: 64,
+                        height: 64,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(summary.title),
+                          if (summary.variantLabel?.isNotEmpty == true)
+                            Text(
+                              summary.variantLabel!,
+                              style: const TextStyle(color: Colors.black54),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+              ],
               _summaryRow('Items', '${summary.totalItems}'),
               _summaryRow('Product', summary.title),
             ],
@@ -634,11 +674,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  Widget _summaryRow(
-    String label,
-    String value, {
-    bool emphasized = false,
-  }) {
+  Widget _summaryRow(String label, String value, {bool emphasized = false}) {
     final style = TextStyle(
       fontSize: emphasized ? 17 : 14,
       fontWeight: emphasized ? FontWeight.w900 : FontWeight.w500,
@@ -652,11 +688,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           Expanded(child: Text(label, style: style)),
           const SizedBox(width: 12),
           Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: style,
-            ),
+            child: Text(value, textAlign: TextAlign.right, style: style),
           ),
         ],
       ),
@@ -740,9 +772,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         return const SizedBox(
                           width: 240,
                           height: 240,
-                          child: Center(
-                            child: Text('Could not load QR image'),
-                          ),
+                          child: Center(child: Text('Could not load QR image')),
                         );
                       },
                     ),
@@ -865,9 +895,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   String? _validateVisaExpiry(String? value) {
-    final match = RegExp(r'^(\d{1,2})/(\d{2}|\d{4})$').firstMatch(
-      (value ?? '').trim(),
-    );
+    final match = RegExp(
+      r'^(\d{1,2})/(\d{2}|\d{4})$',
+    ).firstMatch((value ?? '').trim());
 
     if (match == null) {
       return context.tr('invalidVisaExpiry');
@@ -982,7 +1012,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_showPaymentStep ? context.tr('paymentMethod') : context.tr('checkout')),
+        title: Text(
+          _showPaymentStep
+              ? context.tr('paymentMethod')
+              : context.tr('checkout'),
+        ),
         leading: _showPaymentStep
             ? IconButton(
                 onPressed: _isSubmitting ? null : _backToReview,
@@ -1071,6 +1105,8 @@ class _CheckoutSummary {
   final double finalAmount;
   final int totalItems;
   final String title;
+  final String? imageUrl;
+  final String? variantLabel;
 
   const _CheckoutSummary({
     required this.subtotal,
@@ -1079,5 +1115,7 @@ class _CheckoutSummary {
     required this.finalAmount,
     required this.totalItems,
     required this.title,
+    this.imageUrl,
+    this.variantLabel,
   });
 }

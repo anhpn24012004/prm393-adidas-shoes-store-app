@@ -252,10 +252,47 @@ class ProductService {
     throw Exception(_message(response, 'Failed to load variants'));
   }
 
+  Future<ProductClassificationEditorData> getProductClassifications(
+    int productId,
+  ) async {
+    final response = await http.get(
+      Uri.parse('${ApiClient.baseUrl}/products/$productId/classifications'),
+      headers: await _headers(includeContentType: false),
+    );
+
+    if (response.statusCode == 200) {
+      return ProductClassificationEditorData.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+
+    throw Exception(_message(response, 'Failed to load classifications'));
+  }
+
+  Future<void> syncProductClassifications({
+    required int productId,
+    required List<Map<String, dynamic>> classificationGroups,
+    required List<Map<String, dynamic>> variants,
+  }) async {
+    final response = await http.put(
+      Uri.parse('${ApiClient.baseUrl}/products/$productId/classifications'),
+      headers: await _headers(),
+      body: jsonEncode({
+        'classificationGroups': classificationGroups,
+        'variants': variants,
+      }),
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      throw Exception(_message(response, 'Failed to save classifications'));
+    }
+  }
+
   Future<void> createVariant({
     required int productId,
     required String size,
     required String color,
+    String? imageUrl,
     required double price,
     required int stockQuantity,
     String? sku,
@@ -267,6 +304,7 @@ class ProductService {
       body: jsonEncode({
         'size': size,
         'color': color,
+        'imageUrl': imageUrl,
         'price': price,
         'stockQuantity': stockQuantity,
         'sku': sku,
@@ -283,6 +321,7 @@ class ProductService {
     required int variantId,
     required String size,
     required String color,
+    String? imageUrl,
     required double price,
     required int stockQuantity,
     String? sku,
@@ -294,6 +333,7 @@ class ProductService {
       body: jsonEncode({
         'size': size,
         'color': color,
+        'imageUrl': imageUrl,
         'price': price,
         'stockQuantity': stockQuantity,
         'sku': sku,

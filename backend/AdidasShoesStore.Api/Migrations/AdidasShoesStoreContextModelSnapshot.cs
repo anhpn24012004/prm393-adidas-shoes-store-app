@@ -307,6 +307,9 @@ namespace AdidasShoesStore.Api.Migrations
                         .HasColumnType("nvarchar(100)")
                         .HasDefaultValue("Adidas");
 
+                    b.Property<string>("ClassificationGroupsJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("CategoryId")
                         .HasColumnType("int");
 
@@ -385,6 +388,13 @@ namespace AdidasShoesStore.Api.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("OptionValuesJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool?>("IsActive")
                         .ValueGeneratedOnAdd()
@@ -781,12 +791,17 @@ namespace AdidasShoesStore.Api.Migrations
                     b.Property<int>("UserId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("VariantId")
+                        .HasColumnType("int");
+
                     b.HasKey("WishlistId")
                         .HasName("PK__Wishlist__233189EBC573B413");
 
                     b.HasIndex("ProductId");
 
                     b.HasIndex("UserId");
+
+                    b.HasIndex("VariantId");
 
                     b.ToTable("Wishlists");
                 });
@@ -1028,9 +1043,15 @@ namespace AdidasShoesStore.Api.Migrations
                         .IsRequired()
                         .HasConstraintName("FK__Wishlists__UserI__04E4BC85");
 
+                    b.HasOne("AdidasShoesStore.Api.Models.ProductVariant", "Variant")
+                        .WithMany("Wishlists")
+                        .HasForeignKey("VariantId");
+
                     b.Navigation("Product");
 
                     b.Navigation("User");
+
+                    b.Navigation("Variant");
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.Cart", b =>
@@ -1077,6 +1098,8 @@ namespace AdidasShoesStore.Api.Migrations
                     b.Navigation("CartItems");
 
                     b.Navigation("OrderItems");
+
+                    b.Navigation("Wishlists");
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.ReturnRequest", b =>

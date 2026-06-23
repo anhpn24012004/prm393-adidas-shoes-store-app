@@ -26,6 +26,7 @@ public class WishlistController : ControllerBase
             .Where(w => w.UserId == userId)
             .Include(w => w.Product)
                 .ThenInclude(p => p.ProductImages)
+            .Include(w => w.Variant)
             .OrderByDescending(w => w.CreatedAt)
             .Select(w => new WishlistItemDto
             {
@@ -33,7 +34,9 @@ public class WishlistController : ControllerBase
                 ProductId = w.ProductId,
                 ProductName = w.Product.ProductName,
                 BasePrice = w.Product.BasePrice,
-                ImageUrl = w.Product.ProductImages
+                ImageUrl = w.Variant != null && w.Variant.ImageUrl != null
+                    ? w.Variant.ImageUrl
+                    : w.Product.ProductImages
                     .Where(i => i.IsMain == true)
                     .Select(i => i.ImageUrl)
                     .FirstOrDefault(),
@@ -68,6 +71,16 @@ public class WishlistController : ControllerBase
         if (!productExists)
             return NotFound(new { message = "Product not found" });
 
+        if (request.VariantId.HasValue)
+        {
+            var variantExists = await _context.ProductVariants.AnyAsync(v =>
+                v.VariantId == request.VariantId.Value &&
+                v.ProductId == request.ProductId &&
+                v.IsActive == true);
+            if (!variantExists)
+                return BadRequest(new { message = "Selected product variant is invalid" });
+        }
+
         var existing = await _context.Wishlists
             .FirstOrDefaultAsync(w =>
                 w.UserId == request.UserId &&
@@ -75,6 +88,12 @@ public class WishlistController : ControllerBase
 
         if (existing != null)
         {
+            if (request.VariantId.HasValue)
+            {
+                existing.VariantId = request.VariantId;
+                await _context.SaveChangesAsync();
+            }
+
             var existingCount = await _context.Wishlists
                 .CountAsync(w => w.UserId == request.UserId);
 
@@ -89,6 +108,7 @@ public class WishlistController : ControllerBase
         {
             UserId = request.UserId,
             ProductId = request.ProductId,
+            VariantId = request.VariantId,
             CreatedAt = DateTime.Now
         });
 

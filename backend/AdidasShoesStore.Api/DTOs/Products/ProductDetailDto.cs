@@ -1,5 +1,7 @@
 namespace AdidasShoesStore.Api.DTOs.Products;
 
+using System.Text.Json.Serialization;
+
 public class ProductDetailDto
 {
     public int ProductId { get; set; }
@@ -14,6 +16,9 @@ public class ProductDetailDto
     public double AverageRating { get; set; }
     public int ReviewCount { get; set; }
     public bool IsActive { get; set; }
+    public List<ProductClassificationGroupDto> ClassificationGroups { get; set; } = new();
+    [JsonIgnore]
+    public string? ClassificationGroupsJson { get; set; }
 
     public List<ProductImageDto> Images { get; set; } = new();
     public List<ProductVariantDto> Variants { get; set; } = new();
