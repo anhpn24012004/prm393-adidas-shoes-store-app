@@ -29,7 +29,6 @@ import 'screens/settings/settings_screen.dart';
 import 'screens/admin/admin_product_list_screen.dart';
 import 'screens/admin/admin_product_form_screen.dart';
 import 'screens/admin/admin_product_image_list_screen.dart';
-import 'screens/admin/admin_variant_list_screen.dart';
 import 'screens/admin/admin_category_list_screen.dart';
 import 'screens/review/create_review_screen.dart';
 import 'screens/admin/admin_shipment_list_screen.dart';
@@ -117,10 +116,7 @@ class AdidasShoesStoreApp extends StatelessWidget {
           '/admin/products/variants': (context) {
             final argument = ModalRoute.of(context)?.settings.arguments;
             if (argument is ProductRouteArgs) {
-              return AdminVariantListScreen(
-                product: argument.product,
-                fromCreateFlow: argument.fromCreateFlow,
-              );
+              return AdminProductFormScreen(product: argument.product);
             }
             throw ArgumentError(
               'ProductRouteArgs required for product variants',

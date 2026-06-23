@@ -7,8 +7,9 @@ public class CreateProductVariantDto
     [Required]
     public string Size { get; set; } = string.Empty;
 
-    [Required]
     public string Color { get; set; } = string.Empty;
+
+    public string? ImageUrl { get; set; }
 
     [Range(0, double.MaxValue)]
     public decimal Price { get; set; }

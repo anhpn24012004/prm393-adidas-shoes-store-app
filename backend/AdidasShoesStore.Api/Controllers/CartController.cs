@@ -50,7 +50,7 @@ public class CartController : ControllerBase
             Size = x.Variant.Size,
             Color = x.Variant.Color,
             Price = x.Variant.Price,
-            ImageUrl = x.Variant.Product.ProductImages
+            ImageUrl = x.Variant.ImageUrl ?? x.Variant.Product.ProductImages
                 .Where(i => i.IsMain == true)
                 .Select(i => i.ImageUrl)
                 .FirstOrDefault() ?? x.Variant.Product.ProductImages

@@ -81,14 +81,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   String? getSelectedImage(ProductDetailModel product) {
-    if (product.images.isEmpty) return null;
-
     final selectedImageUrl = _selectedImageUrl;
-    final selectedImageExists =
-        selectedImageUrl != null &&
-        product.images.any((image) => image.imageUrl == selectedImageUrl);
-
-    if (selectedImageExists) {
+    if (selectedImageUrl != null && selectedImageUrl.isNotEmpty) {
       return selectedImageUrl;
     }
 
@@ -220,15 +214,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final selectedColor = _selectedColor;
     final selectedSize = _selectedSize;
 
-    if (selectedColor == null || selectedSize == null) {
+    if (selectedSize == null) {
       selectedVariant = null;
       return;
     }
 
     final matches = product.variants.where((variant) {
       return variant.isActive &&
-          variant.color == selectedColor &&
-          variant.size == selectedSize;
+          variant.size == selectedSize &&
+          (selectedColor == null
+              ? variant.color.trim().isEmpty
+              : variant.color == selectedColor);
     }).toList();
 
     selectedVariant = matches.isEmpty ? null : matches.first;
@@ -247,13 +243,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         _selectedSize = null;
       }
 
-      final matchingImage = product.images.where((image) {
-        return image.imageUrl.toLowerCase().contains('/$color.'.toLowerCase());
-      }).toList();
-
-      if (matchingImage.isNotEmpty) {
-        _selectedImageUrl = matchingImage.first.imageUrl;
-      }
+      final colorImages = product.variants
+          .where((variant) => variant.color == color)
+          .map((variant) => variant.imageUrl)
+          .whereType<String>()
+          .where((imageUrl) => imageUrl.trim().isNotEmpty)
+          .toList();
+      final colorImage = colorImages.isEmpty ? null : colorImages.first;
+      _selectedImageUrl = colorImage ?? getMainImage(product);
 
       _syncSelectedVariant(product);
     });
@@ -263,6 +260,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     setState(() {
       _selectedSize = size;
       _syncSelectedVariant(product);
+      final variantImage = selectedVariant?.imageUrl;
+      if (variantImage != null && variantImage.trim().isNotEmpty) {
+        _selectedImageUrl = variantImage;
+      }
     });
   }
 
@@ -584,6 +585,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         'quantity': 1,
         'unitPrice': selectedVariant!.price,
         'productName': product.productName,
+        'imageUrl': selectedVariant!.imageUrl ?? getMainImage(product),
+        'size': selectedVariant!.size,
+        'color': selectedVariant!.color,
       },
     );
   }
@@ -595,6 +599,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       final totalItems = await _wishlistService.addWishlist(
         userId: AppConfig.currentUserId,
         productId: widget.productId,
+        variantId: selectedVariant?.variantId,
       );
 
       BadgeNotifier.instance.setWishlistCount(totalItems);
@@ -709,17 +714,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   child: Divider(height: 1),
                 ),
 
-                _buildSectionTitle(context.tr('productColor')),
-
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-                  child: _buildColorSelector(product),
-                ),
-
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 22),
-                  child: Divider(height: 1),
-                ),
+                if (_availableColors(product).isNotEmpty) ...[
+                  _buildSectionTitle(context.tr('productColor')),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+                    child: _buildColorSelector(product),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 22),
+                    child: Divider(height: 1),
+                  ),
+                ],
 
                 _buildSectionTitle(context.tr('productSize')),
 

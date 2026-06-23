@@ -7,11 +7,19 @@ import '../models/wishlist_model.dart';
 class WishlistService {
   final String baseUrl = '${AppConfig.apiBaseUrl}/wishlist';
 
-  Future<int> addWishlist({required int userId, required int productId}) async {
+  Future<int> addWishlist({
+    required int userId,
+    required int productId,
+    int? variantId,
+  }) async {
     final response = await http.post(
       Uri.parse(baseUrl),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'userId': userId, 'productId': productId}),
+      body: jsonEncode({
+        'userId': userId,
+        'productId': productId,
+        'variantId': variantId,
+      }),
     );
 
     if (response.statusCode != 200 && response.statusCode != 201) {

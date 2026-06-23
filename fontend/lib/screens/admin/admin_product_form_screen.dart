@@ -38,11 +38,6 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
   final TextEditingController _materialController = TextEditingController();
   final TextEditingController _manualImageUrlController =
       TextEditingController();
-  final TextEditingController _variantSizeController = TextEditingController();
-  final TextEditingController _variantColorController = TextEditingController();
-  final TextEditingController _variantPriceController = TextEditingController();
-  final TextEditingController _variantStockController = TextEditingController();
-  final TextEditingController _variantSkuController = TextEditingController();
 
   late Future<List<CategoryModel>> _categoriesFuture;
 
@@ -50,9 +45,12 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
   String _selectedGender = 'Unisex';
   bool _isActive = false;
   bool _isSubmitting = false;
-  bool _newVariantActive = true;
+  bool _isLoadingVariants = false;
   final List<_PendingImage> _pendingImages = [];
   final List<_PendingVariant> _pendingVariants = [];
+  final Map<String, _PendingVariant> _variantCache = {};
+  final List<_ClassificationGroupDraft> _classificationGroups = [];
+  int _draftId = 0;
 
   bool get isEditMode => widget.product != null;
 
@@ -71,8 +69,10 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
       _selectedGender = _normalizeGender(product.gender);
       _selectedCategoryId = product.categoryId;
       _isActive = product.isActive;
+      _loadEditClassifications(product.productId);
     } else {
       _brandController.text = 'Adidas';
+      _classificationGroups.add(_createEmptyGroup());
     }
   }
 
@@ -84,11 +84,15 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
     _brandController.dispose();
     _materialController.dispose();
     _manualImageUrlController.dispose();
-    _variantSizeController.dispose();
-    _variantColorController.dispose();
-    _variantPriceController.dispose();
-    _variantStockController.dispose();
-    _variantSkuController.dispose();
+    for (final group in _classificationGroups) {
+      group.dispose();
+    }
+    for (final variant in _pendingVariants) {
+      variant.dispose();
+    }
+    for (final variant in _variantCache.values) {
+      variant.dispose();
+    }
     super.dispose();
   }
 
@@ -96,6 +100,106 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
     const genders = ['Unisex', 'Men', 'Women', 'Kids'];
     if (value == null || value.trim().isEmpty) return 'Unisex';
     return genders.contains(value) ? value : 'Unisex';
+  }
+
+  int _nextDraftId() => ++_draftId;
+
+  _ClassificationGroupDraft _createEmptyGroup({String name = ''}) {
+    return _ClassificationGroupDraft(
+      id: _nextDraftId(),
+      name: name,
+      options: [_ClassificationOptionDraft(id: _nextDraftId())],
+    );
+  }
+
+  Future<void> _loadEditClassifications(int productId) async {
+    setState(() => _isLoadingVariants = true);
+    try {
+      final data = await _productService.getProductClassifications(productId);
+      if (!mounted) return;
+      setState(() {
+        for (final group in _classificationGroups) {
+          group.dispose();
+        }
+        for (final variant in _pendingVariants) {
+          variant.dispose();
+        }
+        for (final variant in _variantCache.values) {
+          variant.dispose();
+        }
+        _classificationGroups.clear();
+        _pendingVariants.clear();
+        _variantCache.clear();
+
+        for (final sourceGroup in data.classificationGroups) {
+          final group = _ClassificationGroupDraft(
+            id: _nextDraftId(),
+            name: sourceGroup.name,
+            options: sourceGroup.options
+                .map(
+                  (option) => _ClassificationOptionDraft(
+                    id: _nextDraftId(),
+                    name: option.name,
+                    description: option.description ?? '',
+                    image: option.imageUrl == null
+                        ? null
+                        : _PendingColorImage(imageUrl: option.imageUrl),
+                  ),
+                )
+                .toList(),
+          );
+          group.options.add(_ClassificationOptionDraft(id: _nextDraftId()));
+          _classificationGroups.add(group);
+        }
+        if (_classificationGroups.isEmpty) {
+          _classificationGroups.add(_createEmptyGroup(name: 'Size'));
+        }
+
+        for (final sourceVariant in data.variants) {
+          final values = sourceVariant.optionValues;
+          if (values.length != _classificationGroups.length) continue;
+          final optionIds = <int>[];
+          var valid = true;
+          for (var groupIndex = 0; groupIndex < values.length; groupIndex++) {
+            _ClassificationOptionDraft? matchedOption;
+            for (final candidate
+                in _classificationGroups[groupIndex].filledOptions) {
+              if (candidate.name.trim().toLowerCase() ==
+                  values[groupIndex].trim().toLowerCase()) {
+                matchedOption = candidate;
+                break;
+              }
+            }
+            if (matchedOption == null) {
+              valid = false;
+              break;
+            }
+            optionIds.add(matchedOption.id);
+          }
+          if (!valid) continue;
+          _pendingVariants.add(
+            _PendingVariant(
+              variantId: sourceVariant.variantId,
+              combinationKey: _combinationKey(optionIds),
+              optionIds: optionIds,
+              optionValues: values,
+              price: sourceVariant.price,
+              stockQuantity: sourceVariant.stockQuantity,
+              sku: sourceVariant.sku,
+              isActive: sourceVariant.isActive,
+            ),
+          );
+        }
+        _regenerateVariants(notify: false);
+      });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load product variants: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoadingVariants = false);
+    }
   }
 
   ProductModel _createdDraft(
@@ -132,6 +236,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
 
   Future<void> _submitEdit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (!_validateClassifications()) return;
 
     if (_selectedCategoryId == null) {
       ScaffoldMessenger.of(
@@ -148,6 +253,8 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
       final basePrice = double.parse(_basePriceController.text.trim());
       final brand = _brandController.text.trim();
       final material = _materialController.text.trim();
+
+      await _saveEditVariants(widget.product!.productId);
 
       await _productService.updateProduct(
         productId: widget.product!.productId,
@@ -178,6 +285,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
 
   Future<void> _submitCreate({required bool publish}) async {
     if (!_formKey.currentState!.validate()) return;
+    if (!_validateClassifications()) return;
 
     if (_selectedCategoryId == null) {
       ScaffoldMessenger.of(
@@ -290,24 +398,17 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
       }
     }
 
-    for (final variant in _pendingVariants) {
-      try {
-        await _productService.createVariant(
-          productId: productId,
-          size: variant.size,
-          color: variant.color,
-          price: variant.price,
-          stockQuantity: variant.stockQuantity,
-          sku: variant.sku,
-          isActive: variant.isActive,
-        );
-        if (variant.isActive) {
-          activeVariantCount++;
-          totalStock += variant.stockQuantity;
-        }
-      } catch (_) {
-        hasFailure = true;
-      }
+    try {
+      imageCount += await _persistClassificationImages(productId);
+      await _syncClassifications(productId);
+      activeVariantCount = _pendingVariants
+          .where((variant) => variant.isActive)
+          .length;
+      totalStock = _pendingVariants
+          .where((variant) => variant.isActive)
+          .fold(0, (sum, variant) => sum + variant.stockQuantity);
+    } catch (_) {
+      hasFailure = true;
     }
 
     return _SaveRelatedResult(
@@ -315,6 +416,74 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
       imageCount: imageCount,
       activeVariantCount: activeVariantCount,
       totalStock: totalStock,
+    );
+  }
+
+  Future<int> _persistClassificationImages(int productId) async {
+    if (_classificationGroups.isEmpty ||
+        !_isColorGroup(_classificationGroups.first.name)) {
+      return 0;
+    }
+
+    var uploadedCount = 0;
+    for (final option in _classificationGroups.first.filledOptions) {
+      final image = option.image;
+      if (image?.bytes == null || image?.fileName == null) continue;
+      final uploaded = await _productService.uploadProductImage(
+        productId: productId,
+        bytes: image!.bytes!,
+        fileName: image.fileName!,
+        isMain: false,
+      );
+      option.image = _PendingColorImage(imageUrl: uploaded.imageUrl);
+      uploadedCount++;
+    }
+    return uploadedCount;
+  }
+
+  Future<void> _saveEditVariants(int productId) async {
+    await _persistClassificationImages(productId);
+    await _syncClassifications(productId);
+  }
+
+  Future<void> _syncClassifications(int productId) async {
+    await _productService.syncProductClassifications(
+      productId: productId,
+      classificationGroups: _classificationGroups
+          .asMap()
+          .entries
+          .map(
+            (entry) => {
+              'name': entry.value.name.trim(),
+              'sortOrder': entry.key,
+              'options': entry.value.filledOptions
+                  .asMap()
+                  .entries
+                  .map(
+                    (optionEntry) => {
+                      'name': optionEntry.value.name.trim(),
+                      'description': optionEntry.value.description.trim(),
+                      'imageUrl': optionEntry.value.image?.imageUrl,
+                      'sortOrder': optionEntry.key,
+                    },
+                  )
+                  .toList(),
+            },
+          )
+          .toList(),
+      variants: _pendingVariants
+          .map(
+            (variant) => {
+              'variantId': variant.variantId,
+              'optionValues': variant.optionValues,
+              'price': variant.price,
+              'stockQuantity': variant.stockQuantity,
+              'sku': variant.sku,
+              'isActive': variant.isActive,
+              'imageUrl': _variantImageUrl(variant),
+            },
+          )
+          .toList(),
     );
   }
 
@@ -340,16 +509,6 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
     await Navigator.pushNamed(
       context,
       '/admin/products/images',
-      arguments: ProductRouteArgs(product: product),
-    );
-  }
-
-  Future<void> _goToVariants() async {
-    final product = widget.product;
-    if (product == null) return;
-    await Navigator.pushNamed(
-      context,
-      '/admin/products/variants',
       arguments: ProductRouteArgs(product: product),
     );
   }
@@ -438,63 +597,233 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
     });
   }
 
-  void _addPendingVariant() {
-    final size = _variantSizeController.text.trim();
-    final color = _variantColorController.text.trim();
-    final price = double.tryParse(_variantPriceController.text.trim());
-    final stock = int.tryParse(_variantStockController.text.trim());
-    final sku = _variantSkuController.text.trim();
+  bool _isColorGroup(String name) {
+    final normalized = name.trim().toLowerCase();
+    return normalized.contains('color') ||
+        normalized.contains('màu') ||
+        normalized.contains('mau');
+  }
 
-    if (size.isEmpty || color.isEmpty || price == null || price <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Variant size, color and price are required.'),
-        ),
-      );
-      return;
-    }
+  String _combinationKey(Iterable<int> optionIds) => optionIds.join('|');
 
-    if (stock == null || stock < 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Variant stock must be 0 or greater.')),
-      );
-      return;
-    }
-
-    final duplicate = _pendingVariants.any(
-      (variant) =>
-          variant.size.toLowerCase() == size.toLowerCase() &&
-          variant.color.toLowerCase() == color.toLowerCase(),
-    );
-    if (duplicate) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Variant size and color already added.')),
-      );
-      return;
-    }
-
+  void _addClassificationGroup() {
+    if (_classificationGroups.length >= 2) return;
     setState(() {
-      _pendingVariants.add(
-        _PendingVariant(
-          size: size,
-          color: color,
-          price: price,
-          stockQuantity: stock,
-          sku: sku.isEmpty ? null : sku,
-          isActive: _newVariantActive,
-        ),
-      );
-      _variantSizeController.clear();
-      _variantColorController.clear();
-      _variantPriceController.clear();
-      _variantStockController.clear();
-      _variantSkuController.clear();
-      _newVariantActive = true;
+      _classificationGroups.add(_createEmptyGroup());
+      _regenerateVariants(notify: false);
     });
   }
 
-  void _removePendingVariant(int index) {
-    setState(() => _pendingVariants.removeAt(index));
+  void _removeClassificationGroup(int groupIndex) {
+    if (_classificationGroups.length == 1) return;
+    setState(() {
+      _classificationGroups.removeAt(groupIndex).dispose();
+      _regenerateVariants(notify: false);
+    });
+  }
+
+  void _onGroupNameChanged() => setState(() {});
+
+  void _onOptionChanged(int groupIndex, int optionIndex) {
+    setState(() {
+      final group = _classificationGroups[groupIndex];
+      if (optionIndex == group.options.length - 1 &&
+          group.options[optionIndex].name.trim().isNotEmpty) {
+        group.options.add(_ClassificationOptionDraft(id: _nextDraftId()));
+      }
+      _regenerateVariants(notify: false);
+    });
+  }
+
+  void _removeClassificationOption(int groupIndex, int optionIndex) {
+    setState(() {
+      final group = _classificationGroups[groupIndex];
+      group.options.removeAt(optionIndex).dispose();
+      if (group.options.isEmpty || group.options.last.name.trim().isNotEmpty) {
+        group.options.add(_ClassificationOptionDraft(id: _nextDraftId()));
+      }
+      _regenerateVariants(notify: false);
+    });
+  }
+
+  void _reorderClassificationOption(
+    int groupIndex,
+    int sourceOptionId,
+    int targetOptionId,
+  ) {
+    setState(() {
+      final options = _classificationGroups[groupIndex].options;
+      final sourceIndex = options.indexWhere(
+        (item) => item.id == sourceOptionId,
+      );
+      final targetIndex = options.indexWhere(
+        (item) => item.id == targetOptionId,
+      );
+      if (sourceIndex < 0 || targetIndex < 0 || sourceIndex == targetIndex) {
+        return;
+      }
+      final option = options.removeAt(sourceIndex);
+      options.insert(targetIndex, option);
+      if (options.last.name.trim().isNotEmpty) {
+        options.add(_ClassificationOptionDraft(id: _nextDraftId()));
+      }
+      _regenerateVariants(notify: false);
+    });
+  }
+
+  Future<void> _chooseColorImage(_ClassificationOptionDraft option) async {
+    final image = await _imagePicker.pickImage(source: ImageSource.gallery);
+    if (image == null) return;
+    final bytes = await image.readAsBytes();
+    if (!mounted) return;
+    setState(() {
+      option.image = _PendingColorImage(bytes: bytes, fileName: image.name);
+    });
+  }
+
+  void _removeColorImage(_ClassificationOptionDraft option) {
+    setState(() => option.image = null);
+  }
+
+  void _regenerateVariants({bool notify = true}) {
+    final oldVariants = List<_PendingVariant>.from(_pendingVariants);
+    final oldByKey = {
+      ..._variantCache,
+      for (final variant in oldVariants) variant.combinationKey: variant,
+    };
+    _variantCache.clear();
+    final optionGroups = _classificationGroups
+        .map((group) => group.filledOptions)
+        .toList();
+    final generated = <_PendingVariant>[];
+
+    if (optionGroups.isNotEmpty &&
+        optionGroups.every((options) => options.isNotEmpty)) {
+      void buildCombination(
+        int groupIndex,
+        List<_ClassificationOptionDraft> selected,
+      ) {
+        if (groupIndex == optionGroups.length) {
+          final optionIds = selected.map((option) => option.id).toList();
+          final key = _combinationKey(optionIds);
+          final values = selected.map((option) => option.name.trim()).toList();
+          final existing = oldByKey.remove(key);
+          if (existing != null) {
+            existing
+              ..optionIds = optionIds
+              ..optionValues = values;
+            generated.add(existing);
+          } else {
+            _PendingVariant? source;
+            for (final candidate in oldVariants) {
+              final sharedLength = candidate.optionIds.length < optionIds.length
+                  ? candidate.optionIds.length
+                  : optionIds.length;
+              var samePrefix = sharedLength > 0;
+              for (var index = 0; index < sharedLength; index++) {
+                if (candidate.optionIds[index] != optionIds[index]) {
+                  samePrefix = false;
+                  break;
+                }
+              }
+              if (samePrefix) {
+                source = candidate;
+                break;
+              }
+            }
+            generated.add(
+              _PendingVariant(
+                combinationKey: key,
+                optionIds: optionIds,
+                optionValues: values,
+                price:
+                    source?.price ??
+                    double.tryParse(_basePriceController.text.trim()) ??
+                    0,
+                stockQuantity: source?.stockQuantity ?? 0,
+                isActive: source?.isActive ?? true,
+              ),
+            );
+          }
+          return;
+        }
+
+        for (final option in optionGroups[groupIndex]) {
+          buildCombination(groupIndex + 1, [...selected, option]);
+        }
+      }
+
+      buildCombination(0, []);
+    }
+
+    _variantCache.addAll(oldByKey);
+    _pendingVariants
+      ..clear()
+      ..addAll(generated);
+    if (notify && mounted) setState(() {});
+  }
+
+  String? _variantImageUrl(_PendingVariant variant) {
+    if (_classificationGroups.isEmpty ||
+        !_isColorGroup(_classificationGroups.first.name) ||
+        variant.optionIds.isEmpty) {
+      return null;
+    }
+    final colorOptionId = variant.optionIds.first;
+    for (final option in _classificationGroups.first.filledOptions) {
+      if (option.id == colorOptionId) return option.image?.imageUrl;
+    }
+    return null;
+  }
+
+  bool _validateClassifications() {
+    String? message;
+    if (_classificationGroups.isEmpty || _classificationGroups.length > 2) {
+      message = 'Product must have one or two classification groups.';
+    }
+
+    final groupNames = <String>{};
+    for (final group in _classificationGroups) {
+      if (message != null) break;
+      if (group.name.trim().isEmpty) {
+        message = 'Classification name is required.';
+        break;
+      }
+      if (!groupNames.add(group.name.trim().toLowerCase())) {
+        message = 'Classification names cannot be duplicated.';
+        break;
+      }
+      if (group.filledOptions.isEmpty) {
+        message = 'Each classification must have at least one option.';
+        break;
+      }
+      final names = <String>{};
+      for (final option in group.filledOptions) {
+        final name = option.name.trim().toLowerCase();
+        if (!names.add(name)) {
+          message = 'Option names cannot be duplicated in the same group.';
+          break;
+        }
+      }
+    }
+
+    if (message == null && _pendingVariants.isEmpty) {
+      message = 'No variants were generated.';
+    }
+    if (message == null) {
+      for (final variant in _pendingVariants) {
+        if (variant.price < 0 || variant.stockQuantity < 0) {
+          message = 'Variant price and stock must be 0 or greater.';
+          break;
+        }
+      }
+    }
+
+    if (message == null) return true;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+    return false;
   }
 
   Widget _buildCategoryDropdown() {
@@ -630,101 +959,356 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionTitle('Variants'),
+          const _SectionTitle('Phân loại hàng'),
           const Text(
-            'Optional for draft. Publishing requires at least one active variant with stock.',
+            'Tạo tối đa 2 nhóm phân loại. Danh sách variant sẽ được sinh tự động theo các tùy chọn.',
             style: TextStyle(color: AppColors.muted),
           ),
-          const SizedBox(height: 14),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final wide = constraints.maxWidth >= 720;
-              final fields = [
-                TextField(
-                  controller: _variantSizeController,
-                  decoration: const InputDecoration(labelText: 'Size'),
-                ),
-                TextField(
-                  controller: _variantColorController,
-                  decoration: const InputDecoration(labelText: 'Color'),
-                ),
-                TextField(
-                  controller: _variantPriceController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Price'),
-                ),
-                TextField(
-                  controller: _variantStockController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Stock'),
-                ),
-              ];
-
-              if (!wide) {
-                return Column(
-                  children: [
-                    for (final field in fields) ...[
-                      field,
-                      const SizedBox(height: 10),
-                    ],
-                  ],
-                );
-              }
-
-              return Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(child: fields[0]),
-                      const SizedBox(width: 10),
-                      Expanded(child: fields[1]),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(child: fields[2]),
-                      const SizedBox(width: 10),
-                      Expanded(child: fields[3]),
-                    ],
-                  ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _variantSkuController,
-            decoration: const InputDecoration(labelText: 'SKU'),
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Active variant'),
-            value: _newVariantActive,
-            onChanged: (value) => setState(() => _newVariantActive = value),
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: OutlinedButton.icon(
-              onPressed: _isSubmitting ? null : _addPendingVariant,
-              icon: const Icon(Icons.add),
-              label: const Text('Add variant'),
+          const SizedBox(height: 18),
+          ..._classificationGroups.asMap().entries.map(
+            (entry) => Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: _buildClassificationGroup(entry.key),
             ),
           ),
-          if (_pendingVariants.isNotEmpty) ...[
+          if (_classificationGroups.length < 2)
+            SizedBox(
+              width: double.infinity,
+              child: CustomPaint(
+                painter: _DashedBorderPainter(
+                  color: const Color(0xFFEE4D2D),
+                  radius: 10,
+                ),
+                child: TextButton.icon(
+                  onPressed: _isSubmitting ? null : _addClassificationGroup,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Thêm nhóm phân loại 2'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFFEE4D2D),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                ),
+              ),
+            ),
+          if (_isLoadingVariants) ...[
             const SizedBox(height: 14),
-            ..._pendingVariants.asMap().entries.map((entry) {
-              final index = entry.key;
-              final variant = entry.value;
-              return _PendingVariantTile(
-                variant: variant,
-                onRemove: () => _removePendingVariant(index),
-              );
-            }),
+            const LinearProgressIndicator(),
+          ],
+          if (_pendingVariants.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            const _SectionTitle('Danh sách phân loại hàng'),
+            const SizedBox(height: 12),
+            _buildVariantTable(),
           ],
         ],
       ),
     );
+  }
+
+  Widget _buildClassificationGroup(int groupIndex) {
+    final group = _classificationGroups[groupIndex];
+    final showColorImage = groupIndex == 0 && _isColorGroup(group.name);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F7F7),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE4E4E4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Phân loại ${groupIndex + 1}',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+              if (_classificationGroups.length > 1)
+                IconButton(
+                  tooltip: 'Xóa nhóm phân loại',
+                  onPressed: _isSubmitting
+                      ? null
+                      : () => _removeClassificationGroup(groupIndex),
+                  icon: const Icon(Icons.delete_outline),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: group.nameController,
+            onChanged: (_) => _onGroupNameChanged(),
+            decoration: const InputDecoration(
+              labelText: 'Tên phân loại',
+              hintText: 'Ví dụ: Màu Sắc, Size',
+              filled: true,
+              fillColor: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text('Tùy chọn', style: TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 10),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final twoColumns = constraints.maxWidth >= 680;
+              final itemWidth = twoColumns
+                  ? (constraints.maxWidth - 12) / 2
+                  : constraints.maxWidth;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: group.options.asMap().entries.map((entry) {
+                  final optionIndex = entry.key;
+                  final option = entry.value;
+                  final isBlank =
+                      option.name.trim().isEmpty &&
+                      optionIndex == group.options.length - 1;
+                  return SizedBox(
+                    width: itemWidth,
+                    child: DragTarget<_OptionDragData>(
+                      onWillAcceptWithDetails: (details) =>
+                          details.data.groupIndex == groupIndex &&
+                          details.data.optionId != option.id,
+                      onAcceptWithDetails: (details) =>
+                          _reorderClassificationOption(
+                            groupIndex,
+                            details.data.optionId,
+                            option.id,
+                          ),
+                      builder: (context, candidates, _) => Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: candidates.isEmpty
+                              ? Colors.white
+                              : const Color(0xFFFFEEE9),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFE1E1E1)),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                LongPressDraggable<_OptionDragData>(
+                                  data: _OptionDragData(
+                                    groupIndex: groupIndex,
+                                    optionId: option.id,
+                                  ),
+                                  feedback: const Material(
+                                    color: Colors.transparent,
+                                    child: Icon(Icons.drag_indicator),
+                                  ),
+                                  child: Icon(
+                                    Icons.drag_indicator,
+                                    color: isBlank
+                                        ? Colors.black26
+                                        : Colors.black54,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: TextField(
+                                    controller: option.nameController,
+                                    onChanged: (_) => _onOptionChanged(
+                                      groupIndex,
+                                      optionIndex,
+                                    ),
+                                    decoration: const InputDecoration(
+                                      hintText: 'Nhập',
+                                      isDense: true,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: TextField(
+                                    controller: option.descriptionController,
+                                    onChanged: (_) => setState(() {}),
+                                    decoration: const InputDecoration(
+                                      hintText: 'Thêm mô tả',
+                                      isDense: true,
+                                    ),
+                                  ),
+                                ),
+                                if (!isBlank)
+                                  IconButton(
+                                    tooltip: 'Xóa tùy chọn',
+                                    onPressed: _isSubmitting
+                                        ? null
+                                        : () => _removeClassificationOption(
+                                            groupIndex,
+                                            optionIndex,
+                                          ),
+                                    icon: const Icon(Icons.close, size: 20),
+                                  ),
+                              ],
+                            ),
+                            if (showColorImage && !isBlank) ...[
+                              const SizedBox(height: 10),
+                              _buildColorImageAssignment(option),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildColorImageAssignment(_ClassificationOptionDraft option) {
+    final image = option.image;
+    return Row(
+      children: [
+        Container(
+          width: 52,
+          height: 52,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1F1F1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: image?.bytes != null
+              ? Image.memory(image!.bytes!, fit: BoxFit.cover)
+              : image?.imageUrl != null
+              ? Image.network(
+                  AppConfig.resolveImageUrl(image!.imageUrl!),
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => const Icon(Icons.broken_image),
+                )
+              : const Icon(Icons.image_outlined),
+        ),
+        const SizedBox(width: 10),
+        OutlinedButton.icon(
+          onPressed: _isSubmitting ? null : () => _chooseColorImage(option),
+          icon: const Icon(Icons.upload_outlined, size: 18),
+          label: Text(image == null ? 'Chọn ảnh màu' : 'Đổi ảnh'),
+        ),
+        if (image != null)
+          IconButton(
+            tooltip: 'Xóa ảnh màu',
+            onPressed: _isSubmitting ? null : () => _removeColorImage(option),
+            icon: const Icon(Icons.delete_outline),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildVariantTable() {
+    final showImage =
+        _classificationGroups.isNotEmpty &&
+        _isColorGroup(_classificationGroups.first.name);
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          headingRowColor: WidgetStateProperty.all(const Color(0xFFF5F5F5)),
+          columns: [
+            const DataColumn(label: Text('Phân loại')),
+            const DataColumn(label: Text('Giá')),
+            const DataColumn(label: Text('Số lượng tồn kho')),
+            const DataColumn(label: Text('SKU')),
+            const DataColumn(label: Text('Trạng thái')),
+            if (showImage) const DataColumn(label: Text('Ảnh')),
+          ],
+          rows: _pendingVariants.map((variant) {
+            final colorImage = _variantColorImage(variant);
+            return DataRow(
+              cells: [
+                DataCell(
+                  SizedBox(
+                    width: 150,
+                    child: Text(
+                      variant.optionValues.join(' / '),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+                DataCell(
+                  SizedBox(
+                    width: 130,
+                    child: TextField(
+                      controller: variant.priceController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(isDense: true),
+                    ),
+                  ),
+                ),
+                DataCell(
+                  SizedBox(
+                    width: 130,
+                    child: TextField(
+                      controller: variant.stockController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(isDense: true),
+                    ),
+                  ),
+                ),
+                DataCell(
+                  SizedBox(
+                    width: 150,
+                    child: TextField(
+                      controller: variant.skuController,
+                      decoration: const InputDecoration(isDense: true),
+                    ),
+                  ),
+                ),
+                DataCell(
+                  Switch(
+                    value: variant.isActive,
+                    onChanged: _isSubmitting
+                        ? null
+                        : (value) => setState(() => variant.isActive = value),
+                  ),
+                ),
+                if (showImage)
+                  DataCell(
+                    Container(
+                      width: 46,
+                      height: 46,
+                      clipBehavior: Clip.antiAlias,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F1F1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: colorImage?.bytes != null
+                          ? Image.memory(colorImage!.bytes!, fit: BoxFit.cover)
+                          : colorImage?.imageUrl != null
+                          ? Image.network(
+                              AppConfig.resolveImageUrl(colorImage!.imageUrl!),
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) =>
+                                  const Icon(Icons.broken_image, size: 20),
+                            )
+                          : const Icon(Icons.image_outlined, size: 20),
+                    ),
+                  ),
+              ],
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  _PendingColorImage? _variantColorImage(_PendingVariant variant) {
+    if (_classificationGroups.isEmpty || variant.optionIds.isEmpty) return null;
+    final optionId = variant.optionIds.first;
+    for (final option in _classificationGroups.first.filledOptions) {
+      if (option.id == optionId) return option.image;
+    }
+    return null;
   }
 
   @override
@@ -767,24 +1351,13 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                     onChanged: _setActiveStatus,
                   ),
                   const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _goToImages,
-                          icon: const Icon(Icons.image_outlined),
-                          label: const Text('Manage Images'),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _goToVariants,
-                          icon: const Icon(Icons.inventory_2_outlined),
-                          label: const Text('Manage Variants'),
-                        ),
-                      ),
-                    ],
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _goToImages,
+                      icon: const Icon(Icons.image_outlined),
+                      label: const Text('Manage Images'),
+                    ),
                   ),
                   const SizedBox(height: 16),
                 ],
@@ -851,28 +1424,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                           controller: _materialController,
                           label: 'Material',
                         ),
-                        const SizedBox(height: 26),
-                        if (isEditMode)
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: const Text('Cancel'),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                flex: 2,
-                                child: ElevatedButton(
-                                  onPressed: _isSubmitting ? null : _submitEdit,
-                                  child: _isSubmitting
-                                      ? const CircularProgressIndicator()
-                                      : const Text('Save changes'),
-                                ),
-                              ),
-                            ],
-                          ),
+                        const SizedBox(height: 10),
                       ],
                     ),
                   ),
@@ -887,6 +1439,34 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                     isSubmitting: _isSubmitting,
                     onSaveDraft: () => _submitCreate(publish: false),
                     onSavePublish: () => _submitCreate(publish: true),
+                  ),
+                ] else ...[
+                  const SizedBox(height: 16),
+                  _buildCreateVariantsSection(),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _isSubmitting
+                              ? null
+                              : () => Navigator.pop(context),
+                          child: const Text('Cancel'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          onPressed: _isSubmitting || _isLoadingVariants
+                              ? null
+                              : _submitEdit,
+                          child: _isSubmitting
+                              ? const CircularProgressIndicator()
+                              : const Text('Save product and variants'),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ],
@@ -994,21 +1574,135 @@ class _PendingImage {
 }
 
 class _PendingVariant {
-  final String size;
-  final String color;
-  final double price;
-  final int stockQuantity;
-  final String? sku;
-  final bool isActive;
+  final int? variantId;
+  String combinationKey;
+  List<int> optionIds;
+  List<String> optionValues;
+  final TextEditingController priceController;
+  final TextEditingController stockController;
+  final TextEditingController skuController;
+  bool isActive;
 
-  const _PendingVariant({
-    required this.size,
-    required this.color,
-    required this.price,
-    required this.stockQuantity,
-    this.sku,
+  _PendingVariant({
+    this.variantId,
+    required this.combinationKey,
+    required this.optionIds,
+    required this.optionValues,
+    required double price,
+    required int stockQuantity,
+    String? sku,
     required this.isActive,
-  });
+  }) : priceController = TextEditingController(text: _numberText(price)),
+       stockController = TextEditingController(text: stockQuantity.toString()),
+       skuController = TextEditingController(text: sku ?? '');
+
+  double get price => double.tryParse(priceController.text.trim()) ?? -1;
+  int get stockQuantity => int.tryParse(stockController.text.trim()) ?? -1;
+  String? get sku {
+    final value = skuController.text.trim();
+    return value.isEmpty ? null : value;
+  }
+
+  void dispose() {
+    priceController.dispose();
+    stockController.dispose();
+    skuController.dispose();
+  }
+
+  static String _numberText(double value) => value == value.roundToDouble()
+      ? value.toStringAsFixed(0)
+      : value.toString();
+}
+
+class _ClassificationGroupDraft {
+  final int id;
+  final TextEditingController nameController;
+  final List<_ClassificationOptionDraft> options;
+
+  _ClassificationGroupDraft({
+    required this.id,
+    String name = '',
+    required this.options,
+  }) : nameController = TextEditingController(text: name);
+
+  String get name => nameController.text;
+  List<_ClassificationOptionDraft> get filledOptions =>
+      options.where((option) => option.name.trim().isNotEmpty).toList();
+
+  void dispose() {
+    nameController.dispose();
+    for (final option in options) {
+      option.dispose();
+    }
+  }
+}
+
+class _ClassificationOptionDraft {
+  final int id;
+  final TextEditingController nameController;
+  final TextEditingController descriptionController;
+  _PendingColorImage? image;
+
+  _ClassificationOptionDraft({
+    required this.id,
+    String name = '',
+    String description = '',
+    this.image,
+  }) : nameController = TextEditingController(text: name),
+       descriptionController = TextEditingController(text: description);
+
+  String get name => nameController.text;
+  String get description => descriptionController.text;
+
+  void dispose() {
+    nameController.dispose();
+    descriptionController.dispose();
+  }
+}
+
+class _OptionDragData {
+  final int groupIndex;
+  final int optionId;
+
+  const _OptionDragData({required this.groupIndex, required this.optionId});
+}
+
+class _DashedBorderPainter extends CustomPainter {
+  final Color color;
+  final double radius;
+
+  const _DashedBorderPainter({required this.color, required this.radius});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.4;
+    final path = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius)),
+      );
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        canvas.drawPath(metric.extractPath(distance, distance + 7), paint);
+        distance += 12;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.radius != radius;
+}
+
+class _PendingColorImage {
+  final Uint8List? bytes;
+  final String? fileName;
+  final String? imageUrl;
+
+  const _PendingColorImage({this.bytes, this.fileName, this.imageUrl});
 }
 
 class _SaveRelatedResult {
@@ -1106,47 +1800,6 @@ class _PendingImageCard extends StatelessWidget {
                 ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PendingVariantTile extends StatelessWidget {
-  final _PendingVariant variant;
-  final VoidCallback onRemove;
-
-  const _PendingVariantTile({required this.variant, required this.onRemove});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Chip(label: Text('Size ${variant.size}')),
-                Chip(label: Text(variant.color)),
-                Chip(label: Text('Stock ${variant.stockQuantity}')),
-                Chip(label: Text(variant.isActive ? 'Active' : 'Inactive')),
-              ],
-            ),
-          ),
-          IconButton(
-            tooltip: 'Remove variant',
-            onPressed: onRemove,
-            icon: const Icon(Icons.delete_outline),
           ),
         ],
       ),

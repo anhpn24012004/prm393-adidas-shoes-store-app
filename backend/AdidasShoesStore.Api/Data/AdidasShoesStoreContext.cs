@@ -198,6 +198,7 @@ public partial class AdidasShoesStoreContext : DbContext
             entity.Property(e => e.Brand)
                 .HasMaxLength(100)
                 .HasDefaultValue("Adidas");
+            entity.Property(e => e.ClassificationGroupsJson).HasColumnType("nvarchar(max)");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
@@ -232,6 +233,8 @@ public partial class AdidasShoesStoreContext : DbContext
             entity.HasIndex(e => e.Sku, "UQ__ProductV__CA1ECF0D8EE27279").IsUnique();
 
             entity.Property(e => e.Color).HasMaxLength(50);
+            entity.Property(e => e.ImageUrl).HasMaxLength(500);
+            entity.Property(e => e.OptionValuesJson).HasColumnType("nvarchar(max)");
             entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.Price).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.Size).HasMaxLength(20);
@@ -412,6 +415,10 @@ public partial class AdidasShoesStoreContext : DbContext
                 .HasForeignKey(d => d.ProductId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__Wishlists__Produ__05D8E0BE");
+
+            entity.HasOne(d => d.Variant).WithMany(p => p.Wishlists)
+                .HasForeignKey(d => d.VariantId)
+                .OnDelete(DeleteBehavior.NoAction);
 
             entity.HasOne(d => d.User).WithMany(p => p.Wishlists)
                 .HasForeignKey(d => d.UserId)
