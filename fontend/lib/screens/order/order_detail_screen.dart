@@ -404,7 +404,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _sectionTitle(context.tr('shipping')),
-          Text(context.tr('shipmentFallback')),
+          const Text('Đang chờ shop xử lý vận chuyển'),
           const SizedBox(height: 6),
           _infoRow(context.tr('orderStatus'), _statusLabel(order.status)),
           if (canTrack) ...[
@@ -433,8 +433,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         ),
         _infoRow(
           context.tr('trackingNumber'),
-          shipment.trackingNumber ?? context.tr('notAvailable'),
+          shipment.trackingNumber ??
+              shipment.ghnOrderCode ??
+              context.tr('notAvailable'),
         ),
+        if (shipment.ghnOrderCode?.isNotEmpty == true)
+          _infoRow('GHN order code', shipment.ghnOrderCode!),
         _infoRow(
           context.tr('estimatedDelivery'),
           formatDate(shipment.estimatedDeliveryDate),
@@ -467,7 +471,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   Widget _buildDetail(OrderDetail order, ShipmentDetail? shipment) {
     final canCancel =
-        order.status == 'PendingPayment' || order.status == 'Paid';
+        order.status == 'PendingPayment' ||
+        (order.status == 'Processing' &&
+            order.payment.paymentMethod == 'COD' &&
+            order.payment.paymentStatus != 'Success');
     final paymentStatus =
         _paymentStatus?.paymentStatus ?? order.payment.paymentStatus;
     final paidAt = _paymentStatus?.paidAt ?? order.payment.paidAt;

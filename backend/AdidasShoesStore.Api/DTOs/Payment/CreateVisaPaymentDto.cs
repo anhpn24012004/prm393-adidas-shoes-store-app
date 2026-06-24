@@ -13,5 +13,7 @@ namespace AdidasShoesStore.Api.DTOs.Payment
         public string ExpiryYear { get; set; } = null!;
 
         public string Cvv { get; set; } = null!;
+
+        public decimal? Amount { get; set; }
     }
 }

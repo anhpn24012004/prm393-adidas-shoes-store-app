@@ -23,6 +23,16 @@ public partial class Order
 
     public string ShippingAddress { get; set; } = null!;
 
+    public int? ToDistrictId { get; set; }
+
+    public string? ToWardCode { get; set; }
+
+    public string? ToProvinceName { get; set; }
+
+    public string? ToDistrictName { get; set; }
+
+    public string? ToWardName { get; set; }
+
     public string ReceiverName { get; set; } = null!;
 
     public string ReceiverPhone { get; set; } = null!;

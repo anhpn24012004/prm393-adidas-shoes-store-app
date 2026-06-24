@@ -4,6 +4,12 @@ class CreateOrderRequest {
   final String? note;
   final int? buyNowVariantId;
   final int? buyNowQuantity;
+  final int toDistrictId;
+  final String toWardCode;
+  final String? toProvinceName;
+  final String? toDistrictName;
+  final String? toWardName;
+  final double shippingFee;
 
   CreateOrderRequest({
     required this.addressId,
@@ -11,6 +17,12 @@ class CreateOrderRequest {
     this.note,
     this.buyNowVariantId,
     this.buyNowQuantity,
+    required this.toDistrictId,
+    required this.toWardCode,
+    this.toProvinceName,
+    this.toDistrictName,
+    this.toWardName,
+    required this.shippingFee,
   });
 
   Map<String, dynamic> toJson() {
@@ -20,6 +32,12 @@ class CreateOrderRequest {
       'note': note,
       'buyNowVariantId': buyNowVariantId,
       'buyNowQuantity': buyNowQuantity,
+      'toDistrictId': toDistrictId,
+      'toWardCode': toWardCode,
+      'toProvinceName': toProvinceName,
+      'toDistrictName': toDistrictName,
+      'toWardName': toWardName,
+      'shippingFee': shippingFee,
     };
   }
 }
@@ -83,6 +101,11 @@ class OrderDetail {
   final String status;
   final bool canReview;
   final String shippingAddress;
+  final int? toDistrictId;
+  final String? toWardCode;
+  final String? toProvinceName;
+  final String? toDistrictName;
+  final String? toWardName;
   final String receiverName;
   final String receiverPhone;
   final String? note;
@@ -100,6 +123,11 @@ class OrderDetail {
     required this.status,
     required this.canReview,
     required this.shippingAddress,
+    this.toDistrictId,
+    this.toWardCode,
+    this.toProvinceName,
+    this.toDistrictName,
+    this.toWardName,
     required this.receiverName,
     required this.receiverPhone,
     this.note,
@@ -119,6 +147,11 @@ class OrderDetail {
       status: json['status'] ?? '',
       canReview: json['canReview'] ?? false,
       shippingAddress: json['shippingAddress'] ?? '',
+      toDistrictId: json['toDistrictId'],
+      toWardCode: json['toWardCode'],
+      toProvinceName: json['toProvinceName'],
+      toDistrictName: json['toDistrictName'],
+      toWardName: json['toWardName'],
       receiverName: json['receiverName'] ?? '',
       receiverPhone: json['receiverPhone'] ?? '',
       note: json['note'],
@@ -215,10 +248,7 @@ class CreatePayPalPaymentResponse {
   final String approvalUrl;
   final String? paypalOrderId;
 
-  CreatePayPalPaymentResponse({
-    required this.approvalUrl,
-    this.paypalOrderId,
-  });
+  CreatePayPalPaymentResponse({required this.approvalUrl, this.paypalOrderId});
 
   factory CreatePayPalPaymentResponse.fromJson(Map<String, dynamic> json) {
     return CreatePayPalPaymentResponse(
@@ -264,6 +294,7 @@ class VisaPaymentRequest {
   final String expiryMonth;
   final String expiryYear;
   final String cvv;
+  final double? amount;
 
   VisaPaymentRequest({
     required this.orderId,
@@ -272,6 +303,7 @@ class VisaPaymentRequest {
     required this.expiryMonth,
     required this.expiryYear,
     required this.cvv,
+    this.amount,
   });
 
   Map<String, dynamic> toJson() {
@@ -282,6 +314,7 @@ class VisaPaymentRequest {
       'expiryMonth': expiryMonth,
       'expiryYear': expiryYear,
       'cvv': cvv,
+      if (amount != null) 'amount': amount,
     };
   }
 }

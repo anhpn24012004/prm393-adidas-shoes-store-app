@@ -188,6 +188,25 @@ namespace AdidasShoesStore.Api.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<int?>("ToDistrictId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ToDistrictName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ToProvinceName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ToWardCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("ToWardName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<decimal>("TotalAmount")
                         .HasColumnType("decimal(18, 2)");
 
@@ -307,11 +326,11 @@ namespace AdidasShoesStore.Api.Migrations
                         .HasColumnType("nvarchar(100)")
                         .HasDefaultValue("Adidas");
 
-                    b.Property<string>("ClassificationGroupsJson")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<int>("CategoryId")
                         .HasColumnType("int");
+
+                    b.Property<string>("ClassificationGroupsJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -393,13 +412,13 @@ namespace AdidasShoesStore.Api.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<string>("OptionValuesJson")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<bool?>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
                         .HasDefaultValue(true);
+
+                    b.Property<string>("OptionValuesJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<decimal>("Price")
                         .HasColumnType("decimal(18, 2)");
@@ -566,6 +585,11 @@ namespace AdidasShoesStore.Api.Migrations
                         .HasColumnType("datetime")
                         .HasDefaultValueSql("(getdate())");
 
+                    b.Property<int>("EditCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
                     b.Property<int>("ProductId")
                         .HasColumnType("int");
 
@@ -618,11 +642,25 @@ namespace AdidasShoesStore.Api.Migrations
                     b.Property<DateTime?>("DeliveredAt")
                         .HasColumnType("datetime");
 
+                    b.Property<DateTime?>("ExpectedDeliveryTime")
+                        .HasColumnType("datetime");
+
+                    b.Property<string>("GhnOrderCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<int>("OrderId")
                         .HasColumnType("int");
 
+                    b.Property<string>("RawGhnStatus")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<DateTime?>("ShippedAt")
                         .HasColumnType("datetime");
+
+                    b.Property<decimal?>("ShippingFee")
+                        .HasColumnType("decimal(18, 2)");
 
                     b.Property<string>("ShippingProvider")
                         .HasMaxLength(100)
@@ -1045,7 +1083,8 @@ namespace AdidasShoesStore.Api.Migrations
 
                     b.HasOne("AdidasShoesStore.Api.Models.ProductVariant", "Variant")
                         .WithMany("Wishlists")
-                        .HasForeignKey("VariantId");
+                        .HasForeignKey("VariantId")
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.Navigation("Product");
 

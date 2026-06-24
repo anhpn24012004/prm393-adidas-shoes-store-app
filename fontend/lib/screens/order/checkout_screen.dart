@@ -3,10 +3,12 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../config/app_config.dart';
 import '../../models/address_model.dart';
+import '../../models/ghn_model.dart';
 import '../../models/order_model.dart';
 import '../../localization/app_localization.dart';
 import '../../services/address_service.dart';
 import '../../services/cart_service.dart';
+import '../../services/ghn_service.dart';
 import '../../services/order_service.dart';
 import '../../utils/currency_formatter.dart';
 
@@ -18,12 +20,12 @@ class CheckoutScreen extends StatefulWidget {
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
-  static const double _shippingFee = 30000;
   static const double _discountAmount = 0;
 
   final OrderService _orderService = OrderService();
   final AddressService _addressService = AddressService();
   final CartService _cartService = CartService();
+  final GhnService _ghnService = GhnService();
   final TextEditingController _noteController = TextEditingController();
   final TextEditingController _visaCardNumberController =
       TextEditingController();
@@ -42,6 +44,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   String? _buyNowSize;
   String? _buyNowColor;
   Future<_CheckoutSummary>? _summaryFuture;
+  Future<List<GhnProvince>>? _provincesFuture;
+  List<GhnDistrict> _districts = [];
+  List<GhnWard> _wards = [];
+  GhnProvince? _selectedProvince;
+  GhnDistrict? _selectedDistrict;
+  GhnWard? _selectedWard;
+  double? _calculatedShippingFee;
+  bool _isLoadingDistricts = false;
+  bool _isLoadingWards = false;
+  bool _isCalculatingShippingFee = false;
   String _paymentMethod = 'COD';
   bool _isSubmitting = false;
   bool _showPaymentStep = false;
@@ -51,6 +63,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   void initState() {
     super.initState();
     _addresses = _addressService.getAddresses();
+    _provincesFuture = _ghnService.getProvinces();
   }
 
   @override
@@ -93,6 +106,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
 
+    if (!_hasValidGhnShipping) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Không tính được phí vận chuyển, vui lòng chọn lại địa chỉ.',
+          ),
+        ),
+      );
+      return;
+    }
+
     VisaPaymentRequest? visaPayment;
 
     if (_paymentMethod == 'VISA') {
@@ -116,6 +140,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             : _noteController.text.trim(),
         buyNowVariantId: _buyNowVariantId,
         buyNowQuantity: _buyNowQuantity,
+        toDistrictId: _selectedDistrict!.districtId,
+        toWardCode: _selectedWard!.wardCode,
+        toProvinceName: _selectedProvince?.provinceName,
+        toDistrictName: _selectedDistrict?.districtName,
+        toWardName: _selectedWard?.wardName,
+        shippingFee: _calculatedShippingFee!,
       );
 
       if (!mounted) return;
@@ -169,7 +199,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Visa'),
+          title: const Text('Simulated Visa Payment'),
           content: Form(
             key: formKey,
             child: SingleChildScrollView(
@@ -529,6 +559,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           expiryMonth: payment.expiryMonth,
           expiryYear: payment.expiryYear,
           cvv: payment.cvv,
+          amount: order.finalAmount,
         ),
       );
 
@@ -557,9 +588,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
       return _CheckoutSummary(
         subtotal: subtotal,
-        shippingFee: _shippingFee,
+        shippingFee: _calculatedShippingFee ?? 0,
         discountAmount: _discountAmount,
-        finalAmount: subtotal + _shippingFee - _discountAmount,
+        finalAmount: subtotal + (_calculatedShippingFee ?? 0) - _discountAmount,
         totalItems: quantity,
         title: _buyNowProductName ?? 'Buy now item',
         imageUrl: _buyNowImageUrl,
@@ -574,9 +605,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     return _CheckoutSummary(
       subtotal: cart.totalAmount,
-      shippingFee: _shippingFee,
+      shippingFee: _calculatedShippingFee ?? 0,
       discountAmount: _discountAmount,
-      finalAmount: cart.totalAmount + _shippingFee - _discountAmount,
+      finalAmount:
+          cart.totalAmount + (_calculatedShippingFee ?? 0) - _discountAmount,
       totalItems: cart.totalItems,
       title: 'Cart items',
     );
@@ -703,9 +735,235 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
 
+    if (!_hasValidGhnShipping) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Không tính được phí vận chuyển, vui lòng chọn lại địa chỉ.',
+          ),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _showPaymentStep = true;
     });
+  }
+
+  bool get _hasValidGhnShipping {
+    return _selectedDistrict != null &&
+        _selectedWard != null &&
+        _calculatedShippingFee != null &&
+        _calculatedShippingFee! > 0;
+  }
+
+  Future<void> _loadDistricts(GhnProvince? province) async {
+    setState(() {
+      _selectedProvince = province;
+      _selectedDistrict = null;
+      _selectedWard = null;
+      _districts = [];
+      _wards = [];
+      _calculatedShippingFee = null;
+      _isLoadingDistricts = province != null;
+      _summaryFuture = _loadCheckoutSummary();
+    });
+
+    if (province == null) return;
+
+    try {
+      final districts = await _ghnService.getDistricts(province.provinceId);
+      if (!mounted) return;
+      setState(() {
+        _districts = districts;
+      });
+    } catch (e) {
+      if (mounted) _showError(e.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingDistricts = false);
+      }
+    }
+  }
+
+  Future<void> _loadWards(GhnDistrict? district) async {
+    setState(() {
+      _selectedDistrict = district;
+      _selectedWard = null;
+      _wards = [];
+      _calculatedShippingFee = null;
+      _isLoadingWards = district != null;
+      _summaryFuture = _loadCheckoutSummary();
+    });
+
+    if (district == null) return;
+
+    try {
+      final wards = await _ghnService.getWards(district.districtId);
+      if (!mounted) return;
+      setState(() {
+        _wards = wards;
+      });
+    } catch (e) {
+      if (mounted) _showError(e.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingWards = false);
+      }
+    }
+  }
+
+  Future<void> _selectWard(GhnWard? ward) async {
+    setState(() {
+      _selectedWard = ward;
+      _calculatedShippingFee = null;
+      _summaryFuture = _loadCheckoutSummary();
+    });
+
+    if (ward == null || _selectedDistrict == null) return;
+
+    await _calculateShippingFee();
+  }
+
+  Future<void> _calculateShippingFee() async {
+    final district = _selectedDistrict;
+    final ward = _selectedWard;
+
+    if (district == null || ward == null) return;
+
+    setState(() => _isCalculatingShippingFee = true);
+
+    try {
+      final quantities = await _shippingQuantities();
+      final fee = await _ghnService.calculateFee(
+        toDistrictId: district.districtId,
+        toWardCode: ward.wardCode,
+        quantities: quantities,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _calculatedShippingFee = fee.shippingFee;
+        _summaryFuture = _loadCheckoutSummary();
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _calculatedShippingFee = null;
+        _summaryFuture = _loadCheckoutSummary();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Không tính được phí vận chuyển, vui lòng chọn lại địa chỉ.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isCalculatingShippingFee = false);
+      }
+    }
+  }
+
+  Future<List<int>> _shippingQuantities() async {
+    if (_buyNowVariantId != null) {
+      return [_buyNowQuantity ?? 1];
+    }
+
+    final cart = await _cartService.getCart(AppConfig.currentUserId);
+    return cart.cartItems.map((item) => item.quantity).toList();
+  }
+
+  Widget _buildGhnShippingSelector() {
+    return FutureBuilder<List<GhnProvince>>(
+      future: _provincesFuture,
+      builder: (context, snapshot) {
+        final provinces = snapshot.data ?? [];
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'GHN delivery area',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<GhnProvince>(
+              initialValue: _selectedProvince,
+              decoration: const InputDecoration(
+                labelText: 'Province / City',
+                border: OutlineInputBorder(),
+              ),
+              items: provinces
+                  .map(
+                    (province) => DropdownMenuItem(
+                      value: province,
+                      child: Text(province.provinceName),
+                    ),
+                  )
+                  .toList(),
+              onChanged:
+                  _isSubmitting ||
+                      snapshot.connectionState == ConnectionState.waiting
+                  ? null
+                  : _loadDistricts,
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<GhnDistrict>(
+              initialValue: _selectedDistrict,
+              decoration: InputDecoration(
+                labelText: _isLoadingDistricts
+                    ? 'Loading districts...'
+                    : 'District',
+                border: const OutlineInputBorder(),
+              ),
+              items: _districts
+                  .map(
+                    (district) => DropdownMenuItem(
+                      value: district,
+                      child: Text(district.districtName),
+                    ),
+                  )
+                  .toList(),
+              onChanged: _isSubmitting || _isLoadingDistricts
+                  ? null
+                  : _loadWards,
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<GhnWard>(
+              initialValue: _selectedWard,
+              decoration: InputDecoration(
+                labelText: _isLoadingWards ? 'Loading wards...' : 'Ward',
+                border: const OutlineInputBorder(),
+              ),
+              items: _wards
+                  .map(
+                    (ward) => DropdownMenuItem(
+                      value: ward,
+                      child: Text(ward.wardName),
+                    ),
+                  )
+                  .toList(),
+              onChanged: _isSubmitting || _isLoadingWards ? null : _selectWard,
+            ),
+            const SizedBox(height: 8),
+            if (_isCalculatingShippingFee)
+              const LinearProgressIndicator()
+            else if (_calculatedShippingFee != null)
+              Text('Shipping fee: ${formatVnd(_calculatedShippingFee!)}')
+            else
+              const Text(
+                'Select province, district, and ward to calculate shipping fee.',
+              ),
+          ],
+        );
+      },
+    );
   }
 
   void _backToReview() {
@@ -784,7 +1042,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   _qrInfoRow('Content', payment.transferContent),
                   const SizedBox(height: 8),
                   const Text(
-                    'Scan this QR with your banking app. Your order will stay pending until the transfer is confirmed.',
+                    'Scan this QR with your banking app. Your order will stay pending until admin confirms the transfer.',
                   ),
                 ],
               ),
@@ -814,7 +1072,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     );
                   }
                 },
-                child: const Text('I have transferred'),
+                child: const Text('Tôi đã chuyển khoản'),
               ),
             ],
           );
@@ -836,8 +1094,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         context: context,
         builder: (context) {
           return AlertDialog(
-            title: const Text('Payment successful'),
-            content: const Text('Your QR payment has been confirmed.'),
+            title: const Text('Đang chờ xác nhận'),
+            content: const Text('Đơn hàng đang chờ admin xác nhận thanh toán.'),
             actions: [
               ElevatedButton(
                 onPressed: () => Navigator.pop(context),
@@ -1003,7 +1261,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         paymentOption('VNPAY', 'VNPAY'),
         paymentOption('PAYPAL', 'PayPal'),
         paymentOption('QR', 'QR'),
-        paymentOption('VISA', 'Visa'),
+        paymentOption('VISA', 'Simulated Visa Payment'),
       ],
     );
   }
@@ -1070,6 +1328,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   ),
                   const SizedBox(height: 8),
                   _buildAddressSelector(),
+                  const SizedBox(height: 20),
+                  _buildGhnShippingSelector(),
                   const SizedBox(height: 20),
                   _buildOrderSummary(),
                   const SizedBox(height: 16),
