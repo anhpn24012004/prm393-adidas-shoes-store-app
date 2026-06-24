@@ -3,6 +3,7 @@ using AdidasShoesStore.Api.Helpers;
 using AdidasShoesStore.Api.Models;
 using AdidasShoesStore.Api.Services.Implementations;
 using AdidasShoesStore.Api.Services.Interfaces;
+using AdidasShoesStore.Api.Settings;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -60,6 +61,9 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.AddDbContext<AdidasShoesStoreContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+builder.Services.Configure<GhnSettings>(builder.Configuration.GetSection("GhnSettings"));
+builder.Services.AddHttpClient("GHN");
+
 // Register custom services
 builder.Services.AddScoped<JwtHelper>();
 builder.Services.AddScoped<VnPayHelper>();
@@ -73,6 +77,7 @@ builder.Services.AddScoped<IRefundService, RefundService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IShipmentService, ShipmentService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<IGhnService, GhnService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IAdminDashboardService, AdminDashboardService>();
 

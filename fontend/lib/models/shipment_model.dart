@@ -8,6 +8,7 @@ class ShipmentSummary {
   final String? receiverPhone;
   final String? carrier;
   final String? trackingNumber;
+  final String? ghnOrderCode;
   final String? shipmentStatus;
   final String? orderStatus;
   final String? paymentStatus;
@@ -26,6 +27,7 @@ class ShipmentSummary {
     this.receiverPhone,
     this.carrier,
     this.trackingNumber,
+    this.ghnOrderCode,
     this.shipmentStatus,
     this.orderStatus,
     this.paymentStatus,
@@ -46,6 +48,7 @@ class ShipmentSummary {
       receiverPhone: json['receiverPhone'],
       carrier: json['carrier'] ?? json['shippingProvider'],
       trackingNumber: json['trackingNumber'] ?? json['trackingCode'],
+      ghnOrderCode: json['ghnOrderCode'],
       shipmentStatus: json['shipmentStatus'] ?? json['status'],
       orderStatus: json['orderStatus'],
       paymentStatus: json['paymentStatus'],
@@ -67,6 +70,7 @@ class ShipmentDetail {
   final String? shipmentStatus;
   final String? carrier;
   final String? trackingNumber;
+  final String? ghnOrderCode;
   final DateTime? estimatedDeliveryDate;
   final DateTime? shippedAt;
   final DateTime? deliveredAt;
@@ -95,6 +99,7 @@ class ShipmentDetail {
     this.shipmentStatus,
     this.carrier,
     this.trackingNumber,
+    this.ghnOrderCode,
     this.estimatedDeliveryDate,
     this.shippedAt,
     this.deliveredAt,
@@ -125,6 +130,7 @@ class ShipmentDetail {
       shipmentStatus: json['shipmentStatus'] ?? json['status'],
       carrier: json['carrier'] ?? json['shippingProvider'],
       trackingNumber: json['trackingNumber'] ?? json['trackingCode'],
+      ghnOrderCode: json['ghnOrderCode'],
       estimatedDeliveryDate: DateTime.tryParse(
         json['estimatedDeliveryDate']?.toString() ?? '',
       ),
@@ -160,6 +166,8 @@ class ShipmentTracking {
   final String? shipmentStatus;
   final String? carrier;
   final String? trackingNumber;
+  final String? ghnOrderCode;
+  final String? rawGhnStatus;
   final DateTime? estimatedDeliveryDate;
   final DateTime? shippedAt;
   final DateTime? deliveredAt;
@@ -175,6 +183,8 @@ class ShipmentTracking {
     this.shipmentStatus,
     this.carrier,
     this.trackingNumber,
+    this.ghnOrderCode,
+    this.rawGhnStatus,
     this.estimatedDeliveryDate,
     this.shippedAt,
     this.deliveredAt,
@@ -192,6 +202,8 @@ class ShipmentTracking {
       shipmentStatus: json['shipmentStatus'],
       carrier: json['carrier'],
       trackingNumber: json['trackingNumber'],
+      ghnOrderCode: json['ghnOrderCode'],
+      rawGhnStatus: json['rawGhnStatus'],
       estimatedDeliveryDate: DateTime.tryParse(
         json['estimatedDeliveryDate']?.toString() ?? '',
       ),

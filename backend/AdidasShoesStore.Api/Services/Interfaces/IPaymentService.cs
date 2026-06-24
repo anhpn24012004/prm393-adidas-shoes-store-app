@@ -69,6 +69,10 @@ namespace AdidasShoesStore.Api.Services.Interfaces
             ConfirmQrPaymentDto dto
         );
 
+        Task<PaymentServiceResult<PaymentStatusDto>> AdminConfirmQrPaymentAsync(
+            ConfirmQrPaymentDto dto
+        );
+
         Task<PaymentServiceResult<PaymentStatusDto>> PayWithVisaAsync(
             int userId,
             CreateVisaPaymentDto dto

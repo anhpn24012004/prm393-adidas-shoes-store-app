@@ -186,6 +186,25 @@ namespace AdidasShoesStore.Api.Controllers
             return Ok(result.Data);
         }
 
+        [Authorize(Roles = "Admin")]
+        [HttpPost("admin/qr/confirm")]
+        public async Task<IActionResult> AdminConfirmQrPayment(ConfirmQrPaymentDto dto)
+        {
+            var result = await _paymentService.AdminConfirmQrPaymentAsync(dto);
+
+            if (!result.Success)
+            {
+                if (result.ErrorType == "NotFound")
+                {
+                    return NotFound(new { message = result.Error });
+                }
+
+                return BadRequest(new { message = result.Error });
+            }
+
+            return Ok(result.Data);
+        }
+
         [Authorize]
         [HttpPost("visa/pay")]
         public async Task<IActionResult> PayWithVisa(CreateVisaPaymentDto dto)

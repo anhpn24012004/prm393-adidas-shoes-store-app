@@ -14,6 +14,12 @@ class OrderService {
     String? note,
     int? buyNowVariantId,
     int? buyNowQuantity,
+    required int toDistrictId,
+    required String toWardCode,
+    String? toProvinceName,
+    String? toDistrictName,
+    String? toWardName,
+    required double shippingFee,
   }) async {
     final response = await http.post(
       Uri.parse('${ApiClient.baseUrl}/orders'),
@@ -25,6 +31,12 @@ class OrderService {
           note: note,
           buyNowVariantId: buyNowVariantId,
           buyNowQuantity: buyNowQuantity,
+          toDistrictId: toDistrictId,
+          toWardCode: toWardCode,
+          toProvinceName: toProvinceName,
+          toDistrictName: toDistrictName,
+          toWardName: toWardName,
+          shippingFee: shippingFee,
         ).toJson(),
       ),
     );

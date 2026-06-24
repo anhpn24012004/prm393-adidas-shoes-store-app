@@ -1,14 +1,17 @@
 using AdidasShoesStore.Api.Data;
+using AdidasShoesStore.Api.DTOs.Ghn;
 using AdidasShoesStore.Api.DTOs.Order;
 using AdidasShoesStore.Api.Models;
 using AdidasShoesStore.Api.Services.Interfaces;
+using AdidasShoesStore.Api.Settings;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using System.Text.RegularExpressions;
 
 namespace AdidasShoesStore.Api.Services.Implementations
 {
     public class OrderService : IOrderService
     {
-        private const decimal ShippingFee = 30000m;
         private const decimal DiscountAmount = 0m;
         private static readonly string[] AllowedStatuses =
         {
@@ -17,6 +20,8 @@ namespace AdidasShoesStore.Api.Services.Implementations
             "Processing",
             "Shipping",
             "Delivered",
+            "Completed",
+            "Failed",
             "Cancelled"
         };
 
@@ -25,15 +30,31 @@ namespace AdidasShoesStore.Api.Services.Implementations
             "Paid",
             "Processing",
             "Shipping",
-            "Delivered"
+            "Delivered",
+            "Completed"
+        };
+
+        private static readonly string[] AllowedPaymentMethods =
+        {
+            "COD",
+            "VNPAY",
+            "PAYPAL",
+            "QR",
+            "VISA"
         };
 
         private readonly AdidasShoesStoreContext _context;
+        private readonly IGhnService _ghnService;
+        private readonly GhnSettings _ghnSettings;
 
         public OrderService(
-            AdidasShoesStoreContext context)
+            AdidasShoesStoreContext context,
+            IGhnService ghnService,
+            IOptions<GhnSettings> ghnOptions)
         {
             _context = context;
+            _ghnService = ghnService;
+            _ghnSettings = ghnOptions.Value;
         }
 
         public async Task<OrderServiceResult<OrderDetailDto>> CreateOrderAsync(
@@ -45,6 +66,18 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 return OrderServiceResult<OrderDetailDto>.Fail("Payment method is required");
             }
 
+            var paymentMethod = dto.PaymentMethod.Trim().ToUpperInvariant();
+
+            if (!AllowedPaymentMethods.Contains(paymentMethod))
+            {
+                return OrderServiceResult<OrderDetailDto>.Fail("Invalid payment method");
+            }
+
+            if (dto.ToDistrictId <= 0 || string.IsNullOrWhiteSpace(dto.ToWardCode))
+            {
+                return OrderServiceResult<OrderDetailDto>.Fail("GHN delivery district and ward are required");
+            }
+
             var address = await _context.UserAddresses
                 .AsNoTracking()
                 .FirstOrDefaultAsync(a =>
@@ -54,6 +87,12 @@ namespace AdidasShoesStore.Api.Services.Implementations
             if (address == null)
             {
                 return OrderServiceResult<OrderDetailDto>.Fail("Address not found");
+            }
+
+            if (string.IsNullOrWhiteSpace(address.AddressLine) ||
+                !IsValidPhone(address.Phone))
+            {
+                return OrderServiceResult<OrderDetailDto>.Fail("Invalid delivery address or phone number");
             }
 
             Cart? cart = null;
@@ -102,6 +141,23 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     .ToList();
             }
 
+            var shippingFeeResult = await _ghnService.CalculateFeeAsync(
+                BuildGhnFeeRequest(dto.ToDistrictId, dto.ToWardCode, orderItems)
+            );
+
+            if (!shippingFeeResult.Success || shippingFeeResult.Data == null)
+            {
+                return OrderServiceResult<OrderDetailDto>.Fail(
+                    "Cannot calculate shipping fee. Please check delivery address."
+                );
+            }
+
+            if (dto.ShippingFee.HasValue &&
+                Math.Abs(dto.ShippingFee.Value - shippingFeeResult.Data.ShippingFee) > 1000m)
+            {
+                return OrderServiceResult<OrderDetailDto>.Fail("Shipping fee is no longer valid. Please recalculate shipping fee.");
+            }
+
             await using var transaction = await _context.Database.BeginTransactionAsync();
 
             try
@@ -122,26 +178,35 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 }
 
                 var totalAmount = orderItems.Sum(i => i.Variant.Price * i.Quantity);
-                var finalAmount = totalAmount + ShippingFee - DiscountAmount;
+                var shippingFee = shippingFeeResult.Data.ShippingFee;
+                var finalAmount = totalAmount + shippingFee - DiscountAmount;
                 var createdAt = DateTime.Now;
+                var initialOrderStatus = paymentMethod == "COD"
+                    ? "Processing"
+                    : "PendingPayment";
 
                 var order = new Order
                 {
                     UserId = userId,
                     OrderCode = GenerateOrderCode(),
                     TotalAmount = totalAmount,
-                    ShippingFee = ShippingFee,
+                    ShippingFee = shippingFee,
                     DiscountAmount = DiscountAmount,
                     FinalAmount = finalAmount,
-                    Status = "PendingPayment",
-                    ShippingAddress = BuildShippingAddress(address),
+                    Status = initialOrderStatus,
+                    ShippingAddress = BuildShippingAddress(address, dto),
+                    ToDistrictId = dto.ToDistrictId,
+                    ToWardCode = dto.ToWardCode.Trim(),
+                    ToProvinceName = dto.ToProvinceName?.Trim(),
+                    ToDistrictName = dto.ToDistrictName?.Trim(),
+                    ToWardName = dto.ToWardName?.Trim(),
                     ReceiverName = address.ReceiverName,
                     ReceiverPhone = address.Phone,
                     Note = dto.Note,
                     CreatedAt = createdAt,
                     Payment = new Payment
                     {
-                        PaymentMethod = dto.PaymentMethod.Trim(),
+                        PaymentMethod = paymentMethod,
                         Amount = finalAmount,
                         Status = "Pending"
                     }
@@ -164,8 +229,10 @@ namespace AdidasShoesStore.Api.Services.Implementations
 
                 _context.Orders.Add(order);
 
-                if (cart != null)
+                if (cart != null && paymentMethod == "COD")
                 {
+                    // Online payment orders keep the cart until payment succeeds or fails.
+                    // This keeps unpaid order cancellation/failure recoverable without a cart restore flow.
                     _context.CartItems.RemoveRange(cart.CartItems);
                 }
 
@@ -244,6 +311,11 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     CanReview = o.Status == "Completed" &&
                         !o.ReturnRequests.Any(),
                     ShippingAddress = o.ShippingAddress,
+                    ToDistrictId = o.ToDistrictId,
+                    ToWardCode = o.ToWardCode,
+                    ToProvinceName = o.ToProvinceName,
+                    ToDistrictName = o.ToDistrictName,
+                    ToWardName = o.ToWardName,
                     ReceiverName = o.ReceiverName,
                     ReceiverPhone = o.ReceiverPhone,
                     Note = o.Note,
@@ -298,13 +370,44 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     );
                 }
 
-                if (order.Status != "PendingPayment" &&
-                    order.Status != "Paid")
+                if (order.Status == "Cancelled")
+                {
+                    await transaction.RollbackAsync();
+
+                    return OrderServiceResult<OrderDetailDto>.Fail("Order is already cancelled");
+                }
+
+                if (order.Status == "Paid")
                 {
                     await transaction.RollbackAsync();
 
                     return OrderServiceResult<OrderDetailDto>.Fail(
-                        "Only pending payment or paid orders can be cancelled"
+                        "Paid orders cannot be cancelled directly. Please request refund."
+                    );
+                }
+
+                if (order.Status == "Shipping" ||
+                    order.Status == "Delivered" ||
+                    order.Status == "Completed")
+                {
+                    await transaction.RollbackAsync();
+
+                    return OrderServiceResult<OrderDetailDto>.Fail(
+                        "This order cannot be cancelled at its current status"
+                    );
+                }
+
+                var isCodProcessing = order.Status == "Processing" &&
+                    order.Payment != null &&
+                    string.Equals(order.Payment.PaymentMethod, "COD", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(order.Payment.Status, "Success", StringComparison.OrdinalIgnoreCase);
+
+                if (order.Status != "PendingPayment" && !isCodProcessing)
+                {
+                    await transaction.RollbackAsync();
+
+                    return OrderServiceResult<OrderDetailDto>.Fail(
+                        "Only pending payment or unshipped COD orders can be cancelled"
                     );
                 }
 
@@ -444,6 +547,11 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     ReceiverName = o.ReceiverName,
                     ReceiverPhone = o.ReceiverPhone,
                     ShippingAddress = o.ShippingAddress,
+                    ToDistrictId = o.ToDistrictId,
+                    ToWardCode = o.ToWardCode,
+                    ToProvinceName = o.ToProvinceName,
+                    ToDistrictName = o.ToDistrictName,
+                    ToWardName = o.ToWardName,
                     TotalAmount = o.TotalAmount,
                     ShippingFee = o.ShippingFee ?? 0m,
                     DiscountAmount = o.DiscountAmount ?? 0m,
@@ -517,34 +625,69 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 PaidOrders = await _context.Orders.CountAsync(o => o.Status == "Paid"),
                 CancelledOrders = await _context.Orders.CountAsync(o => o.Status == "Cancelled"),
                 TotalRevenue = await _context.Orders
-                    .Where(o => RevenueStatuses.Contains(o.Status))
+                    .Where(o =>
+                        RevenueStatuses.Contains(o.Status) &&
+                        o.Payment != null &&
+                        o.Payment.Status == "Success")
                     .SumAsync(o => (decimal?)o.FinalAmount) ?? 0m,
                 TodayRevenue = await _context.Orders
                     .Where(o =>
                         RevenueStatuses.Contains(o.Status) &&
+                        o.Payment != null &&
+                        o.Payment.Status == "Success" &&
                         o.CreatedAt >= today &&
                         o.CreatedAt < tomorrow)
                     .SumAsync(o => (decimal?)o.FinalAmount) ?? 0m,
                 MonthRevenue = await _context.Orders
                     .Where(o =>
                         RevenueStatuses.Contains(o.Status) &&
+                        o.Payment != null &&
+                        o.Payment.Status == "Success" &&
                         o.CreatedAt >= monthStart &&
                         o.CreatedAt < nextMonthStart)
                     .SumAsync(o => (decimal?)o.FinalAmount) ?? 0m
             };
         }
 
-        private static string BuildShippingAddress(UserAddress address)
+        private GhnCalculateFeeRequestDto BuildGhnFeeRequest(
+            int toDistrictId,
+            string toWardCode,
+            List<(ProductVariant Variant, int Quantity)> orderItems)
+        {
+            return new GhnCalculateFeeRequestDto
+            {
+                ToDistrictId = toDistrictId,
+                ToWardCode = toWardCode.Trim(),
+                ServiceTypeId = _ghnSettings.ServiceTypeId,
+                InsuranceValue = _ghnSettings.InsuranceValueDefault,
+                Items = orderItems.Select(item => new GhnFeeItemDto
+                {
+                    Quantity = item.Quantity,
+                    Weight = _ghnSettings.DefaultWeight,
+                    Length = _ghnSettings.DefaultLength,
+                    Width = _ghnSettings.DefaultWidth,
+                    Height = _ghnSettings.DefaultHeight
+                }).ToList()
+            };
+        }
+
+        private static string BuildShippingAddress(UserAddress address, CreateOrderDto dto)
         {
             var parts = new[]
             {
                 address.AddressLine,
-                address.Ward,
-                address.District,
-                address.City
+                string.IsNullOrWhiteSpace(dto.ToWardName) ? address.Ward : dto.ToWardName,
+                string.IsNullOrWhiteSpace(dto.ToDistrictName) ? address.District : dto.ToDistrictName,
+                string.IsNullOrWhiteSpace(dto.ToProvinceName) ? address.City : dto.ToProvinceName
             };
 
             return string.Join(", ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
+        }
+
+        private static bool IsValidPhone(string? phone)
+        {
+            return !string.IsNullOrWhiteSpace(phone) &&
+                   Regex.IsMatch(phone.Trim(), @"^(0|\+84)[0-9]{8,10}$");
         }
 
         private static string GenerateOrderCode()

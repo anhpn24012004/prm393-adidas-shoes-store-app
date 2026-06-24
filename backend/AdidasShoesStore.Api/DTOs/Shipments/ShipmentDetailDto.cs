@@ -14,6 +14,8 @@ namespace AdidasShoesStore.Api.DTOs.Shipments
 
         public string? TrackingNumber { get; set; }
 
+        public string? GhnOrderCode { get; set; }
+
         public string? ShipmentStatus { get; set; }
 
         public DateTime? EstimatedDeliveryDate { get; set; }
@@ -23,6 +25,8 @@ namespace AdidasShoesStore.Api.DTOs.Shipments
         public DateTime? ShippedAt { get; set; }
 
         public DateTime? DeliveredAt { get; set; }
+
+        public decimal? ShippingFee { get; set; }
 
         public string ReceiverName { get; set; } = null!;
 

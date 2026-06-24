@@ -143,11 +143,14 @@ namespace AdidasShoesStore.Api.Services.Implementations
             queryParameters.TryGetValue("vnp_TxnRef", out var orderCode);
             queryParameters.TryGetValue("vnp_ResponseCode", out var responseCode);
             queryParameters.TryGetValue("vnp_TransactionNo", out var transactionNo);
+            queryParameters.TryGetValue("vnp_TransactionStatus", out var transactionStatus);
+            queryParameters.TryGetValue("vnp_Amount", out var callbackAmountText);
 
             var order = await _context.Orders
                 .Include(o => o.Payment)
                 .Include(o => o.User)
                 .Include(o => o.OrderItems)
+                    .ThenInclude(i => i.Variant)
                 .FirstOrDefaultAsync(o => o.OrderCode == orderCode);
 
             if (order == null || order.Payment == null)
@@ -159,12 +162,40 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 };
             }
 
-            if (isValidHash && responseCode == "00")
+            if (!string.Equals(order.Payment.PaymentMethod, "VNPAY", StringComparison.OrdinalIgnoreCase))
+            {
+                return new VnPayPaymentResponseDto
+                {
+                    Success = false,
+                    OrderCode = order.OrderCode,
+                    Message = "Payment method must be VNPAY"
+                };
+            }
+
+            if (order.Payment.Status == "Success")
+            {
+                return new VnPayPaymentResponseDto
+                {
+                    Success = true,
+                    OrderCode = order.OrderCode,
+                    Message = "Payment already processed"
+                };
+            }
+
+            var expectedAmount = (long)(order.FinalAmount * 100m);
+            var amountMatches = long.TryParse(callbackAmountText, out var callbackAmount) &&
+                callbackAmount == expectedAmount;
+
+            if (isValidHash &&
+                responseCode == "00" &&
+                transactionStatus == "00" &&
+                amountMatches)
             {
                 order.Payment.Status = "Success";
                 order.Payment.TransactionCode = transactionNo;
-                order.Payment.PaidAt = DateTime.Now;
+                order.Payment.PaidAt = DateTime.UtcNow;
                 order.Status = "Paid";
+                await ClearUserCartAsync(order.UserId);
 
                 await _context.SaveChangesAsync();
 
@@ -188,13 +219,16 @@ namespace AdidasShoesStore.Api.Services.Implementations
             }
 
             order.Payment.Status = "Failed";
+            await RestoreStockForUnpaidOrderAsync(order);
             await _context.SaveChangesAsync();
 
             return new VnPayPaymentResponseDto
             {
                 Success = false,
                 OrderCode = order.OrderCode,
-                Message = isValidHash ? "Payment failed" : "Invalid payment signature"
+                Message = isValidHash
+                    ? amountMatches ? "Payment failed" : "Invalid payment amount"
+                    : "Invalid payment signature"
             };
         }
 
@@ -364,17 +398,43 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 };
             }
 
+            if (order.Payment.Status == "Success")
+            {
+                return new PayPalPaymentResponseDto
+                {
+                    Success = true,
+                    OrderCode = order.OrderCode,
+                    PayPalOrderId = paypalOrderId,
+                    Message = "Payment already processed"
+                };
+            }
+
+            if (!string.IsNullOrWhiteSpace(order.Payment.TransactionCode) &&
+                !string.Equals(order.Payment.TransactionCode, paypalOrderId, StringComparison.Ordinal))
+            {
+                return new PayPalPaymentResponseDto
+                {
+                    Success = false,
+                    OrderCode = order.OrderCode,
+                    PayPalOrderId = paypalOrderId,
+                    Message = "PayPal order ID does not match this order"
+                };
+            }
+
             try
             {
                 var accessToken = await GetPayPalAccessTokenAsync(config);
                 var captureResult = await CapturePayPalOrderAsync(config, accessToken, paypalOrderId);
+                var expectedAmount = ConvertVndToPayPalAmount(order.FinalAmount, config.VndToUsdRate);
+                var amountMatches = string.Equals(captureResult.Amount, expectedAmount, StringComparison.Ordinal);
 
-                if (captureResult.Success)
+                if (captureResult.Success && amountMatches)
                 {
                     order.Payment.Status = "Success";
                     order.Payment.TransactionCode = captureResult.TransactionCode ?? paypalOrderId;
-                    order.Payment.PaidAt = DateTime.Now;
+                    order.Payment.PaidAt = DateTime.UtcNow;
                     order.Status = "Paid";
+                    await ClearUserCartAsync(order.UserId);
 
                     await _context.SaveChangesAsync();
 
@@ -399,6 +459,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 }
 
                 order.Payment.Status = "Failed";
+                await RestoreStockForUnpaidOrderAsync(order);
                 await _context.SaveChangesAsync();
 
                 return new PayPalPaymentResponseDto
@@ -406,7 +467,9 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     Success = false,
                     OrderCode = order.OrderCode,
                     PayPalOrderId = paypalOrderId,
-                    Message = captureResult.Message ?? "PayPal payment failed"
+                    Message = amountMatches
+                        ? captureResult.Message ?? "PayPal payment failed"
+                        : "Invalid PayPal payment amount"
                 };
             }
             catch (Exception ex)
@@ -438,7 +501,12 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 };
             }
 
-            order.Payment.Status = "Failed";
+            if (order.Payment.Status != "Success")
+            {
+                order.Payment.Status = "Failed";
+                await RestoreStockForUnpaidOrderAsync(order);
+            }
+
             await _context.SaveChangesAsync();
 
             return new PayPalPaymentResponseDto
@@ -507,6 +575,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 $"&accountName={Uri.EscapeDataString(config.AccountName)}";
 
             order.Payment.TransactionCode = transferContent;
+            order.Payment.Status = "WaitingConfirm";
             await _context.SaveChangesAsync();
 
             return PaymentServiceResult<QrPaymentResponseDto>.Ok(new QrPaymentResponseDto
@@ -562,10 +631,66 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 );
             }
 
+            if (order.Payment.Status == "Success")
+            {
+                return PaymentServiceResult<PaymentStatusDto>.Ok(MapPaymentStatus(order));
+            }
+
+            order.Payment.Status = "WaitingConfirm";
+            await _context.SaveChangesAsync();
+
+            return PaymentServiceResult<PaymentStatusDto>.Ok(MapPaymentStatus(order));
+        }
+
+        public async Task<PaymentServiceResult<PaymentStatusDto>> AdminConfirmQrPaymentAsync(
+            ConfirmQrPaymentDto dto)
+        {
+            var order = await _context.Orders
+                .Include(o => o.Payment)
+                .Include(o => o.User)
+                .Include(o => o.OrderItems)
+                .FirstOrDefaultAsync(o => o.OrderId == dto.OrderId);
+
+            if (order == null)
+            {
+                return PaymentServiceResult<PaymentStatusDto>.Fail(
+                    "Order not found",
+                    "NotFound"
+                );
+            }
+
+            if (order.Status != "PendingPayment")
+            {
+                return PaymentServiceResult<PaymentStatusDto>.Fail(
+                    "Only pending payment orders can be confirmed"
+                );
+            }
+
+            if (order.Payment == null)
+            {
+                return PaymentServiceResult<PaymentStatusDto>.Fail(
+                    "Payment not found",
+                    "NotFound"
+                );
+            }
+
+            if (!string.Equals(order.Payment.PaymentMethod, "QR", StringComparison.OrdinalIgnoreCase))
+            {
+                return PaymentServiceResult<PaymentStatusDto>.Fail(
+                    "Payment method must be QR"
+                );
+            }
+
+            if (order.Payment.Status == "Success")
+            {
+                return PaymentServiceResult<PaymentStatusDto>.Ok(MapPaymentStatus(order));
+            }
+
             order.Payment.Status = "Success";
             order.Payment.TransactionCode ??= $"QR{DateTime.Now:yyyyMMddHHmmssfff}";
-            order.Payment.PaidAt = DateTime.Now;
+            order.Payment.PaidAt = DateTime.UtcNow;
             order.Status = "Paid";
+            await ClearUserCartAsync(order.UserId);
 
             await _context.SaveChangesAsync();
 
@@ -578,17 +703,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 // Payment confirmation is already saved; email failure should not rollback it.
             }
 
-            return PaymentServiceResult<PaymentStatusDto>.Ok(new PaymentStatusDto
-            {
-                OrderId = order.OrderId,
-                OrderCode = order.OrderCode,
-                OrderStatus = order.Status,
-                PaymentMethod = order.Payment.PaymentMethod,
-                PaymentStatus = order.Payment.Status,
-                Amount = order.Payment.Amount,
-                TransactionCode = order.Payment.TransactionCode,
-                PaidAt = order.Payment.PaidAt
-            });
+            return PaymentServiceResult<PaymentStatusDto>.Ok(MapPaymentStatus(order));
         }
 
         public async Task<PaymentServiceResult<PaymentStatusDto>> PayWithVisaAsync(
@@ -640,10 +755,22 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 );
             }
 
+            if (dto.Amount.HasValue && dto.Amount.Value != order.Payment.Amount)
+            {
+                return PaymentServiceResult<PaymentStatusDto>.Fail("Payment amount does not match order amount");
+            }
+
+            if (order.Payment.Status == "Success")
+            {
+                return PaymentServiceResult<PaymentStatusDto>.Ok(MapPaymentStatus(order));
+            }
+
+            // Demo-only simulated Visa payment. This validates card-like input but does not call a real gateway.
             order.Payment.Status = "Success";
             order.Payment.TransactionCode = $"VISA{DateTime.Now:yyyyMMddHHmmssfff}";
-            order.Payment.PaidAt = DateTime.Now;
+            order.Payment.PaidAt = DateTime.UtcNow;
             order.Status = "Paid";
+            await ClearUserCartAsync(order.UserId);
 
             await _context.SaveChangesAsync();
 
@@ -656,17 +783,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 // Payment is already completed; email failure should not rollback the order.
             }
 
-            return PaymentServiceResult<PaymentStatusDto>.Ok(new PaymentStatusDto
-            {
-                OrderId = order.OrderId,
-                OrderCode = order.OrderCode,
-                OrderStatus = order.Status,
-                PaymentMethod = order.Payment.PaymentMethod,
-                PaymentStatus = order.Payment.Status,
-                Amount = order.Payment.Amount,
-                TransactionCode = order.Payment.TransactionCode,
-                PaidAt = order.Payment.PaidAt
-            });
+            return PaymentServiceResult<PaymentStatusDto>.Ok(MapPaymentStatus(order));
         }
 
         public async Task<PaymentStatusDto?> GetPaymentStatusAsync(
@@ -929,6 +1046,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
             {
                 Success = string.Equals(status, "COMPLETED", StringComparison.OrdinalIgnoreCase),
                 TransactionCode = GetPayPalCaptureId(root) ?? paypalOrderId,
+                Amount = GetPayPalCaptureAmount(root),
                 Message = string.Equals(status, "COMPLETED", StringComparison.OrdinalIgnoreCase)
                     ? "Payment successful"
                     : $"PayPal payment status: {status ?? "Unknown"}"
@@ -948,6 +1066,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     .Include(o => o.Payment)
                     .Include(o => o.User)
                     .Include(o => o.OrderItems)
+                        .ThenInclude(i => i.Variant)
                     .FirstOrDefaultAsync(o => o.OrderId == orderId);
             }
 
@@ -960,9 +1079,57 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 .Include(o => o.Payment)
                 .Include(o => o.User)
                 .Include(o => o.OrderItems)
+                    .ThenInclude(i => i.Variant)
                 .FirstOrDefaultAsync(o =>
                     o.Payment != null &&
                     o.Payment.TransactionCode == paypalOrderId);
+        }
+
+        private async Task ClearUserCartAsync(int userId)
+        {
+            var cart = await _context.Carts
+                .Include(c => c.CartItems)
+                .FirstOrDefaultAsync(c => c.UserId == userId);
+
+            if (cart != null && cart.CartItems.Any())
+            {
+                _context.CartItems.RemoveRange(cart.CartItems);
+            }
+        }
+
+        private Task RestoreStockForUnpaidOrderAsync(Order order)
+        {
+            if (order.Status != "PendingPayment")
+            {
+                return Task.CompletedTask;
+            }
+
+            foreach (var item in order.OrderItems)
+            {
+                if (item.Variant != null)
+                {
+                    item.Variant.StockQuantity = (item.Variant.StockQuantity ?? 0) + item.Quantity;
+                }
+            }
+
+            order.Status = "Failed";
+
+            return Task.CompletedTask;
+        }
+
+        private static PaymentStatusDto MapPaymentStatus(Order order)
+        {
+            return new PaymentStatusDto
+            {
+                OrderId = order.OrderId,
+                OrderCode = order.OrderCode,
+                OrderStatus = order.Status,
+                PaymentMethod = order.Payment!.PaymentMethod,
+                PaymentStatus = order.Payment.Status,
+                Amount = order.Payment.Amount,
+                TransactionCode = order.Payment.TransactionCode,
+                PaidAt = order.Payment.PaidAt
+            };
         }
 
         private static string AddOrderIdToUrl(
@@ -1044,6 +1211,36 @@ namespace AdidasShoesStore.Api.Services.Implementations
             return null;
         }
 
+        private static string? GetPayPalCaptureAmount(JsonElement root)
+        {
+            if (!root.TryGetProperty("purchase_units", out var purchaseUnits) ||
+                purchaseUnits.ValueKind != JsonValueKind.Array)
+            {
+                return null;
+            }
+
+            foreach (var purchaseUnit in purchaseUnits.EnumerateArray())
+            {
+                if (!purchaseUnit.TryGetProperty("payments", out var payments) ||
+                    !payments.TryGetProperty("captures", out var captures) ||
+                    captures.ValueKind != JsonValueKind.Array)
+                {
+                    continue;
+                }
+
+                foreach (var capture in captures.EnumerateArray())
+                {
+                    if (capture.TryGetProperty("amount", out var amount) &&
+                        amount.TryGetProperty("value", out var value))
+                    {
+                        return value.GetString();
+                    }
+                }
+            }
+
+            return null;
+        }
+
         private static StringContent JsonContent(object value)
         {
             return new StringContent(
@@ -1117,6 +1314,8 @@ namespace AdidasShoesStore.Api.Services.Implementations
             public bool Success { get; set; }
 
             public string? TransactionCode { get; set; }
+
+            public string? Amount { get; set; }
 
             public string? Message { get; set; }
         }

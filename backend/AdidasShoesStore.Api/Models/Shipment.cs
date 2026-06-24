@@ -13,6 +13,14 @@ public partial class Shipment
 
     public string? TrackingCode { get; set; }
 
+    public string? GhnOrderCode { get; set; }
+
+    public decimal? ShippingFee { get; set; }
+
+    public DateTime? ExpectedDeliveryTime { get; set; }
+
+    public string? RawGhnStatus { get; set; }
+
     public string? Status { get; set; }
 
     public DateTime? ShippedAt { get; set; }

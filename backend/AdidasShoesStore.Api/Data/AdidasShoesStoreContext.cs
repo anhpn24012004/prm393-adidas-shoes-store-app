@@ -144,6 +144,10 @@ public partial class AdidasShoesStoreContext : DbContext
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
             entity.Property(e => e.Status).HasMaxLength(50);
+            entity.Property(e => e.ToDistrictName).HasMaxLength(100);
+            entity.Property(e => e.ToProvinceName).HasMaxLength(100);
+            entity.Property(e => e.ToWardCode).HasMaxLength(20);
+            entity.Property(e => e.ToWardName).HasMaxLength(100);
             entity.Property(e => e.TotalAmount).HasColumnType("decimal(18, 2)");
 
             entity.HasOne(d => d.User).WithMany(p => p.Orders)
@@ -347,7 +351,11 @@ public partial class AdidasShoesStoreContext : DbContext
             entity.HasIndex(e => e.OrderId, "UQ__Shipment__C3905BCEA0118E11").IsUnique();
 
             entity.Property(e => e.DeliveredAt).HasColumnType("datetime");
+            entity.Property(e => e.ExpectedDeliveryTime).HasColumnType("datetime");
+            entity.Property(e => e.GhnOrderCode).HasMaxLength(100);
+            entity.Property(e => e.RawGhnStatus).HasMaxLength(100);
             entity.Property(e => e.ShippedAt).HasColumnType("datetime");
+            entity.Property(e => e.ShippingFee).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.ShippingProvider).HasMaxLength(100);
             entity.Property(e => e.Status).HasMaxLength(50);
             entity.Property(e => e.TrackingCode).HasMaxLength(100);
