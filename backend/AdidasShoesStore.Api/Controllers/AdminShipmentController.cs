@@ -1,7 +1,9 @@
 using AdidasShoesStore.Api.DTOs.Shipments;
 using AdidasShoesStore.Api.Services.Interfaces;
+using AdidasShoesStore.Api.Settings;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace AdidasShoesStore.Api.Controllers
 {
@@ -11,10 +13,14 @@ namespace AdidasShoesStore.Api.Controllers
     public class AdminShipmentController : ControllerBase
     {
         private readonly IShipmentService _shipmentService;
+        private readonly ShipmentSettings _shipmentSettings;
 
-        public AdminShipmentController(IShipmentService shipmentService)
+        public AdminShipmentController(
+            IShipmentService shipmentService,
+            IOptions<ShipmentSettings> shipmentOptions)
         {
             _shipmentService = shipmentService;
+            _shipmentSettings = shipmentOptions.Value;
         }
 
         [HttpGet]
@@ -65,6 +71,14 @@ namespace AdidasShoesStore.Api.Controllers
             int id,
             UpdateShipmentStatusDto dto)
         {
+            if (!_shipmentSettings.ManualOverrideEnabled)
+            {
+                return StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    new { message = "Manual shipment status override is disabled" }
+                );
+            }
+
             var result = await _shipmentService.UpdateShipmentStatusAsync(id, dto);
 
             if (!result.Success)
@@ -86,6 +100,24 @@ namespace AdidasShoesStore.Api.Controllers
             UpdateTrackingInfoDto dto)
         {
             var result = await _shipmentService.UpdateTrackingInfoAsync(id, dto);
+
+            if (!result.Success)
+            {
+                if (result.ErrorType == "NotFound")
+                {
+                    return NotFound(new { message = result.Error });
+                }
+
+                return BadRequest(new { message = result.Error });
+            }
+
+            return Ok(result.Data);
+        }
+
+        [HttpPost("{id:int}/sync-ghn-status")]
+        public async Task<IActionResult> SyncGhnStatus(int id)
+        {
+            var result = await _shipmentService.SyncGhnStatusAsync(id);
 
             if (!result.Success)
             {

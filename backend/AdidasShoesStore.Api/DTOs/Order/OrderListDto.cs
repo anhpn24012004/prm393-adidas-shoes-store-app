@@ -20,6 +20,14 @@ namespace AdidasShoesStore.Api.DTOs.Order
 
         public string? PaymentStatus { get; set; }
 
+        public string? ShipmentStatus { get; set; }
+
+        public string? GhnOrderCode { get; set; }
+
+        public string? TrackingCode { get; set; }
+
+        public DateTime? ExpectedDeliveryTime { get; set; }
+
         public DateTime? CreatedAt { get; set; }
 
         public bool HasReturnRequest { get; set; }

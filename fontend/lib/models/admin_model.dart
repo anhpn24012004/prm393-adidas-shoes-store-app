@@ -89,12 +89,28 @@ class AdminOrderDetail {
   final AdminOrderSummary summary;
   final String shippingAddress;
   final String? note;
+  final int? shipmentId;
+  final String? shipmentStatus;
+  final String? shippingProvider;
+  final String? trackingCode;
+  final String? ghnOrderCode;
+  final DateTime? expectedDeliveryTime;
+  final DateTime? shippedAt;
+  final DateTime? deliveredAt;
   final List<OrderItem> items;
 
   const AdminOrderDetail({
     required this.summary,
     required this.shippingAddress,
     this.note,
+    this.shipmentId,
+    this.shipmentStatus,
+    this.shippingProvider,
+    this.trackingCode,
+    this.ghnOrderCode,
+    this.expectedDeliveryTime,
+    this.shippedAt,
+    this.deliveredAt,
     required this.items,
   });
 
@@ -103,6 +119,16 @@ class AdminOrderDetail {
       summary: AdminOrderSummary.fromJson(json),
       shippingAddress: json['shippingAddress'] ?? '',
       note: json['note'],
+      shipmentId: json['shipmentId'],
+      shipmentStatus: json['shipmentStatus'],
+      shippingProvider: json['shippingProvider'] ?? json['carrier'],
+      trackingCode: json['trackingCode'] ?? json['trackingNumber'],
+      ghnOrderCode: json['ghnOrderCode'],
+      expectedDeliveryTime: DateTime.tryParse(
+        json['expectedDeliveryTime']?.toString() ?? '',
+      ),
+      shippedAt: DateTime.tryParse(json['shippedAt']?.toString() ?? ''),
+      deliveredAt: DateTime.tryParse(json['deliveredAt']?.toString() ?? ''),
       items: (json['items'] as List? ?? [])
           .map((item) => OrderItem.fromJson(item))
           .toList(),

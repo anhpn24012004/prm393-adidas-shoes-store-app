@@ -27,15 +27,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final CartService _cartService = CartService();
   final GhnService _ghnService = GhnService();
   final TextEditingController _noteController = TextEditingController();
-  final TextEditingController _visaCardNumberController =
-      TextEditingController();
-  final TextEditingController _visaCardHolderController =
-      TextEditingController();
-  final TextEditingController _visaExpiryController = TextEditingController();
-  final TextEditingController _visaCvvController = TextEditingController();
 
   late Future<List<UserAddress>> _addresses;
+  late Future<List<GhnProvince>> _provincesFuture;
   int? _selectedAddressId;
+  UserAddress? _selectedAddress;
   int? _buyNowVariantId;
   int? _buyNowQuantity;
   double? _buyNowUnitPrice;
@@ -44,13 +40,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   String? _buyNowSize;
   String? _buyNowColor;
   Future<_CheckoutSummary>? _summaryFuture;
-  Future<List<GhnProvince>>? _provincesFuture;
   List<GhnDistrict> _districts = [];
   List<GhnWard> _wards = [];
   GhnProvince? _selectedProvince;
   GhnDistrict? _selectedDistrict;
   GhnWard? _selectedWard;
   double? _calculatedShippingFee;
+  String? _ghnError;
   bool _isLoadingDistricts = false;
   bool _isLoadingWards = false;
   bool _isCalculatingShippingFee = false;
@@ -91,10 +87,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   void dispose() {
     _noteController.dispose();
-    _visaCardNumberController.dispose();
-    _visaCardHolderController.dispose();
-    _visaExpiryController.dispose();
-    _visaCvvController.dispose();
     super.dispose();
   }
 
@@ -107,24 +99,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
 
     if (!_hasValidGhnShipping) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Không tính được phí vận chuyển, vui lòng chọn lại địa chỉ.',
-          ),
-        ),
+      _showError(
+        _ghnError ??
+            'Vui lòng chọn đầy đủ tỉnh, quận/huyện và phường/xã để tính phí vận chuyển.',
       );
       return;
-    }
-
-    VisaPaymentRequest? visaPayment;
-
-    if (_paymentMethod == 'VISA') {
-      visaPayment = await _collectVisaPayment();
-
-      if (visaPayment == null) {
-        return;
-      }
     }
 
     setState(() {
@@ -143,8 +122,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         toDistrictId: _selectedDistrict!.districtId,
         toWardCode: _selectedWard!.wardCode,
         toProvinceName: _selectedProvince?.provinceName,
-        toDistrictName: _selectedDistrict?.districtName,
-        toWardName: _selectedWard?.wardName,
+        toDistrictName: _selectedDistrict!.districtName,
+        toWardName: _selectedWard!.wardName,
         shippingFee: _calculatedShippingFee!,
       );
 
@@ -160,13 +139,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         return;
       }
 
-      if (_paymentMethod == 'QR') {
-        await _handleQrPayment(order);
-        return;
-      }
-
-      if (_paymentMethod == 'VISA') {
-        await _handleVisa(order, visaPayment!);
+      if (_paymentMethod == 'SEPAY') {
+        await _handleSePay(order);
         return;
       }
 
@@ -190,111 +164,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         });
       }
     }
-  }
-
-  Future<VisaPaymentRequest?> _collectVisaPayment() async {
-    final formKey = GlobalKey<FormState>();
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Simulated Visa Payment'),
-          content: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    controller: _visaCardNumberController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: context.tr('visaCardNumber'),
-                      prefixIcon: const Icon(Icons.credit_card),
-                    ),
-                    validator: _validateVisaCardNumber,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _visaCardHolderController,
-                    textCapitalization: TextCapitalization.characters,
-                    decoration: InputDecoration(
-                      labelText: context.tr('visaCardHolder'),
-                      prefixIcon: const Icon(Icons.person_outline),
-                    ),
-                    validator: (value) {
-                      if ((value ?? '').trim().isEmpty) {
-                        return context.tr('requiredField');
-                      }
-
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: _visaExpiryController,
-                          keyboardType: TextInputType.datetime,
-                          decoration: InputDecoration(
-                            labelText: context.tr('visaExpiry'),
-                            hintText: 'MM/YY',
-                          ),
-                          validator: _validateVisaExpiry,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextFormField(
-                          controller: _visaCvvController,
-                          keyboardType: TextInputType.number,
-                          obscureText: true,
-                          decoration: InputDecoration(
-                            labelText: context.tr('visaCvv'),
-                          ),
-                          validator: _validateVisaCvv,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text(context.tr('cancel').toUpperCase()),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (formKey.currentState?.validate() ?? false) {
-                  Navigator.pop(context, true);
-                }
-              },
-              child: Text(context.tr('confirm').toUpperCase()),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed != true) {
-      return null;
-    }
-
-    final expiryParts = _visaExpiryController.text.trim().split('/');
-
-    return VisaPaymentRequest(
-      orderId: 0,
-      cardNumber: _visaCardNumberController.text.trim(),
-      cardHolderName: _visaCardHolderController.text.trim(),
-      expiryMonth: expiryParts[0].trim(),
-      expiryYear: expiryParts[1].trim(),
-      cvv: _visaCvvController.text.trim(),
-    );
   }
 
   Future<void> _openAddressPicker(List<UserAddress> addresses) async {
@@ -388,9 +257,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     if (selectedAddressId == null || !mounted) return;
 
-    setState(() {
-      _selectedAddressId = selectedAddressId;
-    });
+    final selectedAddress = addresses.firstWhere(
+      (address) => address.addressId == selectedAddressId,
+    );
+    await _applySavedAddress(selectedAddress);
   }
 
   Widget _buildAddressSelector() {
@@ -441,6 +311,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           (address) => address.addressId == _selectedAddressId,
           orElse: () => addresses.first,
         );
+        if (_selectedAddress?.addressId != selectedAddress.addressId) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _applySavedAddress(selectedAddress);
+          });
+        }
 
         return InkWell(
           onTap: _isSubmitting ? null : () => _openAddressPicker(addresses),
@@ -537,41 +412,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       Navigator.pushReplacementNamed(
         context,
         '/payment-result',
-        arguments: order.orderId,
-      );
-    } catch (e) {
-      if (!mounted) return;
-
-      _showError(e.toString());
-    }
-  }
-
-  Future<void> _handleVisa(
-    OrderDetail order,
-    VisaPaymentRequest payment,
-  ) async {
-    try {
-      await _orderService.payWithVisa(
-        VisaPaymentRequest(
-          orderId: order.orderId,
-          cardNumber: payment.cardNumber,
-          cardHolderName: payment.cardHolderName,
-          expiryMonth: payment.expiryMonth,
-          expiryYear: payment.expiryYear,
-          cvv: payment.cvv,
-          amount: order.finalAmount,
-        ),
-      );
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(context.tr('paymentCompleted'))));
-
-      Navigator.pushReplacementNamed(
-        context,
-        '/order-detail',
         arguments: order.orderId,
       );
     } catch (e) {
@@ -736,12 +576,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
 
     if (!_hasValidGhnShipping) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Không tính được phí vận chuyển, vui lòng chọn lại địa chỉ.',
-          ),
-        ),
+      _showError(
+        _ghnError ??
+            'Vui lòng chọn đầy đủ tỉnh, quận/huyện và phường/xã để tính phí vận chuyển.',
       );
       return;
     }
@@ -758,6 +595,52 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         _calculatedShippingFee! > 0;
   }
 
+  Future<void> _applySavedAddress(UserAddress address) async {
+    final hasGhnCodes =
+        address.provinceId != null &&
+        address.provinceId! > 0 &&
+        address.districtId != null &&
+        address.districtId! > 0 &&
+        address.wardCode?.trim().isNotEmpty == true;
+
+    setState(() {
+      _selectedAddressId = address.addressId;
+      _selectedAddress = address;
+      _selectedProvince = hasGhnCodes && address.provinceId != null
+          ? GhnProvince(
+              provinceId: address.provinceId!,
+              provinceName: address.city ?? '',
+            )
+          : null;
+      _selectedDistrict = hasGhnCodes
+          ? GhnDistrict(
+              districtId: address.districtId!,
+              provinceId: address.provinceId ?? 0,
+              districtName: address.district ?? '',
+            )
+          : null;
+      _selectedWard = hasGhnCodes
+          ? GhnWard(
+              wardCode: address.wardCode!,
+              districtId: address.districtId!,
+              wardName: address.ward ?? '',
+            )
+          : null;
+      _districts = [];
+      _wards = [];
+      _calculatedShippingFee = null;
+      _ghnError = null;
+      _summaryFuture = _loadCheckoutSummary();
+    });
+
+    if (hasGhnCodes) {
+      await _calculateShippingFee(
+        districtId: address.districtId!,
+        wardCode: address.wardCode!,
+      );
+    }
+  }
+
   Future<void> _loadDistricts(GhnProvince? province) async {
     setState(() {
       _selectedProvince = province;
@@ -766,6 +649,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       _districts = [];
       _wards = [];
       _calculatedShippingFee = null;
+      _ghnError = null;
       _isLoadingDistricts = province != null;
       _summaryFuture = _loadCheckoutSummary();
     });
@@ -774,14 +658,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     try {
       final districts = await _ghnService.getDistricts(province.provinceId);
-      if (!mounted) return;
-      setState(() {
-        _districts = districts;
-      });
-    } catch (e) {
-      if (mounted) _showError(e.toString());
+      if (!mounted || _selectedProvince?.provinceId != province.provinceId) {
+        return;
+      }
+      setState(() => _districts = districts);
+    } catch (_) {
+      if (mounted) setState(() => _ghnError = _ghnUnavailableMessage);
     } finally {
-      if (mounted) {
+      if (mounted && _selectedProvince?.provinceId == province.provinceId) {
         setState(() => _isLoadingDistricts = false);
       }
     }
@@ -793,6 +677,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       _selectedWard = null;
       _wards = [];
       _calculatedShippingFee = null;
+      _ghnError = null;
       _isLoadingWards = district != null;
       _summaryFuture = _loadCheckoutSummary();
     });
@@ -801,14 +686,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     try {
       final wards = await _ghnService.getWards(district.districtId);
-      if (!mounted) return;
-      setState(() {
-        _wards = wards;
-      });
-    } catch (e) {
-      if (mounted) _showError(e.toString());
+      if (!mounted || _selectedDistrict?.districtId != district.districtId) {
+        return;
+      }
+      setState(() => _wards = wards);
+    } catch (_) {
+      if (mounted) setState(() => _ghnError = _ghnUnavailableMessage);
     } finally {
-      if (mounted) {
+      if (mounted && _selectedDistrict?.districtId == district.districtId) {
         setState(() => _isLoadingWards = false);
       }
     }
@@ -818,31 +703,87 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     setState(() {
       _selectedWard = ward;
       _calculatedShippingFee = null;
+      _ghnError = null;
       _summaryFuture = _loadCheckoutSummary();
     });
 
     if (ward == null || _selectedDistrict == null) return;
 
-    await _calculateShippingFee();
+    await _calculateShippingFee(
+      districtId: _selectedDistrict!.districtId,
+      wardCode: ward.wardCode,
+    );
+
+    if (_calculatedShippingFee != null) {
+      await _saveSelectedGhnLocation();
+    }
   }
 
-  Future<void> _calculateShippingFee() async {
+  Future<void> _saveSelectedGhnLocation() async {
+    final address = _selectedAddress;
+    final province = _selectedProvince;
     final district = _selectedDistrict;
     final ward = _selectedWard;
+    if (address == null ||
+        province == null ||
+        district == null ||
+        ward == null) {
+      return;
+    }
 
-    if (district == null || ward == null) return;
+    try {
+      final updated = await _addressService.updateAddress(
+        address.addressId,
+        SaveAddressRequest(
+          receiverName: address.receiverName,
+          phone: address.phone,
+          addressLine: address.addressLine,
+          city: province.provinceName,
+          district: district.districtName,
+          ward: ward.wardName,
+          provinceId: province.provinceId,
+          districtId: district.districtId,
+          wardCode: ward.wardCode,
+          isDefault: address.isDefault,
+        ),
+      );
 
-    setState(() => _isCalculatingShippingFee = true);
+      if (!mounted || _selectedAddressId != updated.addressId) return;
+      setState(() {
+        _selectedAddress = updated;
+        _addresses = _addressService.getAddresses();
+      });
+    } catch (error) {
+      if (mounted) {
+        _showError(
+          'Shipping fee was calculated, but the address could not be updated: $error',
+        );
+      }
+    }
+  }
+
+  Future<void> _calculateShippingFee({
+    required int districtId,
+    required String wardCode,
+  }) async {
+    setState(() {
+      _isCalculatingShippingFee = true;
+      _ghnError = null;
+    });
 
     try {
       final quantities = await _shippingQuantities();
       final fee = await _ghnService.calculateFee(
-        toDistrictId: district.districtId,
-        toWardCode: ward.wardCode,
+        toDistrictId: districtId,
+        toWardCode: wardCode,
         quantities: quantities,
       );
 
-      if (!mounted) return;
+      if (!mounted ||
+          _selectedDistrict?.districtId != districtId ||
+          _selectedWard?.wardCode != wardCode) {
+        return;
+      }
 
       setState(() {
         _calculatedShippingFee = fee.shippingFee;
@@ -853,16 +794,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
       setState(() {
         _calculatedShippingFee = null;
+        _ghnError = _ghnUnavailableMessage;
         _summaryFuture = _loadCheckoutSummary();
       });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Không tính được phí vận chuyển, vui lòng chọn lại địa chỉ.',
-          ),
-        ),
-      );
     } finally {
       if (mounted) {
         setState(() => _isCalculatingShippingFee = false);
@@ -879,87 +813,141 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return cart.cartItems.map((item) => item.quantity).toList();
   }
 
+  static const String _ghnUnavailableMessage =
+      'Không thể tải dữ liệu GHN. Vui lòng kiểm tra cấu hình GHN.';
+
   Widget _buildGhnShippingSelector() {
+    final address = _selectedAddress;
+    final hasGhnCodes =
+        address?.provinceId != null &&
+        address!.provinceId! > 0 &&
+        address.districtId != null &&
+        address.districtId! > 0 &&
+        address.wardCode?.trim().isNotEmpty == true;
+
     return FutureBuilder<List<GhnProvince>>(
       future: _provincesFuture,
       builder: (context, snapshot) {
         final provinces = snapshot.data ?? [];
-
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'GHN delivery area',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            const Text(
+              'GHN delivery',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            DropdownButtonFormField<GhnProvince>(
-              initialValue: _selectedProvince,
-              decoration: const InputDecoration(
-                labelText: 'Province / City',
-                border: OutlineInputBorder(),
-              ),
-              items: provinces
-                  .map(
-                    (province) => DropdownMenuItem(
-                      value: province,
-                      child: Text(province.provinceName),
-                    ),
-                  )
-                  .toList(),
-              onChanged:
-                  _isSubmitting ||
-                      snapshot.connectionState == ConnectionState.waiting
-                  ? null
-                  : _loadDistricts,
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<GhnDistrict>(
-              initialValue: _selectedDistrict,
-              decoration: InputDecoration(
-                labelText: _isLoadingDistricts
-                    ? 'Loading districts...'
-                    : 'District',
-                border: const OutlineInputBorder(),
-              ),
-              items: _districts
-                  .map(
-                    (district) => DropdownMenuItem(
-                      value: district,
-                      child: Text(district.districtName),
-                    ),
-                  )
-                  .toList(),
-              onChanged: _isSubmitting || _isLoadingDistricts
-                  ? null
-                  : _loadWards,
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<GhnWard>(
-              initialValue: _selectedWard,
-              decoration: InputDecoration(
-                labelText: _isLoadingWards ? 'Loading wards...' : 'Ward',
-                border: const OutlineInputBorder(),
-              ),
-              items: _wards
-                  .map(
-                    (ward) => DropdownMenuItem(
-                      value: ward,
-                      child: Text(ward.wardName),
-                    ),
-                  )
-                  .toList(),
-              onChanged: _isSubmitting || _isLoadingWards ? null : _selectWard,
-            ),
-            const SizedBox(height: 8),
+            if (address == null)
+              const Text('Select a shipping address.')
+            else if (!hasGhnCodes) ...[
+              if (snapshot.hasError) ...[
+                const Text(_ghnUnavailableMessage),
+                TextButton(
+                  onPressed: () => setState(
+                    () => _provincesFuture = _ghnService.getProvinces(),
+                  ),
+                  child: const Text('Retry'),
+                ),
+              ] else ...[
+                DropdownButtonFormField<GhnProvince>(
+                  key: ValueKey(
+                    'checkout-province-${_selectedProvince?.provinceId}',
+                  ),
+                  initialValue: _selectedProvince,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText:
+                        snapshot.connectionState == ConnectionState.waiting
+                        ? 'Loading provinces...'
+                        : 'Province / City',
+                    border: const OutlineInputBorder(),
+                  ),
+                  items: provinces
+                      .map(
+                        (province) => DropdownMenuItem(
+                          value: province,
+                          child: Text(
+                            province.provinceName,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged:
+                      snapshot.connectionState == ConnectionState.waiting ||
+                          _isSubmitting
+                      ? null
+                      : _loadDistricts,
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<GhnDistrict>(
+                  key: ValueKey(
+                    'checkout-district-${_selectedDistrict?.districtId}',
+                  ),
+                  initialValue: _selectedDistrict,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: _isLoadingDistricts
+                        ? 'Loading districts...'
+                        : 'District',
+                    border: const OutlineInputBorder(),
+                  ),
+                  items: _districts
+                      .map(
+                        (district) => DropdownMenuItem(
+                          value: district,
+                          child: Text(
+                            district.districtName,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged:
+                      _selectedProvince == null ||
+                          _isLoadingDistricts ||
+                          _isSubmitting
+                      ? null
+                      : _loadWards,
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<GhnWard>(
+                  key: ValueKey('checkout-ward-${_selectedWard?.wardCode}'),
+                  initialValue: _selectedWard,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: _isLoadingWards ? 'Loading wards...' : 'Ward',
+                    border: const OutlineInputBorder(),
+                  ),
+                  items: _wards
+                      .map(
+                        (ward) => DropdownMenuItem(
+                          value: ward,
+                          child: Text(
+                            ward.wardName,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged:
+                      _selectedDistrict == null ||
+                          _isLoadingWards ||
+                          _isSubmitting
+                      ? null
+                      : _selectWard,
+                ),
+                const SizedBox(height: 8),
+              ],
+            ],
             if (_isCalculatingShippingFee)
               const LinearProgressIndicator()
+            else if (_ghnError != null)
+              Text(_ghnError!, style: const TextStyle(color: Colors.red))
             else if (_calculatedShippingFee != null)
               Text('Shipping fee: ${formatVnd(_calculatedShippingFee!)}')
-            else
-              const Text(
-                'Select province, district, and ward to calculate shipping fee.',
-              ),
+            else if (hasGhnCodes)
+              const Text('Calculating GHN shipping fee...'),
           ],
         );
       },
@@ -1003,219 +991,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
-  Future<void> _handleQrPayment(OrderDetail order) async {
+  Future<void> _handleSePay(OrderDetail order) async {
     try {
-      final payment = await _orderService.createQrPayment(order.orderId);
+      final payment = await _orderService.createSePayPayment(order.orderId);
 
       if (!mounted) return;
-
-      final confirmed = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) {
-          return AlertDialog(
-            title: const Text('QR Payment'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Image.network(
-                      payment.qrImageUrl,
-                      width: 240,
-                      height: 240,
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, _, _) {
-                        return const SizedBox(
-                          width: 240,
-                          height: 240,
-                          child: Center(child: Text('Could not load QR image')),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _qrInfoRow('Amount', formatVnd(payment.amount)),
-                  _qrInfoRow('Account', payment.accountNo),
-                  _qrInfoRow('Name', payment.accountName),
-                  _qrInfoRow('Content', payment.transferContent),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Scan this QR with your banking app. Your order will stay pending until admin confirms the transfer.',
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  try {
-                    await _orderService.confirmQrPayment(order.orderId);
-
-                    if (!context.mounted) return;
-
-                    Navigator.pop(context, true);
-                  } catch (e) {
-                    if (!context.mounted) return;
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          e.toString().replaceFirst('Exception: ', ''),
-                        ),
-                      ),
-                    );
-                  }
-                },
-                child: const Text('Tôi đã chuyển khoản'),
-              ),
-            ],
-          );
-        },
-      );
-
-      if (!mounted) return;
-
-      if (confirmed != true) {
-        Navigator.pushReplacementNamed(
-          context,
-          '/order-detail',
-          arguments: order.orderId,
-        );
-        return;
-      }
-
-      await showDialog<void>(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: const Text('Đang chờ xác nhận'),
-            content: const Text('Đơn hàng đang chờ admin xác nhận thanh toán.'),
-            actions: [
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('View order'),
-              ),
-            ],
-          );
-        },
-      );
-
-      if (!mounted) return;
-
       Navigator.pushReplacementNamed(
         context,
-        '/order-detail',
-        arguments: order.orderId,
+        '/sepay-payment',
+        arguments: payment,
       );
     } catch (e) {
       if (!mounted) return;
 
       _showError(e.toString());
     }
-  }
-
-  Widget _qrInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 78,
-            child: Text(
-              label,
-              style: const TextStyle(fontWeight: FontWeight.w800),
-            ),
-          ),
-          Expanded(child: SelectableText(value)),
-        ],
-      ),
-    );
-  }
-
-  String? _validateVisaCardNumber(String? value) {
-    final digits = _digitsOnly(value);
-
-    if (digits.length < 13 ||
-        digits.length > 19 ||
-        !digits.startsWith('4') ||
-        !_passesLuhn(digits)) {
-      return context.tr('invalidVisaCard');
-    }
-
-    return null;
-  }
-
-  String? _validateVisaExpiry(String? value) {
-    final match = RegExp(
-      r'^(\d{1,2})/(\d{2}|\d{4})$',
-    ).firstMatch((value ?? '').trim());
-
-    if (match == null) {
-      return context.tr('invalidVisaExpiry');
-    }
-
-    final month = int.tryParse(match.group(1)!);
-    var year = int.tryParse(match.group(2)!);
-
-    if (month == null || month < 1 || month > 12 || year == null) {
-      return context.tr('invalidVisaExpiry');
-    }
-
-    if (year < 100) {
-      year += 2000;
-    }
-
-    final lastValidDate = DateTime(year, month + 1, 0);
-    final today = DateTime.now();
-
-    if (lastValidDate.isBefore(DateTime(today.year, today.month, today.day))) {
-      return context.tr('invalidVisaExpiry');
-    }
-
-    return null;
-  }
-
-  String? _validateVisaCvv(String? value) {
-    final digits = _digitsOnly(value);
-
-    if (digits.length < 3 || digits.length > 4) {
-      return context.tr('invalidVisaCvv');
-    }
-
-    return null;
-  }
-
-  String _digitsOnly(String? value) {
-    return (value ?? '').replaceAll(RegExp(r'\D'), '');
-  }
-
-  bool _passesLuhn(String value) {
-    var sum = 0;
-    var doubleDigit = false;
-
-    for (var index = value.length - 1; index >= 0; index--) {
-      var digit = int.parse(value[index]);
-
-      if (doubleDigit) {
-        digit *= 2;
-
-        if (digit > 9) {
-          digit -= 9;
-        }
-      }
-
-      sum += digit;
-      doubleDigit = !doubleDigit;
-    }
-
-    return sum % 10 == 0;
   }
 
   void _showError(String message) {
@@ -1260,10 +1050,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         paymentOption('COD', 'COD'),
         paymentOption('VNPAY', 'VNPAY'),
         paymentOption('PAYPAL', 'PayPal'),
-        paymentOption('QR', 'QR'),
-        paymentOption('VISA', 'Simulated Visa Payment'),
+        paymentOption('SEPAY', 'SePay'),
       ],
     );
+  }
+
+  String get _paymentButtonLabel {
+    return switch (_paymentMethod) {
+      'VNPAY' => 'Pay with VNPAY',
+      'PAYPAL' => 'Pay with PayPal',
+      'SEPAY' => 'Pay with SePay',
+      _ => 'Place order',
+    };
   }
 
   @override
@@ -1303,7 +1101,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               height: 20,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : Text(context.tr('placeOrder')),
+                          : Text(_paymentButtonLabel),
                     ),
                   ),
                   const SizedBox(height: 8),

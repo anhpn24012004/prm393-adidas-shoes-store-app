@@ -1,6 +1,5 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../config/app_config.dart';
@@ -38,6 +37,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
   final TextEditingController _materialController = TextEditingController();
   final TextEditingController _manualImageUrlController =
       TextEditingController();
+  final TextEditingController _bulkStockController = TextEditingController();
 
   late Future<List<CategoryModel>> _categoriesFuture;
 
@@ -50,6 +50,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
   final List<_PendingVariant> _pendingVariants = [];
   final Map<String, _PendingVariant> _variantCache = {};
   final List<_ClassificationGroupDraft> _classificationGroups = [];
+  bool _bulkStockHadNegativeInput = false;
   int _draftId = 0;
 
   bool get isEditMode => widget.product != null;
@@ -84,6 +85,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
     _brandController.dispose();
     _materialController.dispose();
     _manualImageUrlController.dispose();
+    _bulkStockController.dispose();
     for (final group in _classificationGroups) {
       group.dispose();
     }
@@ -826,6 +828,104 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
     return false;
   }
 
+  void _applyBulkStock() {
+    if (_pendingVariants.isEmpty) return;
+
+    final text = _bulkStockController.text.trim();
+    if (_bulkStockHadNegativeInput) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tồn kho không được nhỏ hơn 0.')),
+      );
+      return;
+    }
+    if (text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vui lòng nhập số lượng tồn kho.')),
+      );
+      return;
+    }
+
+    final stock = int.tryParse(text);
+    if (stock == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tồn kho phải là số nguyên không âm.')),
+      );
+      return;
+    }
+    if (stock < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tồn kho không được nhỏ hơn 0.')),
+      );
+      return;
+    }
+
+    setState(() {
+      for (final variant in _pendingVariants) {
+        variant.stockController.text = stock.toString();
+      }
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Đã áp dụng tồn kho cho tất cả phân loại.')),
+    );
+  }
+
+  Widget _buildBulkStockControls() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 520;
+        final stockField = TextField(
+          controller: _bulkStockController,
+          enabled: !_isSubmitting,
+          keyboardType: TextInputType.number,
+          inputFormatters: [
+            TextInputFormatter.withFunction((oldValue, newValue) {
+              if (newValue.text.contains('-')) {
+                _bulkStockHadNegativeInput = true;
+                return oldValue;
+              }
+              _bulkStockHadNegativeInput = false;
+              return RegExp(r'^\d*$').hasMatch(newValue.text)
+                  ? newValue
+                  : oldValue;
+            }),
+          ],
+          decoration: const InputDecoration(
+            labelText: 'Nhập tồn kho chung',
+            hintText: 'Ví dụ: 100',
+            prefixIcon: Icon(Icons.inventory_2_outlined),
+            isDense: true,
+          ),
+          onSubmitted: (_) => _applyBulkStock(),
+        );
+        final applyButton = ElevatedButton.icon(
+          onPressed: _isSubmitting || _pendingVariants.isEmpty
+              ? null
+              : _applyBulkStock,
+          icon: const Icon(Icons.done_all),
+          label: const Text('Áp dụng cho tất cả'),
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          ),
+        );
+
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [stockField, const SizedBox(height: 10), applyButton],
+          );
+        }
+
+        return Row(
+          children: [
+            SizedBox(width: 280, child: stockField),
+            const SizedBox(width: 12),
+            applyButton,
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildCategoryDropdown() {
     return FutureBuilder<List<CategoryModel>>(
       future: _categoriesFuture,
@@ -997,6 +1097,8 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
           if (_pendingVariants.isNotEmpty) ...[
             const SizedBox(height: 24),
             const _SectionTitle('Danh sách phân loại hàng'),
+            const SizedBox(height: 12),
+            _buildBulkStockControls(),
             const SizedBox(height: 12),
             _buildVariantTable(),
           ],

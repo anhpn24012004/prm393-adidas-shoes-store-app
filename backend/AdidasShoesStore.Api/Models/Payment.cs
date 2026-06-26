@@ -17,6 +17,16 @@ public partial class Payment
 
     public string? TransactionCode { get; set; }
 
+    public string? PaymentProvider { get; set; }
+
+    public string? ProviderTransactionId { get; set; }
+
+    public string? TransferContent { get; set; }
+
+    public decimal? PaidAmount { get; set; }
+
+    public string? RawWebhookData { get; set; }
+
     public DateTime? PaidAt { get; set; }
 
     public virtual Order Order { get; set; } = null!;

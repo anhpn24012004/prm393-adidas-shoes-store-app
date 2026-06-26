@@ -3,9 +3,11 @@ import 'package:http/http.dart' as http;
 
 import '../config/app_config.dart';
 import '../models/cart_model.dart';
+import 'auth_storage.dart';
 
 class CartService {
   final String baseUrl = '${AppConfig.apiBaseUrl}/cart';
+  final AuthStorage _authStorage = AuthStorage();
 
   Future<int> addToCart({
     required int userId,
@@ -14,9 +16,8 @@ class CartService {
   }) async {
     final response = await http.post(
       Uri.parse(baseUrl),
-      headers: {'Content-Type': 'application/json'},
+      headers: await _headers(),
       body: jsonEncode({
-        'userId': userId,
         'variantId': variantId,
         'quantity': quantity,
       }),
@@ -31,7 +32,10 @@ class CartService {
   }
 
   Future<CartModel> getCart(int userId) async {
-    final response = await http.get(Uri.parse('$baseUrl/user/$userId'));
+    final response = await http.get(
+      Uri.parse(baseUrl),
+      headers: await _headers(),
+    );
 
     if (response.statusCode != 200) {
       throw Exception(_message(response));
@@ -41,7 +45,10 @@ class CartService {
   }
 
   Future<int> getCartCount(int userId) async {
-    final response = await http.get(Uri.parse('$baseUrl/user/$userId/count'));
+    final response = await http.get(
+      Uri.parse('$baseUrl/count'),
+      headers: await _headers(),
+    );
 
     if (response.statusCode != 200) {
       throw Exception(_message(response));
@@ -54,7 +61,7 @@ class CartService {
   Future<int> updateQuantity(int cartItemId, int quantity) async {
     final response = await http.put(
       Uri.parse('$baseUrl/item/$cartItemId'),
-      headers: {'Content-Type': 'application/json'},
+      headers: await _headers(),
       body: jsonEncode({'quantity': quantity}),
     );
 
@@ -67,7 +74,10 @@ class CartService {
   }
 
   Future<int> deleteItem(int cartItemId) async {
-    final response = await http.delete(Uri.parse('$baseUrl/item/$cartItemId'));
+    final response = await http.delete(
+      Uri.parse('$baseUrl/item/$cartItemId'),
+      headers: await _headers(),
+    );
 
     if (response.statusCode != 200 && response.statusCode != 204) {
       throw Exception(_message(response));
@@ -82,7 +92,10 @@ class CartService {
   }
 
   Future<int> clearCart(int userId) async {
-    final response = await http.delete(Uri.parse('$baseUrl/user/$userId'));
+    final response = await http.delete(
+      Uri.parse(baseUrl),
+      headers: await _headers(),
+    );
 
     if (response.statusCode != 200 && response.statusCode != 204) {
       throw Exception(_message(response));
@@ -97,6 +110,10 @@ class CartService {
   }
 
   String _message(http.Response response) {
+    if (response.statusCode == 401) {
+      return 'Login required';
+    }
+
     try {
       final data = jsonDecode(response.body);
       if (data is Map && data['message'] != null) {
@@ -105,5 +122,18 @@ class CartService {
     } catch (_) {}
 
     return 'Request failed (${response.statusCode})';
+  }
+
+  Future<Map<String, String>> _headers() async {
+    final token = await _authStorage.getToken();
+
+    if (token == null) {
+      throw Exception('Login required');
+    }
+
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    };
   }
 }

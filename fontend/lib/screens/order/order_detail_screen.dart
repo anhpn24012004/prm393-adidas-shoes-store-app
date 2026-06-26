@@ -74,6 +74,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       'Cancelled' => context.tr('statusCancelled'),
       'Completed' => context.tr('statusCompleted'),
       'Pending' => context.tr('statusPendingPayment'),
+      'ReadyToPick' => 'Ready to pick',
+      'Picking' => 'Picking',
+      'Preparing' => context.tr('statusPreparing'),
+      'Shipped' => context.tr('statusShipped'),
+      'InTransit' => context.tr('statusInTransit'),
+      'OutForDelivery' => context.tr('statusOutForDelivery'),
+      'Failed' => context.tr('statusFailed'),
+      'Returned' => context.tr('statusReturned'),
       null => context.tr('notAvailable'),
       _ => status,
     };
@@ -189,6 +197,82 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           Expanded(child: Text(value)),
         ],
       ),
+    );
+  }
+
+  Widget _buildOrderTimeline(OrderDetail order, ShipmentDetail? shipment) {
+    final shipmentStatus = shipment?.shipmentStatus ?? order.shipmentStatus;
+    final includeOutForDelivery = shipmentStatus == 'OutForDelivery';
+    final steps = <_TimelineStep>[
+      const _TimelineStep('Order Placed', true),
+      _TimelineStep(
+        context.tr('statusProcessing'),
+        order.status == 'Processing' ||
+            order.status == 'Shipping' ||
+            order.status == 'Delivered' ||
+            order.status == 'Completed',
+      ),
+      _TimelineStep(
+        context.tr('statusShipping'),
+        order.status == 'Shipping' ||
+            order.status == 'Delivered' ||
+            order.status == 'Completed',
+      ),
+      if (includeOutForDelivery)
+        _TimelineStep(context.tr('statusOutForDelivery'), true),
+      _TimelineStep(
+        context.tr('statusDelivered'),
+        order.status == 'Delivered' || order.status == 'Completed',
+      ),
+      _TimelineStep(context.tr('statusCompleted'), order.status == 'Completed'),
+    ];
+
+    var activeIndex = steps.lastIndexWhere((step) => step.done);
+    if (activeIndex < 0) activeIndex = 0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionTitle('Order timeline'),
+        ...steps.asMap().entries.map((entry) {
+          final index = entry.key;
+          final step = entry.value;
+          final isActive = index == activeIndex;
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Column(
+                children: [
+                  Icon(
+                    step.done
+                        ? Icons.check_circle
+                        : Icons.radio_button_unchecked,
+                    color: step.done ? Colors.green : Colors.grey,
+                  ),
+                  if (index != steps.length - 1)
+                    Container(
+                      width: 2,
+                      height: 28,
+                      color: step.done ? Colors.green : Colors.grey.shade300,
+                    ),
+                ],
+              ),
+              const SizedBox(width: 12),
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  step.label,
+                  style: TextStyle(
+                    fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                    color: step.done ? Colors.black87 : Colors.grey,
+                  ),
+                ),
+              ),
+            ],
+          );
+        }),
+      ],
     );
   }
 
@@ -396,17 +480,37 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   Widget _buildShipmentSection(OrderDetail order, ShipmentDetail? shipment) {
     final canTrack =
         shipment != null ||
+        order.shipmentId != null ||
         order.status == 'Shipping' ||
         order.status == 'Delivered';
 
     if (shipment == null) {
+      final hasOrderShipment =
+          order.shipmentId != null ||
+          order.shipmentStatus != null ||
+          order.ghnOrderCode != null ||
+          order.trackingCode != null;
+
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _sectionTitle(context.tr('shipping')),
           const Text('Đang chờ shop xử lý vận chuyển'),
           const SizedBox(height: 6),
-          _infoRow(context.tr('orderStatus'), _statusLabel(order.status)),
+          if (!hasOrderShipment)
+            _infoRow(context.tr('orderStatus'), _statusLabel(order.status)),
+          _infoRow(
+            context.tr('shipmentStatus'),
+            _statusLabel(order.shipmentStatus),
+          ),
+          if (order.ghnOrderCode?.isNotEmpty == true)
+            _infoRow('GHN Order Code', order.ghnOrderCode!),
+          if (order.trackingCode?.isNotEmpty == true)
+            _infoRow('Tracking Code', order.trackingCode!),
+          _infoRow(
+            context.tr('estimatedDelivery'),
+            formatDate(order.expectedDeliveryTime),
+          ),
           if (canTrack) ...[
             const SizedBox(height: 8),
             OutlinedButton.icon(
@@ -438,7 +542,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               context.tr('notAvailable'),
         ),
         if (shipment.ghnOrderCode?.isNotEmpty == true)
-          _infoRow('GHN order code', shipment.ghnOrderCode!),
+          _infoRow('GHN Order Code', shipment.ghnOrderCode!),
+        if (shipment.trackingNumber?.isNotEmpty == true)
+          _infoRow('Tracking Code', shipment.trackingNumber!),
         _infoRow(
           context.tr('estimatedDelivery'),
           formatDate(shipment.estimatedDeliveryDate),
@@ -471,10 +577,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   Widget _buildDetail(OrderDetail order, ShipmentDetail? shipment) {
     final canCancel =
-        order.status == 'PendingPayment' ||
-        (order.status == 'Processing' &&
-            order.payment.paymentMethod == 'COD' &&
-            order.payment.paymentStatus != 'Success');
+        order.shipmentId == null &&
+        (order.status == 'PendingPayment' || order.status == 'Processing');
     final paymentStatus =
         _paymentStatus?.paymentStatus ?? order.payment.paymentStatus;
     final paidAt = _paymentStatus?.paidAt ?? order.payment.paidAt;
@@ -491,6 +595,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           ),
           const SizedBox(height: 4),
           Text('${context.tr('orderStatus')}: ${_statusLabel(order.status)}'),
+          Text('${context.tr('createdAt')}: ${formatDate(order.createdAt)}'),
+          _buildOrderTimeline(order, shipment),
           _sectionTitle(context.tr('receiver')),
           _infoRow(context.tr('name'), order.receiverName),
           _infoRow(context.tr('phoneNumber'), order.receiverPhone),
@@ -542,6 +648,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     )
                   : const Icon(Icons.check_circle_outline),
               label: Text(context.tr('confirmReceived')),
+            ),
+          ],
+          if (order.status == 'Shipping') ...[
+            const SizedBox(height: 8),
+            const Text(
+              'Order is being shipped. Please contact support to cancel.',
             ),
           ],
           if (canCancel) ...[
@@ -628,4 +740,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             ),
     );
   }
+}
+
+class _TimelineStep {
+  final String label;
+  final bool done;
+
+  const _TimelineStep(this.label, this.done);
 }

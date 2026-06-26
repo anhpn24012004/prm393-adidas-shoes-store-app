@@ -3,6 +3,7 @@ using AdidasShoesStore.Api.DTOs.Products;
 using AdidasShoesStore.Api.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using System.Globalization;
 using System.Text;
@@ -74,14 +75,15 @@ public class ProductVariantsController : ControllerBase
             return BadRequest(new { message = "Variant with this size and color already exists." });
         }
 
-        if (!string.IsNullOrWhiteSpace(dto.Sku))
+        var normalizedSku = NormalizeSku(dto.Sku);
+        if (normalizedSku != null)
         {
             var skuExists = await _context.ProductVariants
-                .AnyAsync(v => v.Sku == dto.Sku);
+                .AnyAsync(v => v.Sku == normalizedSku);
 
             if (skuExists)
             {
-                return BadRequest(new { message = "SKU already exists" });
+                return BadRequest(new { message = "SKU already exists on another variant." });
             }
         }
 
@@ -93,12 +95,19 @@ public class ProductVariantsController : ControllerBase
             ImageUrl = NormalizeImageUrl(dto.ImageUrl),
             Price = dto.Price,
             StockQuantity = dto.StockQuantity,
-            Sku = dto.Sku,
+            Sku = normalizedSku,
             IsActive = dto.IsActive
         };
 
         _context.ProductVariants.Add(variant);
-        await _context.SaveChangesAsync();
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException exception) when (IsUniqueConstraintViolation(exception))
+        {
+            return BadRequest(new { message = "SKU already exists on another variant." });
+        }
 
         return Ok(new
         {
@@ -130,14 +139,15 @@ public class ProductVariantsController : ControllerBase
             return BadRequest(new { message = "Variant with this size and color already exists." });
         }
 
-        if (!string.IsNullOrWhiteSpace(dto.Sku))
+        var normalizedSku = NormalizeSku(dto.Sku);
+        if (normalizedSku != null)
         {
             var skuExists = await _context.ProductVariants
-                .AnyAsync(v => v.Sku == dto.Sku && v.VariantId != variantId);
+                .AnyAsync(v => v.Sku == normalizedSku && v.VariantId != variantId);
 
             if (skuExists)
             {
-                return BadRequest(new { message = "SKU already exists" });
+                return BadRequest(new { message = "SKU already exists on another variant." });
             }
         }
 
@@ -146,10 +156,17 @@ public class ProductVariantsController : ControllerBase
         variant.ImageUrl = NormalizeImageUrl(dto.ImageUrl);
         variant.Price = dto.Price;
         variant.StockQuantity = dto.StockQuantity;
-        variant.Sku = dto.Sku;
+        variant.Sku = normalizedSku;
         variant.IsActive = dto.IsActive;
 
-        await _context.SaveChangesAsync();
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException exception) when (IsUniqueConstraintViolation(exception))
+        {
+            return BadRequest(new { message = "SKU already exists on another variant." });
+        }
 
         return Ok(new { message = "Product variant updated successfully" });
     }
@@ -179,6 +196,11 @@ public class ProductVariantsController : ControllerBase
     private static string NormalizeColor(string? color)
     {
         return color?.Trim() ?? string.Empty;
+    }
+
+    private static string? NormalizeSku(string? sku)
+    {
+        return string.IsNullOrWhiteSpace(sku) ? null : sku.Trim();
     }
 
     [HttpGet("products/{productId}/classifications")]
@@ -245,8 +267,8 @@ public class ProductVariantsController : ControllerBase
         }
 
         var requestSkus = dto.Variants
-            .Select(v => v.Sku?.Trim())
-            .Where(sku => !string.IsNullOrWhiteSpace(sku))
+            .Select(v => NormalizeSku(v.Sku))
+            .Where(sku => sku != null)
             .Cast<string>()
             .ToList();
         if (requestSkus.Count != requestSkus.Distinct(StringComparer.OrdinalIgnoreCase).Count())
@@ -254,13 +276,16 @@ public class ProductVariantsController : ControllerBase
             return BadRequest(new { message = "SKU values must be unique." });
         }
 
-        var duplicateSkuExists = await _context.ProductVariants.AnyAsync(v =>
-            v.ProductId != productId &&
-            v.Sku != null &&
-            requestSkus.Contains(v.Sku));
-        if (duplicateSkuExists)
+        if (requestSkus.Count > 0)
         {
-            return BadRequest(new { message = "SKU already exists on another product." });
+            var duplicateSkuExists = await _context.ProductVariants.AnyAsync(v =>
+                v.ProductId != productId &&
+                v.Sku != null &&
+                requestSkus.Contains(v.Sku));
+            if (duplicateSkuExists)
+            {
+                return BadRequest(new { message = "SKU already exists on another product." });
+            }
         }
 
         var normalizedGroups = NormalizeGroups(dto.ClassificationGroups);
@@ -303,7 +328,7 @@ public class ProductVariantsController : ControllerBase
                 variant.OptionValuesJson = JsonSerializer.Serialize(values);
                 variant.Price = input.Price;
                 variant.StockQuantity = input.StockQuantity;
-                variant.Sku = string.IsNullOrWhiteSpace(input.Sku) ? null : input.Sku.Trim();
+                variant.Sku = NormalizeSku(input.Sku);
                 variant.IsActive = input.IsActive;
                 variant.ImageUrl = ResolveVariantImage(normalizedGroups, values, input.ImageUrl);
 
@@ -321,6 +346,11 @@ public class ProductVariantsController : ControllerBase
 
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
+        }
+        catch (DbUpdateException exception) when (IsUniqueConstraintViolation(exception))
+        {
+            await transaction.RollbackAsync();
+            return BadRequest(new { message = "SKU already exists on another variant." });
         }
         catch
         {
@@ -381,6 +411,11 @@ public class ProductVariantsController : ControllerBase
         }
 
         return null;
+    }
+
+    private static bool IsUniqueConstraintViolation(DbUpdateException exception)
+    {
+        return exception.InnerException is SqlException { Number: 2601 or 2627 };
     }
 
     private static List<ProductClassificationGroupDto> NormalizeGroups(

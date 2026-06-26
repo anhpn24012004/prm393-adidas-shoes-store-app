@@ -14,6 +14,7 @@ import 'screens/order/checkout_screen.dart';
 import 'screens/order/order_history_screen.dart';
 import 'screens/order/order_detail_screen.dart';
 import 'screens/order/payment_result_screen.dart';
+import 'screens/order/sepay_payment_screen.dart';
 import 'screens/order/user_shipment_tracking_screen.dart';
 import 'screens/refund/refund_request_screen.dart';
 import 'screens/refund/refund_status_screen.dart';
@@ -41,6 +42,7 @@ import 'screens/admin/admin_user_list_screen.dart';
 import 'theme/app_theme.dart';
 import 'config/app_config.dart';
 import 'models/product_model.dart';
+import 'models/order_model.dart';
 import 'services/auth_storage.dart';
 
 Future<void> main() async {
@@ -78,9 +80,32 @@ class AdidasShoesStoreApp extends StatelessWidget {
           '/shipment-tracking': (context) => const UserShipmentTrackingScreen(),
           '/payment-result': (context) {
             final argument = ModalRoute.of(context)?.settings.arguments;
-            final orderId = argument is int ? argument : 0;
+            final queryOrderId = int.tryParse(
+              Uri.base.queryParameters['orderId'] ?? '',
+            );
+            final queryStatus = Uri.base.queryParameters['status'];
 
-            return PaymentResultScreen(orderId: orderId);
+            int orderId = queryOrderId ?? 0;
+            String? statusHint = queryStatus;
+
+            if (argument is int) {
+              orderId = argument;
+            } else if (argument is Map) {
+              orderId = argument['orderId'] as int? ?? orderId;
+              statusHint = argument['status'] as String? ?? statusHint;
+            }
+
+            return PaymentResultScreen(
+              orderId: orderId,
+              statusHint: statusHint,
+            );
+          },
+          '/sepay-payment': (context) {
+            final argument = ModalRoute.of(context)?.settings.arguments;
+            if (argument is SePayPaymentResponse) {
+              return SePayPaymentScreen(payment: argument);
+            }
+            throw ArgumentError('SePayPaymentResponse required');
           },
           '/refund-request': (context) => const RefundRequestScreen(),
           '/refund-status': (context) => const RefundStatusScreen(),

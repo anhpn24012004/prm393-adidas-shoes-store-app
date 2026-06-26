@@ -283,6 +283,9 @@ namespace AdidasShoesStore.Api.Migrations
                     b.Property<int>("OrderId")
                         .HasColumnType("int");
 
+                    b.Property<decimal?>("PaidAmount")
+                        .HasColumnType("decimal(18, 2)");
+
                     b.Property<DateTime?>("PaidAt")
                         .HasColumnType("datetime");
 
@@ -290,6 +293,17 @@ namespace AdidasShoesStore.Api.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("PaymentProvider")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("ProviderTransactionId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("RawWebhookData")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -300,8 +314,16 @@ namespace AdidasShoesStore.Api.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("TransferContent")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
                     b.HasKey("PaymentId")
                         .HasName("PK__Payments__9B556A38D879DA3F");
+
+                    b.HasIndex("ProviderTransactionId")
+                        .IsUnique()
+                        .HasFilter("[ProviderTransactionId] IS NOT NULL");
 
                     b.HasIndex(new[] { "OrderId" }, "UQ__Payments__C3905BCE48FC4ECF")
                         .IsUnique();
@@ -446,7 +468,7 @@ namespace AdidasShoesStore.Api.Migrations
 
                     b.HasIndex("ProductId");
 
-                    b.HasIndex(new[] { "Sku" }, "UQ__ProductV__CA1ECF0D8EE27279")
+                    b.HasIndex(new[] { "Sku" }, "UX_ProductVariants_SKU_NotNull")
                         .IsUnique()
                         .HasFilter("[SKU] IS NOT NULL");
 
@@ -780,6 +802,9 @@ namespace AdidasShoesStore.Api.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<int?>("DistrictId")
+                        .HasColumnType("int");
+
                     b.Property<bool?>("IsDefault")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
@@ -789,6 +814,9 @@ namespace AdidasShoesStore.Api.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
+
+                    b.Property<int?>("ProvinceId")
+                        .HasColumnType("int");
 
                     b.Property<string>("ReceiverName")
                         .IsRequired()
@@ -801,6 +829,10 @@ namespace AdidasShoesStore.Api.Migrations
                     b.Property<string>("Ward")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("WardCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.HasKey("AddressId")
                         .HasName("PK__UserAddr__091C2AFB003ECD84");

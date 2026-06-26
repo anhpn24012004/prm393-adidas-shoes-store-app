@@ -136,43 +136,15 @@ class OrderService {
     throw Exception(_errorMessage(response));
   }
 
-  Future<QrPaymentResponse> createQrPayment(int orderId) async {
+  Future<SePayPaymentResponse> createSePayPayment(int orderId) async {
     final response = await http.post(
-      Uri.parse('${ApiClient.baseUrl}/payments/qr/create'),
+      Uri.parse('${ApiClient.baseUrl}/payments/sepay/create'),
       headers: await _headers(),
       body: jsonEncode({'orderId': orderId}),
     );
 
     if (response.statusCode == 200) {
-      return QrPaymentResponse.fromJson(jsonDecode(response.body));
-    }
-
-    throw Exception(_errorMessage(response));
-  }
-
-  Future<PaymentStatus> confirmQrPayment(int orderId) async {
-    final response = await http.post(
-      Uri.parse('${ApiClient.baseUrl}/payments/qr/confirm'),
-      headers: await _headers(),
-      body: jsonEncode({'orderId': orderId}),
-    );
-
-    if (response.statusCode == 200) {
-      return PaymentStatus.fromJson(jsonDecode(response.body));
-    }
-
-    throw Exception(_errorMessage(response));
-  }
-
-  Future<PaymentStatus> payWithVisa(VisaPaymentRequest request) async {
-    final response = await http.post(
-      Uri.parse('${ApiClient.baseUrl}/payments/visa/pay'),
-      headers: await _headers(),
-      body: jsonEncode(request.toJson()),
-    );
-
-    if (response.statusCode == 200) {
-      return PaymentStatus.fromJson(jsonDecode(response.body));
+      return SePayPaymentResponse.fromJson(jsonDecode(response.body));
     }
 
     throw Exception(_errorMessage(response));

@@ -58,6 +58,8 @@ namespace AdidasShoesStore.Api.DTOs.Shipments
 
         public decimal FinalAmount { get; set; }
 
+        public bool ManualOverrideEnabled { get; set; }
+
         public List<AdminShipmentOrderItemDto> OrderItems { get; set; } = new();
     }
 }

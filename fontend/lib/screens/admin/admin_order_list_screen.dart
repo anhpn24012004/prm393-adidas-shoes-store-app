@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import '../../localization/app_localization.dart';
 import '../../models/admin_model.dart';
 import '../../services/admin_service.dart';
+import '../../services/shipment_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/currency_formatter.dart';
+import 'admin_shipment_detail_screen.dart';
 
 class AdminOrderListScreen extends StatefulWidget {
   const AdminOrderListScreen({super.key});
@@ -203,18 +205,9 @@ class AdminOrderDetailScreen extends StatefulWidget {
 
 class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
   final _service = AdminService();
+  final _shipmentService = ShipmentService();
   late Future<AdminOrderDetail> _future;
   bool _updating = false;
-
-  static const _statuses = [
-    'PendingPayment',
-    'Paid',
-    'Processing',
-    'Shipping',
-    'Delivered',
-    'Completed',
-    'Cancelled',
-  ];
 
   @override
   void initState() {
@@ -236,44 +229,97 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
     };
   }
 
-  Future<void> _changeStatus(AdminOrderDetail order) async {
-    var selected = order.summary.status;
-    final status = await showDialog<String>(
+  String _shipmentStatusLabel(String? status) {
+    return switch (status) {
+      'ReadyToPick' => 'Ready to pick',
+      'Picking' => 'Picking',
+      'Pending' => context.tr('statusPending'),
+      'Preparing' => context.tr('statusPreparing'),
+      'Shipped' => context.tr('statusShipped'),
+      'InTransit' => context.tr('statusInTransit'),
+      'OutForDelivery' => context.tr('statusOutForDelivery'),
+      'Delivered' => context.tr('statusDelivered'),
+      'Failed' => context.tr('statusFailed'),
+      'Returned' => context.tr('statusReturned'),
+      null => context.tr('notAvailable'),
+      _ => status,
+    };
+  }
+
+  String _formatDate(DateTime? date) {
+    if (date == null) return context.tr('notAvailable');
+    return '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')} '
+        '${date.hour.toString().padLeft(2, '0')}:'
+        '${date.minute.toString().padLeft(2, '0')}';
+  }
+
+  void _reloadDetail() {
+    _future = _service.getOrder(widget.orderId);
+  }
+
+  Future<void> _completeOrder() async {
+    final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(context.tr('updateOrderStatus')),
-          content: DropdownButtonFormField<String>(
-            initialValue: _statuses.contains(selected) ? selected : null,
-            items: _statuses
-                .map(
-                  (value) => DropdownMenuItem(
-                    value: value,
-                    child: Text(_statusLabel(value)),
-                  ),
-                )
-                .toList(),
-            onChanged: (value) =>
-                setDialogState(() => selected = value ?? selected),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(context.tr('cancel').toUpperCase()),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, selected),
-              child: Text(context.tr('update').toUpperCase()),
-            ),
-          ],
+      builder: (context) => AlertDialog(
+        title: const Text('Mark order completed?'),
+        content: const Text(
+          'Use this admin fallback only when the customer has received the order.',
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(context.tr('cancel').toUpperCase()),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('MARK COMPLETED'),
+          ),
+        ],
       ),
     );
-    if (status == null || status == order.summary.status) return;
+
+    if (confirmed != true) return;
+    await _updateOrderStatus('Completed');
+  }
+
+  Future<void> _cancelOrder(AdminOrderDetail order) async {
+    if (order.summary.status != 'Processing' || order.shipmentId != null) {
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel order?'),
+        content: const Text('Are you sure you want to cancel this order?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(context.tr('cancel').toUpperCase()),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('CANCEL ORDER'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    await _updateOrderStatus('Cancelled');
+  }
+
+  Future<void> _updateOrderStatus(String status) async {
     setState(() => _updating = true);
     try {
       await _service.updateOrderStatus(widget.orderId, status);
-      if (mounted) setState(() => _future = _service.getOrder(widget.orderId));
+      if (mounted) setState(_reloadDetail);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -284,6 +330,61 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
     } finally {
       if (mounted) setState(() => _updating = false);
     }
+  }
+
+  Future<void> _createGhnShipment() async {
+    setState(() => _updating = true);
+    try {
+      await _shipmentService.createShipment(
+        orderId: widget.orderId,
+        carrier: '',
+        trackingNumber: '',
+      );
+      if (mounted) setState(_reloadDetail);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _updating = false);
+    }
+  }
+
+  Future<void> _syncGhnStatus(AdminOrderDetail order) async {
+    final shipmentId = order.shipmentId;
+    if (shipmentId == null) return;
+
+    setState(() => _updating = true);
+    try {
+      await _shipmentService.syncGhnStatus(shipmentId);
+      if (mounted) setState(_reloadDetail);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _updating = false);
+    }
+  }
+
+  Future<void> _viewShipment(AdminOrderDetail order) async {
+    final shipmentId = order.shipmentId;
+    if (shipmentId == null) return;
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AdminShipmentDetailScreen(shipmentId: shipmentId),
+      ),
+    );
+
+    if (mounted) setState(_reloadDetail);
   }
 
   @override
@@ -316,6 +417,16 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
                 ),
               ),
               const Divider(height: 36),
+              _line('Order status', _statusLabel(order.summary.status)),
+              _line(
+                'Payment status',
+                order.summary.paymentStatus ?? context.tr('notAvailable'),
+              ),
+              _line(
+                'Shipment status',
+                _shipmentStatusLabel(order.shipmentStatus),
+              ),
+              const Divider(height: 36),
               _line(context.tr('customer'), order.summary.customerName),
               _line('Email', order.summary.customerEmail),
               _line(context.tr('receiver'), order.summary.receiverName),
@@ -341,15 +452,68 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
                 context.tr('payment'),
                 '${order.summary.paymentMethod ?? context.tr('notAvailable')} / ${order.summary.paymentStatus ?? context.tr('notAvailable')}',
               ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _updating ? null : () => _changeStatus(order),
-                child: Text(
-                  _updating
-                      ? context.tr('updating').toUpperCase()
-                      : context.tr('updateOrderStatus').toUpperCase(),
-                ),
+              const Divider(height: 36),
+              _line(
+                context.tr('shipment'),
+                order.shipmentId == null
+                    ? context.tr('notAvailable')
+                    : '#${order.shipmentId}',
               ),
+              _line(
+                'GhnOrderCode',
+                order.ghnOrderCode ?? context.tr('notAvailable'),
+              ),
+              _line(
+                'TrackingCode',
+                order.trackingCode ?? context.tr('notAvailable'),
+              ),
+              _line(
+                'ExpectedDeliveryTime',
+                _formatDate(order.expectedDeliveryTime),
+              ),
+              const SizedBox(height: 20),
+              if (order.summary.status == 'Processing' &&
+                  order.shipmentId == null)
+                ElevatedButton.icon(
+                  onPressed: _updating ? null : _createGhnShipment,
+                  icon: const Icon(Icons.local_shipping),
+                  label: Text(
+                    _updating ? context.tr('updating') : 'Create GHN Shipment',
+                  ),
+                ),
+              if (order.summary.status == 'Processing' &&
+                  order.shipmentId == null) ...[
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _updating ? null : () => _cancelOrder(order),
+                  icon: const Icon(Icons.cancel),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red,
+                    side: const BorderSide(color: Colors.red),
+                  ),
+                  label: const Text('Cancel Order'),
+                ),
+              ],
+              if (order.shipmentId != null) ...[
+                OutlinedButton.icon(
+                  onPressed: _updating ? null : () => _viewShipment(order),
+                  icon: const Icon(Icons.receipt_long),
+                  label: const Text('View Shipment Detail'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _updating ? null : () => _syncGhnStatus(order),
+                  icon: const Icon(Icons.sync),
+                  label: const Text('Sync GHN Status'),
+                ),
+              ],
+              if (order.summary.status == 'Delivered') ...[
+                const SizedBox(height: 8),
+                ElevatedButton(
+                  onPressed: _updating ? null : _completeOrder,
+                  child: const Text('MARK COMPLETED'),
+                ),
+              ],
             ],
           );
         },
