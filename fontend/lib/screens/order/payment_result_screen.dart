@@ -7,8 +7,13 @@ import '../../utils/currency_formatter.dart';
 
 class PaymentResultScreen extends StatefulWidget {
   final int orderId;
+  final String? statusHint;
 
-  const PaymentResultScreen({super.key, required this.orderId});
+  const PaymentResultScreen({
+    super.key,
+    required this.orderId,
+    this.statusHint,
+  });
 
   @override
   State<PaymentResultScreen> createState() => _PaymentResultScreenState();
@@ -87,9 +92,39 @@ class _PaymentResultScreenState extends State<PaymentResultScreen>
     );
   }
 
+  String? _resultMessage(PaymentStatus status) {
+    if (status.message != null && status.message!.isNotEmpty) {
+      return status.message;
+    }
+
+    if (status.isSuccess) {
+      return context.tr('paymentCompleted');
+    }
+
+    if (status.paymentStatus == 'Expired') {
+      return 'Payment expired.';
+    }
+
+    if (status.isFailed) {
+      return 'Payment failed or expired.';
+    }
+
+    return null;
+  }
+
+  Color? _resultColor(PaymentStatus status) {
+    if (status.isSuccess) return Colors.green;
+    if (status.isFailed || status.paymentStatus == 'Expired') {
+      return Colors.red;
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final status = _paymentStatus;
+    final resultMessage = status != null ? _resultMessage(status) : null;
+    final resultColor = status != null ? _resultColor(status) : null;
 
     return Scaffold(
       appBar: AppBar(title: Text(context.tr('paymentStatus'))),
@@ -102,6 +137,13 @@ class _PaymentResultScreenState extends State<PaymentResultScreen>
               context.tr('paymentResultHint'),
               style: const TextStyle(fontSize: 16),
             ),
+            if (widget.statusHint != null && status == null && _isLoading) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Loading latest payment status...',
+                style: TextStyle(color: Colors.grey.shade700),
+              ),
+            ],
             const SizedBox(height: 16),
             if (_error != null)
               Text(_error!, style: const TextStyle(color: Colors.red)),
@@ -117,13 +159,13 @@ class _PaymentResultScreenState extends State<PaymentResultScreen>
                   isThreeLine: true,
                 ),
               ),
-              if (status.paymentStatus == 'Success')
+              if (resultMessage != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
-                    context.tr('paymentCompleted'),
-                    style: const TextStyle(
-                      color: Colors.green,
+                    resultMessage,
+                    style: TextStyle(
+                      color: resultColor,
                       fontWeight: FontWeight.bold,
                     ),
                   ),

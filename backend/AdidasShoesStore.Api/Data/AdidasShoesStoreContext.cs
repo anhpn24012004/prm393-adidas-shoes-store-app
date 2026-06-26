@@ -181,12 +181,20 @@ public partial class AdidasShoesStoreContext : DbContext
             entity.HasKey(e => e.PaymentId).HasName("PK__Payments__9B556A38D879DA3F");
 
             entity.HasIndex(e => e.OrderId, "UQ__Payments__C3905BCE48FC4ECF").IsUnique();
+            entity.HasIndex(e => e.ProviderTransactionId)
+                .IsUnique()
+                .HasFilter("[ProviderTransactionId] IS NOT NULL");
 
             entity.Property(e => e.Amount).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.PaidAmount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.PaidAt).HasColumnType("datetime");
             entity.Property(e => e.PaymentMethod).HasMaxLength(50);
+            entity.Property(e => e.PaymentProvider).HasMaxLength(50);
+            entity.Property(e => e.ProviderTransactionId).HasMaxLength(100);
+            entity.Property(e => e.RawWebhookData).HasColumnType("nvarchar(max)");
             entity.Property(e => e.Status).HasMaxLength(50);
             entity.Property(e => e.TransactionCode).HasMaxLength(100);
+            entity.Property(e => e.TransferContent).HasMaxLength(255);
 
             entity.HasOne(d => d.Order).WithOne(p => p.Payment)
                 .HasForeignKey<Payment>(d => d.OrderId)
@@ -234,7 +242,9 @@ public partial class AdidasShoesStoreContext : DbContext
         {
             entity.HasKey(e => e.VariantId).HasName("PK__ProductV__0EA2338405E10B3D");
 
-            entity.HasIndex(e => e.Sku, "UQ__ProductV__CA1ECF0D8EE27279").IsUnique();
+            entity.HasIndex(e => e.Sku, "UX_ProductVariants_SKU_NotNull")
+                .IsUnique()
+                .HasFilter("[SKU] IS NOT NULL");
 
             entity.Property(e => e.Color).HasMaxLength(50);
             entity.Property(e => e.ImageUrl).HasMaxLength(500);
@@ -404,6 +414,7 @@ public partial class AdidasShoesStoreContext : DbContext
             entity.Property(e => e.Phone).HasMaxLength(20);
             entity.Property(e => e.ReceiverName).HasMaxLength(100);
             entity.Property(e => e.Ward).HasMaxLength(100);
+            entity.Property(e => e.WardCode).HasMaxLength(20);
 
             entity.HasOne(d => d.User).WithMany(p => p.UserAddresses)
                 .HasForeignKey(d => d.UserId)

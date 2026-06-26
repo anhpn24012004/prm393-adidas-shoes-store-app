@@ -2,13 +2,16 @@ using AdidasShoesStore.Api.Data;
 using AdidasShoesStore.Api.DTOs.Cart;
 using AdidasShoesStore.Api.DTOs.Carts;
 using AdidasShoesStore.Api.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace AdidasShoesStore.Api.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
+[Authorize]
 public class CartController : ControllerBase
 {
     private readonly AdidasShoesStoreContext _context;
@@ -18,10 +21,15 @@ public class CartController : ControllerBase
         _context = context;
     }
 
-    // GET api/cart/user/1
-    [HttpGet("user/{userId}")]
-    public async Task<IActionResult> GetCartByUser(int userId)
+    // GET api/cart
+    [HttpGet]
+    public async Task<IActionResult> GetCart()
     {
+        if (!TryGetUserId(out var userId))
+        {
+            return Unauthorized(new { message = "Invalid token" });
+        }
+
         var cart = await _context.Carts
             .AsNoTracking()
             .Include(c => c.CartItems)
@@ -71,10 +79,15 @@ public class CartController : ControllerBase
         });
     }
 
-    // GET api/cart/user/1/count
-    [HttpGet("user/{userId}/count")]
-    public async Task<IActionResult> GetCartCount(int userId)
+    // GET api/cart/count
+    [HttpGet("count")]
+    public async Task<IActionResult> GetCartCount()
     {
+        if (!TryGetUserId(out var userId))
+        {
+            return Unauthorized(new { message = "Invalid token" });
+        }
+
         var cart = await _context.Carts
             .AsNoTracking()
             .Include(c => c.CartItems)
@@ -89,6 +102,11 @@ public class CartController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> AddToCart(AddToCartDto request)
     {
+        if (!TryGetUserId(out var userId))
+        {
+            return Unauthorized(new { message = "Invalid token" });
+        }
+
         if (request.Quantity <= 0)
         {
             return BadRequest(new { message = "Quantity must be greater than 0" });
@@ -112,13 +130,13 @@ public class CartController : ControllerBase
 
         var cart = await _context.Carts
             .Include(c => c.CartItems)
-            .FirstOrDefaultAsync(c => c.UserId == request.UserId);
+            .FirstOrDefaultAsync(c => c.UserId == userId);
 
         if (cart == null)
         {
             cart = new Cart
             {
-                UserId = request.UserId,
+                UserId = userId,
                 CreatedAt = DateTime.Now
             };
 
@@ -170,10 +188,18 @@ public class CartController : ControllerBase
         int cartItemId,
         UpdateCartItemDto dto)
     {
+        if (!TryGetUserId(out var userId))
+        {
+            return Unauthorized(new { message = "Invalid token" });
+        }
+
         var item = await _context.CartItems
+            .Include(x => x.Cart)
             .Include(x => x.Variant)
                 .ThenInclude(v => v.Product)
-            .FirstOrDefaultAsync(x => x.CartItemId == cartItemId);
+            .FirstOrDefaultAsync(x =>
+                x.CartItemId == cartItemId &&
+                x.Cart.UserId == userId);
 
         if (item == null)
             return NotFound();
@@ -211,8 +237,16 @@ public class CartController : ControllerBase
     [HttpDelete("item/{cartItemId}")]
     public async Task<IActionResult> RemoveItem(int cartItemId)
     {
+        if (!TryGetUserId(out var userId))
+        {
+            return Unauthorized(new { message = "Invalid token" });
+        }
+
         var item = await _context.CartItems
-            .FirstOrDefaultAsync(x => x.CartItemId == cartItemId);
+            .Include(x => x.Cart)
+            .FirstOrDefaultAsync(x =>
+                x.CartItemId == cartItemId &&
+                x.Cart.UserId == userId);
 
         if (item == null)
             return NotFound();
@@ -229,10 +263,15 @@ public class CartController : ControllerBase
         return Ok(new { totalItems });
     }
 
-    // DELETE api/cart/user/1
-    [HttpDelete("user/{userId}")]
-    public async Task<IActionResult> ClearCart(int userId)
+    // DELETE api/cart
+    [HttpDelete]
+    public async Task<IActionResult> ClearCart()
     {
+        if (!TryGetUserId(out var userId))
+        {
+            return Unauthorized(new { message = "Invalid token" });
+        }
+
         var cart = await _context.Carts
             .Include(c => c.CartItems)
             .FirstOrDefaultAsync(x => x.UserId == userId);
@@ -244,5 +283,12 @@ public class CartController : ControllerBase
         await _context.SaveChangesAsync();
 
         return Ok(new { totalItems = 0 });
+    }
+
+    private bool TryGetUserId(out int userId)
+    {
+        var value = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        return int.TryParse(value, out userId);
     }
 }

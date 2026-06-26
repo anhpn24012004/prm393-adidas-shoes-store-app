@@ -56,6 +56,23 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     };
   }
 
+  String _shipmentStatusLabel(String? status) {
+    return switch (status) {
+      'ReadyToPick' => 'Ready to pick',
+      'Picking' => 'Picking',
+      'Pending' => context.tr('statusPending'),
+      'Preparing' => context.tr('statusPreparing'),
+      'Shipped' => context.tr('statusShipped'),
+      'InTransit' => context.tr('statusInTransit'),
+      'OutForDelivery' => context.tr('statusOutForDelivery'),
+      'Delivered' => context.tr('statusDelivered'),
+      'Failed' => context.tr('statusFailed'),
+      'Returned' => context.tr('statusReturned'),
+      null => context.tr('notAvailable'),
+      _ => status,
+    };
+  }
+
   List<_OrderFilter> get _filters {
     return const [
       _OrderFilter('all', 'Tất cả'),
@@ -207,6 +224,10 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                 '${context.tr('payment')}: '
                 '${order.paymentMethod ?? context.tr('notAvailable')}'
                 ' / ${order.paymentStatus ?? context.tr('notAvailable')}',
+              ),
+              Text(
+                '${context.tr('shipmentStatus')}: '
+                '${_shipmentStatusLabel(order.shipmentStatus)}',
               ),
               Text(
                 '${context.tr('createdAt')}: ${formatDate(order.createdAt)}',

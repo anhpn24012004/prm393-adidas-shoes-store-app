@@ -5,7 +5,6 @@ import '../../models/shipment_model.dart';
 import '../../services/auth_storage.dart';
 import '../../services/shipment_service.dart';
 import '../../utils/currency_formatter.dart';
-import 'admin_shipment_form_screen.dart';
 
 class AdminShipmentDetailScreen extends StatefulWidget {
   final int? shipmentId;
@@ -21,6 +20,8 @@ class _AdminShipmentDetailScreenState extends State<AdminShipmentDetailScreen> {
   final ShipmentService _shipmentService = ShipmentService();
   final AuthStorage _authStorage = AuthStorage();
   static const Map<String, List<String>> _transitions = {
+    'ReadyToPick': ['Picking', 'Shipped', 'Failed'],
+    'Picking': ['Shipped', 'Failed'],
     'Pending': ['Preparing'],
     'Preparing': ['Shipped'],
     'Shipped': ['InTransit'],
@@ -32,6 +33,7 @@ class _AdminShipmentDetailScreenState extends State<AdminShipmentDetailScreen> {
   Future<ShipmentDetail>? _detailFuture;
   late Future<bool> _isAdminFuture;
   int? _shipmentId;
+  bool _syncing = false;
 
   @override
   void didChangeDependencies() {
@@ -75,20 +77,6 @@ class _AdminShipmentDetailScreenState extends State<AdminShipmentDetailScreen> {
 
   List<String> _nextStatuses(String? currentStatus) {
     return _transitions[currentStatus] ?? const [];
-  }
-
-  Future<void> _editTracking(ShipmentDetail detail) async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) =>
-            AdminShipmentFormScreen(createMode: false, shipment: detail),
-      ),
-    );
-
-    if (result == true) {
-      await _refresh();
-    }
   }
 
   Future<void> _updateStatus(ShipmentDetail detail) async {
@@ -164,6 +152,33 @@ class _AdminShipmentDetailScreenState extends State<AdminShipmentDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
       );
+    }
+  }
+
+  Future<void> _syncGhnStatus(ShipmentDetail detail) async {
+    final shipmentId = detail.shipmentId;
+    if (shipmentId == null) return;
+
+    setState(() => _syncing = true);
+
+    try {
+      await _shipmentService.syncGhnStatus(shipmentId);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('GHN status synced')));
+
+      await _refresh();
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) setState(() => _syncing = false);
     }
   }
 
@@ -265,7 +280,7 @@ class _AdminShipmentDetailScreenState extends State<AdminShipmentDetailScreen> {
             detail.paymentMethod ?? context.tr('notAvailable'),
           ),
           _infoRow(
-            context.tr('orderStatus'),
+            'Payment status',
             detail.paymentStatus ?? context.tr('notAvailable'),
           ),
           _infoRow(
@@ -294,17 +309,19 @@ class _AdminShipmentDetailScreenState extends State<AdminShipmentDetailScreen> {
           else
             ...detail.items.map(_buildItem),
           const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: locked ? null : () => _editTracking(detail),
-            icon: const Icon(Icons.local_shipping),
-            label: Text(context.tr('updateTrackingInfo')),
-          ),
-          const SizedBox(height: 8),
           ElevatedButton.icon(
-            onPressed: locked ? null : () => _updateStatus(detail),
+            onPressed: _syncing ? null : () => _syncGhnStatus(detail),
             icon: const Icon(Icons.sync),
-            label: Text(context.tr('updateShipmentStatus')),
+            label: Text(_syncing ? context.tr('updating') : 'Sync GHN Status'),
           ),
+          if (detail.manualOverrideEnabled) ...[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: locked ? null : () => _updateStatus(detail),
+              icon: const Icon(Icons.edit),
+              label: const Text('Manual Override Shipment Status'),
+            ),
+          ],
         ],
       ),
     );
@@ -381,6 +398,8 @@ class _AdminShipmentDetailScreenState extends State<AdminShipmentDetailScreen> {
 
   String _shipmentStatusLabel(String status) {
     return switch (status) {
+      'ReadyToPick' => 'Ready to pick',
+      'Picking' => 'Picking',
       'Pending' => context.tr('statusPending'),
       'Preparing' => context.tr('statusPreparing'),
       'Shipped' => context.tr('statusShipped'),

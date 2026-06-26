@@ -63,5 +63,9 @@ namespace AdidasShoesStore.Api.Services.Interfaces
             int shipmentId,
             UpdateTrackingInfoDto dto
         );
+
+        Task<ShipmentServiceResult<AdminShipmentDetailDto>> SyncGhnStatusAsync(
+            int shipmentId
+        );
     }
 }

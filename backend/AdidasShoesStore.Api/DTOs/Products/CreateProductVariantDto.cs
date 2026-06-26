@@ -17,6 +17,7 @@ public class CreateProductVariantDto
     [Range(0, int.MaxValue)]
     public int StockQuantity { get; set; }
 
+    [MaxLength(100)]
     public string? Sku { get; set; }
 
     public bool IsActive { get; set; } = true;

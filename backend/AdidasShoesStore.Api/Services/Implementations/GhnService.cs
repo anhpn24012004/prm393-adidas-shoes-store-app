@@ -267,8 +267,13 @@ namespace AdidasShoesStore.Api.Services.Implementations
             object? body,
             bool includeShopId)
         {
-            if (!IsConfigured())
+            var configurationErrors = GetConfigurationErrors();
+            if (configurationErrors.Count > 0)
             {
+                _logger.LogError(
+                    "GHN is not configured. Invalid settings: {InvalidSettings}",
+                    string.Join(", ", configurationErrors)
+                );
                 return GhnHttpResult.Fail("GHN is not configured");
             }
 
@@ -330,14 +335,24 @@ namespace AdidasShoesStore.Api.Services.Implementations
             }
         }
 
-        private bool IsConfigured()
+        private List<string> GetConfigurationErrors()
         {
-            return !string.IsNullOrWhiteSpace(_settings.BaseUrl) &&
-                   !string.IsNullOrWhiteSpace(_settings.Token) &&
-                   !_settings.Token.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase) &&
-                   _settings.ShopId > 0 &&
-                   _settings.FromDistrictId > 0 &&
-                   !string.IsNullOrWhiteSpace(_settings.FromWardCode);
+            var errors = new List<string>();
+
+            if (string.IsNullOrWhiteSpace(_settings.BaseUrl))
+                errors.Add("BaseUrl");
+            if (string.IsNullOrWhiteSpace(_settings.Token) ||
+                _settings.Token.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase))
+                errors.Add("Token");
+            if (_settings.ShopId <= 0)
+                errors.Add("ShopId");
+            if (_settings.FromDistrictId <= 0)
+                errors.Add("FromDistrictId");
+            if (string.IsNullOrWhiteSpace(_settings.FromWardCode) ||
+                _settings.FromWardCode.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase))
+                errors.Add("FromWardCode");
+
+            return errors;
         }
 
         private static IEnumerable<JsonElement> DataArray(JsonElement root)
@@ -410,11 +425,15 @@ namespace AdidasShoesStore.Api.Services.Implementations
         {
             return status switch
             {
-                "ready_to_pick" or "picking" => "Shipping",
-                "delivering" => "Shipping",
+                "ready_to_pick" => "ReadyToPick",
+                "picking" => "Picking",
+                "picked" => "Shipped",
+                "storing" or "transporting" or "sorting" => "InTransit",
+                "delivering" => "OutForDelivery",
                 "delivered" => "Delivered",
-                "return" or "cancel" or "delivery_fail" => "Failed",
-                _ => "Shipping"
+                "delivery_fail" or "cancel" or "exception" => "Failed",
+                "waiting_to_return" or "return" or "returned" => "Returned",
+                _ => "InTransit"
             };
         }
 

@@ -1,6 +1,7 @@
 using AdidasShoesStore.Api.Data;
 using AdidasShoesStore.Api.DTOs;
 using AdidasShoesStore.Api.DTOs.Products;
+using AdidasShoesStore.Api.Helpers;
 using AdidasShoesStore.Api.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -233,6 +234,7 @@ public class ProductsController : ControllerBase
         {
             variant.OptionValues = DeserializeOptionValues(variant.OptionValuesJson);
         }
+        product.Images = ProductImageDeduplicator.GetUniqueImages(product.Images);
 
         return Ok(product);
     }

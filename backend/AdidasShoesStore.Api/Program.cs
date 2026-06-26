@@ -62,6 +62,10 @@ builder.Services.AddDbContext<AdidasShoesStoreContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.Configure<GhnSettings>(builder.Configuration.GetSection("GhnSettings"));
+builder.Services.Configure<SePaySettings>(builder.Configuration.GetSection("SePay"));
+builder.Services.Configure<PaymentSettings>(builder.Configuration.GetSection("PaymentSettings"));
+builder.Services.Configure<GhnSyncSettings>(builder.Configuration.GetSection("GhnSyncSettings"));
+builder.Services.Configure<ShipmentSettings>(builder.Configuration.GetSection("ShipmentSettings"));
 builder.Services.AddHttpClient("GHN");
 
 // Register custom services
@@ -78,8 +82,11 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IShipmentService, ShipmentService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IGhnService, GhnService>();
+builder.Services.AddScoped<ISePayService, SePayService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IAdminDashboardService, AdminDashboardService>();
+builder.Services.AddHostedService<PendingPaymentExpirationService>();
+builder.Services.AddHostedService<GhnShipmentSyncService>();
 
 // Configure JWT Authentication
 builder.Services.AddAuthentication(options =>

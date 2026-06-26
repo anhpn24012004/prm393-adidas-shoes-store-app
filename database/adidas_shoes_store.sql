@@ -75,11 +75,15 @@ CREATE TABLE ProductVariants (
     Color NVARCHAR(50) NOT NULL,
     Price DECIMAL(18,2) NOT NULL,
     StockQuantity INT DEFAULT 0,
-    SKU NVARCHAR(100) UNIQUE,
+    SKU NVARCHAR(100) NULL,
     IsActive BIT DEFAULT 1,
 
     FOREIGN KEY (ProductId) REFERENCES Products(ProductId)
 );
+
+CREATE UNIQUE INDEX UX_ProductVariants_SKU_NotNull
+ON ProductVariants(SKU)
+WHERE SKU IS NOT NULL;
 
 CREATE TABLE ProductImages (
     ImageId INT IDENTITY(1,1) PRIMARY KEY,

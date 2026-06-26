@@ -33,6 +33,7 @@ public class SyncProductVariantDto
     public decimal Price { get; set; }
     [Range(0, int.MaxValue)]
     public int StockQuantity { get; set; }
+    [MaxLength(100)]
     public string? Sku { get; set; }
     public bool IsActive { get; set; } = true;
     public string? ImageUrl { get; set; }

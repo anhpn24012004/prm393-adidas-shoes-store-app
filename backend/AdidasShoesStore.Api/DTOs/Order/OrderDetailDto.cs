@@ -46,6 +46,22 @@ namespace AdidasShoesStore.Api.DTOs.Order
 
         public string? PaymentStatus { get; set; }
 
+        public int? ShipmentId { get; set; }
+
+        public string? ShipmentStatus { get; set; }
+
+        public string? ShippingProvider { get; set; }
+
+        public string? TrackingCode { get; set; }
+
+        public string? GhnOrderCode { get; set; }
+
+        public DateTime? ExpectedDeliveryTime { get; set; }
+
+        public DateTime? ShippedAt { get; set; }
+
+        public DateTime? DeliveredAt { get; set; }
+
         public List<OrderItemDto> Items { get; set; } = new();
     }
 }

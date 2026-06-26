@@ -39,8 +39,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
             "COD",
             "VNPAY",
             "PAYPAL",
-            "QR",
-            "VISA"
+            "SEPAY"
         };
 
         private readonly AdidasShoesStoreContext _context;
@@ -67,6 +66,13 @@ namespace AdidasShoesStore.Api.Services.Implementations
             }
 
             var paymentMethod = dto.PaymentMethod.Trim().ToUpperInvariant();
+
+            if (paymentMethod == "QR")
+            {
+                return OrderServiceResult<OrderDetailDto>.Fail(
+                    "QR payment is no longer supported. Please use SePay."
+                );
+            }
 
             if (!AllowedPaymentMethods.Contains(paymentMethod))
             {
@@ -164,8 +170,13 @@ namespace AdidasShoesStore.Api.Services.Implementations
             {
                 foreach (var item in orderItems)
                 {
-                    if (item.Variant.StockQuantity == null ||
-                        item.Variant.StockQuantity < item.Quantity)
+                    var updatedRows = await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                        UPDATE ProductVariants
+                        SET StockQuantity = StockQuantity - {item.Quantity}
+                        WHERE VariantId = {item.Variant.VariantId}
+                            AND ISNULL(StockQuantity, 0) >= {item.Quantity}");
+
+                    if (updatedRows != 1)
                     {
                         var productLabel = $"{item.Variant.Product.ProductName} - Size {item.Variant.Size}, Color {item.Variant.Color}";
 
@@ -223,8 +234,6 @@ namespace AdidasShoesStore.Api.Services.Implementations
                         Quantity = item.Quantity,
                         UnitPrice = item.Variant.Price
                     });
-
-                    item.Variant.StockQuantity -= item.Quantity;
                 }
 
                 _context.Orders.Add(order);
@@ -268,6 +277,10 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     Status = o.Status,
                     PaymentMethod = o.Payment == null ? null : o.Payment.PaymentMethod,
                     PaymentStatus = o.Payment == null ? null : o.Payment.Status,
+                    ShipmentStatus = o.Shipment == null ? null : o.Shipment.Status,
+                    GhnOrderCode = o.Shipment == null ? null : o.Shipment.GhnOrderCode,
+                    TrackingCode = o.Shipment == null ? null : o.Shipment.TrackingCode,
+                    ExpectedDeliveryTime = o.Shipment == null ? null : o.Shipment.ExpectedDeliveryTime,
                     CreatedAt = o.CreatedAt,
                     HasReturnRequest = o.ReturnRequests.Any(),
                     Items = o.OrderItems.Select(i => new OrderItemDto
@@ -324,6 +337,14 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     PaymentMethod = o.Payment == null ? null : o.Payment.PaymentMethod,
                     PaymentAmount = o.Payment == null ? null : o.Payment.Amount,
                     PaymentStatus = o.Payment == null ? null : o.Payment.Status,
+                    ShipmentId = o.Shipment == null ? null : o.Shipment.ShipmentId,
+                    ShipmentStatus = o.Shipment == null ? null : o.Shipment.Status,
+                    ShippingProvider = o.Shipment == null ? null : o.Shipment.ShippingProvider,
+                    TrackingCode = o.Shipment == null ? null : o.Shipment.TrackingCode,
+                    GhnOrderCode = o.Shipment == null ? null : o.Shipment.GhnOrderCode,
+                    ExpectedDeliveryTime = o.Shipment == null ? null : o.Shipment.ExpectedDeliveryTime,
+                    ShippedAt = o.Shipment == null ? null : o.Shipment.ShippedAt,
+                    DeliveredAt = o.Shipment == null ? null : o.Shipment.DeliveredAt,
                     Items = o.OrderItems.Select(i => new OrderItemDto
                     {
                         OrderItemId = i.OrderItemId,
@@ -417,6 +438,11 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 }
 
                 order.Status = "Cancelled";
+                if (order.Payment != null &&
+                    !string.Equals(order.Payment.Status, "Success", StringComparison.OrdinalIgnoreCase))
+                {
+                    order.Payment.Status = "Failed";
+                }
 
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -565,6 +591,14 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     PaymentStatus = o.Payment == null ? null : o.Payment.Status,
                     TransactionCode = o.Payment == null ? null : o.Payment.TransactionCode,
                     PaidAt = o.Payment == null ? null : o.Payment.PaidAt,
+                    ShipmentId = o.Shipment == null ? null : o.Shipment.ShipmentId,
+                    ShipmentStatus = o.Shipment == null ? null : o.Shipment.Status,
+                    ShippingProvider = o.Shipment == null ? null : o.Shipment.ShippingProvider,
+                    TrackingCode = o.Shipment == null ? null : o.Shipment.TrackingCode,
+                    GhnOrderCode = o.Shipment == null ? null : o.Shipment.GhnOrderCode,
+                    ExpectedDeliveryTime = o.Shipment == null ? null : o.Shipment.ExpectedDeliveryTime,
+                    ShippedAt = o.Shipment == null ? null : o.Shipment.ShippedAt,
+                    DeliveredAt = o.Shipment == null ? null : o.Shipment.DeliveredAt,
                     Items = o.OrderItems.Select(i => new OrderItemDto
                     {
                         OrderItemId = i.OrderItemId,
@@ -596,11 +630,19 @@ namespace AdidasShoesStore.Api.Services.Implementations
             }
 
             var order = await _context.Orders
+                .Include(o => o.Shipment)
                 .FirstOrDefaultAsync(o => o.OrderId == orderId);
 
             if (order == null)
             {
                 return OrderServiceResult<AdminOrderDetailDto>.Fail("Order not found");
+            }
+
+            if (!IsValidAdminOrderTransition(order, dto.Status))
+            {
+                return OrderServiceResult<AdminOrderDetailDto>.Fail(
+                    $"Invalid order status transition from {order.Status} to {dto.Status}"
+                );
             }
 
             order.Status = dto.Status;
@@ -693,6 +735,24 @@ namespace AdidasShoesStore.Api.Services.Implementations
         private static string GenerateOrderCode()
         {
             return $"ORD{DateTime.Now:yyyyMMddHHmmssfff}{Guid.NewGuid():N}"[..25];
+        }
+
+        private static bool IsValidAdminOrderTransition(Order order, string newStatus)
+        {
+            if (string.Equals(order.Status, newStatus, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            return order.Status switch
+            {
+                "PendingPayment" => newStatus == "Cancelled",
+                "Paid" => newStatus is "Processing" or "Cancelled",
+                "Processing" => newStatus == "Cancelled" ||
+                    (newStatus == "Shipping" && order.Shipment != null),
+                "Delivered" => newStatus == "Completed",
+                _ => false
+            };
         }
     }
 }

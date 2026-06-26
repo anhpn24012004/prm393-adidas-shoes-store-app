@@ -22,6 +22,8 @@ class _AdminShipmentListScreenState extends State<AdminShipmentListScreen> {
   final TextEditingController _searchController = TextEditingController();
   static const List<String> _filterStatuses = [
     'All',
+    'ReadyToPick',
+    'Picking',
     'Pending',
     'Preparing',
     'Shipped',
@@ -68,6 +70,8 @@ class _AdminShipmentListScreenState extends State<AdminShipmentListScreen> {
   String _shipmentStatusLabel(String status) {
     return switch (status) {
       'All' => context.tr('all'),
+      'ReadyToPick' => 'Ready to pick',
+      'Picking' => 'Picking',
       'Pending' => context.tr('statusPending'),
       'Preparing' => context.tr('statusPreparing'),
       'Shipped' => context.tr('statusShipped'),

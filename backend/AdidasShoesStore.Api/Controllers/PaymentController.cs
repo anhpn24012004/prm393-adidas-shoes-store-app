@@ -3,6 +3,7 @@ using AdidasShoesStore.Api.DTOs.Payment;
 using AdidasShoesStore.Api.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Globalization;
 
 namespace AdidasShoesStore.Api.Controllers
 {
@@ -11,10 +12,17 @@ namespace AdidasShoesStore.Api.Controllers
     public class PaymentController : ControllerBase
     {
         private readonly IPaymentService _paymentService;
+        private readonly ISePayService _sePayService;
+        private readonly IConfiguration _configuration;
 
-        public PaymentController(IPaymentService paymentService)
+        public PaymentController(
+            IPaymentService paymentService,
+            ISePayService sePayService,
+            IConfiguration configuration)
         {
             _paymentService = paymentService;
+            _sePayService = sePayService;
+            _configuration = configuration;
         }
 
         [Authorize]
@@ -61,12 +69,7 @@ namespace AdidasShoesStore.Api.Controllers
 
             var result = await _paymentService.ProcessVnPayReturnAsync(queryParameters);
 
-            return Ok(new
-            {
-                success = result.Success,
-                orderCode = result.OrderCode,
-                message = result.Message
-            });
+            return Redirect(BuildPaymentResultUrl(result.OrderId, result.Success));
         }
 
         [Authorize]
@@ -111,12 +114,7 @@ namespace AdidasShoesStore.Api.Controllers
 
             var result = await _paymentService.ProcessPayPalReturnAsync(queryParameters);
 
-            return Ok(new
-            {
-                success = result.Success,
-                orderCode = result.OrderCode,
-                message = result.Message
-            });
+            return Redirect(BuildPaymentResultUrl(result.OrderId, result.Success));
         }
 
         [AllowAnonymous]
@@ -130,103 +128,78 @@ namespace AdidasShoesStore.Api.Controllers
 
             var result = await _paymentService.ProcessPayPalCancelAsync(queryParameters);
 
-            return Ok(new
-            {
-                success = result.Success,
-                orderCode = result.OrderCode,
-                message = result.Message
-            });
+            return Redirect(BuildPaymentResultUrl(result.OrderId, false));
         }
 
         [Authorize]
         [HttpPost("qr/create")]
-        public async Task<IActionResult> CreateQrPayment(CreateQrPaymentDto dto)
+        public IActionResult CreateQrPayment()
         {
-            if (!TryGetUserId(out var userId))
+            return BadRequest(new
             {
-                return Unauthorized(new { message = "Invalid token" });
-            }
-
-            var result = await _paymentService.CreateQrPaymentAsync(userId, dto);
-
-            if (!result.Success)
-            {
-                if (result.ErrorType == "NotFound")
-                {
-                    return NotFound(new { message = result.Error });
-                }
-
-                return BadRequest(new { message = result.Error });
-            }
-
-            return Ok(result.Data);
+                message = "QR payment is no longer supported. Please use SePay."
+            });
         }
 
         [Authorize]
         [HttpPost("qr/confirm")]
-        public async Task<IActionResult> ConfirmQrPayment(ConfirmQrPaymentDto dto)
+        public IActionResult ConfirmQrPayment()
         {
-            if (!TryGetUserId(out var userId))
+            return BadRequest(new
             {
-                return Unauthorized(new { message = "Invalid token" });
-            }
-
-            var result = await _paymentService.ConfirmQrPaymentAsync(userId, dto);
-
-            if (!result.Success)
-            {
-                if (result.ErrorType == "NotFound")
-                {
-                    return NotFound(new { message = result.Error });
-                }
-
-                return BadRequest(new { message = result.Error });
-            }
-
-            return Ok(result.Data);
+                message = "QR payment is no longer supported. Please use SePay."
+            });
         }
 
         [Authorize(Roles = "Admin")]
         [HttpPost("admin/qr/confirm")]
-        public async Task<IActionResult> AdminConfirmQrPayment(ConfirmQrPaymentDto dto)
+        public IActionResult AdminConfirmQrPayment()
         {
-            var result = await _paymentService.AdminConfirmQrPaymentAsync(dto);
-
-            if (!result.Success)
+            return BadRequest(new
             {
-                if (result.ErrorType == "NotFound")
-                {
-                    return NotFound(new { message = result.Error });
-                }
-
-                return BadRequest(new { message = result.Error });
-            }
-
-            return Ok(result.Data);
+                message = "QR payment is no longer supported. Please use SePay."
+            });
         }
 
         [Authorize]
-        [HttpPost("visa/pay")]
-        public async Task<IActionResult> PayWithVisa(CreateVisaPaymentDto dto)
+        [HttpPost("sepay/create")]
+        public async Task<IActionResult> CreateSePayPayment(CreateSePayPaymentDto dto)
         {
             if (!TryGetUserId(out var userId))
             {
                 return Unauthorized(new { message = "Invalid token" });
             }
 
-            var result = await _paymentService.PayWithVisaAsync(userId, dto);
+            var result = await _sePayService.CreatePaymentAsync(userId, dto);
+            if (!result.Success)
+                return result.ErrorType == "NotFound"
+                    ? NotFound(new { message = result.Error })
+                    : BadRequest(new { message = result.Error });
+
+            return Ok(result.Data);
+        }
+
+        [AllowAnonymous]
+        [HttpPost("sepay/webhook")]
+        public async Task<IActionResult> SePayWebhook()
+        {
+            using var reader = new StreamReader(Request.Body);
+            var rawBody = await reader.ReadToEndAsync();
+            var result = await _sePayService.ProcessWebhookAsync(
+                rawBody,
+                Request.Headers.Authorization.FirstOrDefault(),
+                Request.Headers["X-SePay-Signature"].FirstOrDefault(),
+                Request.Headers["X-SePay-Timestamp"].FirstOrDefault()
+            );
 
             if (!result.Success)
             {
-                if (result.ErrorType == "NotFound")
-                {
-                    return NotFound(new { message = result.Error });
-                }
-
-                return BadRequest(new { message = result.Error });
+                return result.ErrorType == "Unauthorized"
+                    ? Unauthorized(new { success = false, message = result.Error })
+                    : BadRequest(new { success = false, message = result.Error });
             }
 
-            return Ok(result.Data);
+            return Ok(new { success = true });
         }
 
         [Authorize]
@@ -256,6 +229,21 @@ namespace AdidasShoesStore.Api.Controllers
             var value = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
             return int.TryParse(value, out userId);
+        }
+
+        private string BuildPaymentResultUrl(int? orderId, bool success)
+        {
+            var baseUrl = _configuration["Frontend:PaymentResultUrl"];
+            if (string.IsNullOrWhiteSpace(baseUrl))
+            {
+                baseUrl = "/payment-result";
+            }
+
+            var separator = baseUrl.Contains('?', StringComparison.Ordinal) ? "&" : "?";
+            var status = success ? "success" : "failed";
+            var orderIdValue = orderId?.ToString(CultureInfo.InvariantCulture) ?? "0";
+
+            return $"{baseUrl}{separator}orderId={Uri.EscapeDataString(orderIdValue)}&status={status}";
         }
     }
 }

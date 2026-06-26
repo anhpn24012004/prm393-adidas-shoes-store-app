@@ -68,22 +68,107 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     });
   }
 
-  String? getMainImage(ProductDetailModel product) {
-    if (product.images.isEmpty) return null;
+  String _normalizeImageUrl(String? url) {
+    if (url == null || url.trim().isEmpty) return '';
 
-    final mainImages = product.images.where((image) => image.isMain).toList();
+    return url.trim().split('?').first.toLowerCase();
+  }
 
-    if (mainImages.isNotEmpty) {
-      return mainImages.first.imageUrl;
+  List<ProductImageModel> _uniqueGalleryImages(ProductDetailModel product) {
+    final galleryImages = <ProductImageModel>[];
+    final seenUrls = <String>{};
+
+    void addImage(ProductImageModel image) {
+      final normalizedUrl = _normalizeImageUrl(image.imageUrl);
+      if (normalizedUrl.isEmpty || !seenUrls.add(normalizedUrl)) return;
+      galleryImages.add(image);
     }
 
-    return product.images.first.imageUrl;
+    final productImages = [...product.images]
+      ..sort((first, second) {
+        if (first.isMain != second.isMain) {
+          return first.isMain ? -1 : 1;
+        }
+        return first.imageId.compareTo(second.imageId);
+      });
+
+    // When variants provide color images, they define the gallery: one image
+    // per color, never one image per size.
+    final representedColors = <String>{};
+    final colorImages = <ProductImageModel>[];
+    for (final variant in product.variants.where((variant) {
+      return variant.isActive &&
+          _normalizeImageUrl(variant.imageUrl).isNotEmpty;
+    })) {
+      final normalizedColor = variant.color.trim().toLowerCase();
+      final colorKey = normalizedColor.isEmpty
+          ? _normalizeImageUrl(variant.imageUrl)
+          : normalizedColor;
+      if (!representedColors.add(colorKey)) continue;
+
+      colorImages.add(
+        ProductImageModel(
+          imageId: -variant.variantId,
+          imageUrl: variant.imageUrl!.trim(),
+          isMain: false,
+        ),
+      );
+    }
+
+    if (colorImages.isNotEmpty) {
+      final productImagesByUrl = <String, ProductImageModel>{
+        for (final image in productImages)
+          _normalizeImageUrl(image.imageUrl): image,
+      };
+
+      for (final colorImage in colorImages) {
+        final matchingProductImage =
+            productImagesByUrl[_normalizeImageUrl(colorImage.imageUrl)];
+        addImage(matchingProductImage ?? colorImage);
+      }
+
+      galleryImages.sort((first, second) {
+        if (first.isMain != second.isMain) {
+          return first.isMain ? -1 : 1;
+        }
+        return 0;
+      });
+      return galleryImages;
+    }
+
+    // Products without variant images fall back to their real product images.
+    for (final image in productImages) {
+      addImage(image);
+    }
+
+    return galleryImages;
+  }
+
+  ProductImageModel? _findUniqueImageByUrl(
+    ProductDetailModel product,
+    String? imageUrl,
+  ) {
+    final normalizedUrl = _normalizeImageUrl(imageUrl);
+    if (normalizedUrl.isEmpty) return null;
+
+    for (final image in _uniqueGalleryImages(product)) {
+      if (_normalizeImageUrl(image.imageUrl) == normalizedUrl) {
+        return image;
+      }
+    }
+
+    return null;
+  }
+
+  String? getMainImage(ProductDetailModel product) {
+    final galleryImages = _uniqueGalleryImages(product);
+    return galleryImages.isEmpty ? null : galleryImages.first.imageUrl;
   }
 
   String? getSelectedImage(ProductDetailModel product) {
-    final selectedImageUrl = _selectedImageUrl;
-    if (selectedImageUrl != null && selectedImageUrl.isNotEmpty) {
-      return selectedImageUrl;
+    final selectedImage = _findUniqueImageByUrl(product, _selectedImageUrl);
+    if (selectedImage != null) {
+      return selectedImage.imageUrl;
     }
 
     return getMainImage(product);
@@ -116,24 +201,38 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Widget _buildImageGallery(ProductDetailModel product) {
+    final galleryImages = _uniqueGalleryImages(product);
     final selectedImageUrl = getSelectedImage(product);
+    final normalizedSelectedImageUrl = _normalizeImageUrl(selectedImageUrl);
+    final variantsWithImages = product.variants.where(
+      (variant) =>
+          variant.imageUrl != null && variant.imageUrl!.trim().isNotEmpty,
+    );
+
+    debugPrint('Product gallery raw images: ${product.images.length}');
+    debugPrint(
+      'Product gallery variants with images: ${variantsWithImages.length}',
+    );
+    debugPrint('Product gallery unique images: ${galleryImages.length}');
 
     return Container(
       color: AppColors.surface,
       child: Column(
         children: [
           _buildImage(selectedImageUrl),
-          if (product.images.length > 1)
+          if (galleryImages.length > 1)
             SizedBox(
               height: 92,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.fromLTRB(20, 10, 20, 14),
-                itemCount: product.images.length,
+                itemCount: galleryImages.length,
                 separatorBuilder: (_, _) => const SizedBox(width: 10),
                 itemBuilder: (context, index) {
-                  final image = product.images[index];
-                  final isSelected = image.imageUrl == selectedImageUrl;
+                  final image = galleryImages[index];
+                  final isSelected =
+                      _normalizeImageUrl(image.imageUrl) ==
+                      normalizedSelectedImageUrl;
 
                   return InkWell(
                     onTap: () {
@@ -243,14 +342,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         _selectedSize = null;
       }
 
-      final colorImages = product.variants
-          .where((variant) => variant.color == color)
-          .map((variant) => variant.imageUrl)
-          .whereType<String>()
-          .where((imageUrl) => imageUrl.trim().isNotEmpty)
-          .toList();
-      final colorImage = colorImages.isEmpty ? null : colorImages.first;
-      _selectedImageUrl = colorImage ?? getMainImage(product);
+      final colorVariants = product.variants.where((variant) {
+        return variant.isActive &&
+            variant.color == color &&
+            _normalizeImageUrl(variant.imageUrl).isNotEmpty;
+      });
+      final colorImage = colorVariants.isEmpty
+          ? null
+          : colorVariants.first.imageUrl;
+      _selectedImageUrl =
+          _findUniqueImageByUrl(product, colorImage)?.imageUrl ??
+          getMainImage(product);
 
       _syncSelectedVariant(product);
     });
@@ -262,7 +364,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       _syncSelectedVariant(product);
       final variantImage = selectedVariant?.imageUrl;
       if (variantImage != null && variantImage.trim().isNotEmpty) {
-        _selectedImageUrl = variantImage;
+        _selectedImageUrl =
+            _findUniqueImageByUrl(product, variantImage)?.imageUrl ??
+            getMainImage(product);
       }
     });
   }
@@ -510,6 +614,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   Future<void> _addToCart() async {
     if (!await _requireLogin()) return;
+    if (!mounted) return;
 
     if (selectedVariant == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -548,6 +653,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(e.toString())));
@@ -562,6 +668,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   Future<void> _buyNow(ProductDetailModel product) async {
     if (!await _requireLogin()) return;
+    if (!mounted) return;
 
     if (selectedVariant == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -594,6 +701,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   Future<void> _addToWishlist() async {
     if (!await _requireLogin()) return;
+    if (!mounted) return;
 
     try {
       final totalItems = await _wishlistService.addWishlist(
@@ -615,6 +723,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(e.toString())));

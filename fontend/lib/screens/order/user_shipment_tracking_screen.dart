@@ -67,6 +67,10 @@ class _UserShipmentTrackingScreenState
 
   String _label(String status) {
     switch (status) {
+      case 'ReadyToPick':
+        return 'Ready to pick';
+      case 'Picking':
+        return 'Picking';
       case 'Pending':
         return context.tr('statusPending');
       case 'Preparing':

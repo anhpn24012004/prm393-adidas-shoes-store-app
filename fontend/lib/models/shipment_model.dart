@@ -89,6 +89,7 @@ class ShipmentDetail {
   final double? discountAmount;
   final double? finalAmount;
   final String? note;
+  final bool manualOverrideEnabled;
   final List<ShipmentItem> items;
 
   ShipmentDetail({
@@ -118,6 +119,7 @@ class ShipmentDetail {
     this.discountAmount,
     this.finalAmount,
     this.note,
+    this.manualOverrideEnabled = false,
     this.items = const [],
   });
 
@@ -151,6 +153,7 @@ class ShipmentDetail {
       discountAmount: (json['discountAmount'] as num?)?.toDouble(),
       finalAmount: (json['finalAmount'] as num?)?.toDouble(),
       note: json['note'],
+      manualOverrideEnabled: json['manualOverrideEnabled'] == true,
       items: (json['orderItems'] as List? ?? json['items'] as List? ?? [])
           .map((item) => ShipmentItem.fromJson(item))
           .toList(),

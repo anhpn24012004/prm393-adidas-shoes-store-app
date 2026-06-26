@@ -154,6 +154,21 @@ class ShipmentService {
     throw Exception(_errorMessage(response));
   }
 
+  Future<ShipmentDetail> syncGhnStatus(int shipmentId) async {
+    final response = await http.post(
+      Uri.parse(
+        '${ApiClient.baseUrl}/admin/shipments/$shipmentId/sync-ghn-status',
+      ),
+      headers: await _headers(),
+    );
+
+    if (response.statusCode == 200) {
+      return ShipmentDetail.fromJson(jsonDecode(response.body));
+    }
+
+    throw Exception(_errorMessage(response));
+  }
+
   Future<Map<String, String>> _headers() async {
     final token = await _authStorage.getToken();
 

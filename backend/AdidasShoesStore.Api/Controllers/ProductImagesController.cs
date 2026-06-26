@@ -1,5 +1,6 @@
 using AdidasShoesStore.Api.Data;
 using AdidasShoesStore.Api.DTOs.Products;
+using AdidasShoesStore.Api.Helpers;
 using AdidasShoesStore.Api.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -51,7 +52,7 @@ public class ProductImagesController : ControllerBase
             })
             .ToListAsync();
 
-        return Ok(images);
+        return Ok(ProductImageDeduplicator.GetUniqueImages(images));
     }
 
     [HttpPost("products/{productId}/images")]
@@ -64,6 +65,30 @@ public class ProductImagesController : ControllerBase
         if (!productExists)
         {
             return NotFound(new { message = "Product not found" });
+        }
+
+        var imageUrl = dto.ImageUrl.Trim();
+        if (imageUrl.Length == 0)
+        {
+            return BadRequest(new { message = "Image URL is required." });
+        }
+
+        var existingImageUrls = await _context.ProductImages
+            .AsNoTracking()
+            .Where(i => i.ProductId == productId)
+            .Select(i => i.ImageUrl)
+            .ToListAsync();
+
+        if (existingImageUrls.Any(existingUrl =>
+            string.Equals(
+                existingUrl?.Trim(),
+                imageUrl,
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            return BadRequest(new
+            {
+                message = "This image already exists for this product."
+            });
         }
 
         var hasImages = await _context.ProductImages
@@ -84,7 +109,7 @@ public class ProductImagesController : ControllerBase
         var productImage = new ProductImage
         {
             ProductId = productId,
-            ImageUrl = dto.ImageUrl,
+            ImageUrl = imageUrl,
             IsMain = dto.IsMain || !hasImages
         };
 

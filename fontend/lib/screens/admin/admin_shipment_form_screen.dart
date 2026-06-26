@@ -87,12 +87,8 @@ class _AdminShipmentFormScreenState extends State<AdminShipmentFormScreen> {
 
         await _shipmentService.createShipment(
           orderId: orderId,
-          carrier: _carrierController.text.trim(),
-          trackingNumber: _trackingController.text.trim(),
-          estimatedDeliveryDate: _parseDate(_estimatedController.text),
-          note: _noteController.text.trim().isEmpty
-              ? null
-              : _noteController.text.trim(),
+          carrier: '',
+          trackingNumber: '',
         );
       } else {
         await _shipmentService.updateShipmentTrackingInfo(
@@ -168,56 +164,58 @@ class _AdminShipmentFormScreenState extends State<AdminShipmentFormScreen> {
                   : null,
             ),
             const SizedBox(height: 16),
-            TextFormField(
-              controller: _carrierController,
-              enabled: !_submitting,
-              decoration: InputDecoration(
-                labelText: context.tr('carrier'),
-                border: const OutlineInputBorder(),
+            if (!widget.createMode) ...[
+              TextFormField(
+                controller: _carrierController,
+                enabled: !_submitting,
+                decoration: InputDecoration(
+                  labelText: context.tr('carrier'),
+                  border: const OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  if ((value ?? '').trim().isEmpty) {
+                    return context.tr('carrierRequired');
+                  }
+                  return null;
+                },
               ),
-              validator: (value) {
-                if ((value ?? '').trim().isEmpty) {
-                  return context.tr('carrierRequired');
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _trackingController,
-              enabled: !_submitting,
-              decoration: InputDecoration(
-                labelText: context.tr('trackingNumber'),
-                border: const OutlineInputBorder(),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _trackingController,
+                enabled: !_submitting,
+                decoration: InputDecoration(
+                  labelText: context.tr('trackingNumber'),
+                  border: const OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  if ((value ?? '').trim().isEmpty) {
+                    return context.tr('trackingNumberRequired');
+                  }
+                  return null;
+                },
               ),
-              validator: (value) {
-                if ((value ?? '').trim().isEmpty) {
-                  return context.tr('trackingNumberRequired');
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _estimatedController,
-              enabled: !_submitting,
-              decoration: InputDecoration(
-                labelText: context.tr('estimatedDelivery'),
-                helperText: context.tr('optionalDateFormat'),
-                border: const OutlineInputBorder(),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _estimatedController,
+                enabled: !_submitting,
+                decoration: InputDecoration(
+                  labelText: context.tr('estimatedDelivery'),
+                  helperText: context.tr('optionalDateFormat'),
+                  border: const OutlineInputBorder(),
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _noteController,
-              enabled: !_submitting,
-              maxLines: 3,
-              decoration: InputDecoration(
-                labelText: context.tr('note'),
-                border: const OutlineInputBorder(),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _noteController,
+                enabled: !_submitting,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: context.tr('note'),
+                  border: const OutlineInputBorder(),
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
+              const SizedBox(height: 24),
+            ],
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -230,7 +228,7 @@ class _AdminShipmentFormScreenState extends State<AdminShipmentFormScreen> {
                       )
                     : Text(
                         widget.createMode
-                            ? context.tr('createShipment')
+                            ? 'Create GHN shipment'
                             : context.tr('saveChanges'),
                       ),
               ),

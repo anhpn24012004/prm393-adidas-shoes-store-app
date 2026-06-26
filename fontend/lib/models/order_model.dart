@@ -52,6 +52,10 @@ class OrderListItem {
   final String status;
   final String? paymentMethod;
   final String? paymentStatus;
+  final String? shipmentStatus;
+  final String? ghnOrderCode;
+  final String? trackingCode;
+  final DateTime? expectedDeliveryTime;
   final DateTime? createdAt;
   final bool hasReturnRequest;
   final List<OrderItem> items;
@@ -66,6 +70,10 @@ class OrderListItem {
     required this.status,
     this.paymentMethod,
     this.paymentStatus,
+    this.shipmentStatus,
+    this.ghnOrderCode,
+    this.trackingCode,
+    this.expectedDeliveryTime,
     this.createdAt,
     required this.hasReturnRequest,
     required this.items,
@@ -82,6 +90,12 @@ class OrderListItem {
       status: json['status'] ?? '',
       paymentMethod: json['paymentMethod'],
       paymentStatus: json['paymentStatus'],
+      shipmentStatus: json['shipmentStatus'],
+      ghnOrderCode: json['ghnOrderCode'],
+      trackingCode: json['trackingCode'] ?? json['trackingNumber'],
+      expectedDeliveryTime: DateTime.tryParse(
+        json['expectedDeliveryTime']?.toString() ?? '',
+      ),
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
       hasReturnRequest: json['hasReturnRequest'] ?? false,
       items: (json['items'] as List? ?? [])
@@ -111,6 +125,14 @@ class OrderDetail {
   final String? note;
   final DateTime? createdAt;
   final PaymentInfo payment;
+  final int? shipmentId;
+  final String? shipmentStatus;
+  final String? shippingProvider;
+  final String? trackingCode;
+  final String? ghnOrderCode;
+  final DateTime? expectedDeliveryTime;
+  final DateTime? shippedAt;
+  final DateTime? deliveredAt;
   final List<OrderItem> items;
 
   OrderDetail({
@@ -133,6 +155,14 @@ class OrderDetail {
     this.note,
     this.createdAt,
     required this.payment,
+    this.shipmentId,
+    this.shipmentStatus,
+    this.shippingProvider,
+    this.trackingCode,
+    this.ghnOrderCode,
+    this.expectedDeliveryTime,
+    this.shippedAt,
+    this.deliveredAt,
     required this.items,
   });
 
@@ -157,6 +187,16 @@ class OrderDetail {
       note: json['note'],
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
       payment: PaymentInfo.fromJson(json),
+      shipmentId: json['shipmentId'],
+      shipmentStatus: json['shipmentStatus'],
+      shippingProvider: json['shippingProvider'] ?? json['carrier'],
+      trackingCode: json['trackingCode'] ?? json['trackingNumber'],
+      ghnOrderCode: json['ghnOrderCode'],
+      expectedDeliveryTime: DateTime.tryParse(
+        json['expectedDeliveryTime']?.toString() ?? '',
+      ),
+      shippedAt: DateTime.tryParse(json['shippedAt']?.toString() ?? ''),
+      deliveredAt: DateTime.tryParse(json['deliveredAt']?.toString() ?? ''),
       items: (json['items'] as List? ?? [])
           .map((item) => OrderItem.fromJson(item))
           .toList(),
@@ -258,98 +298,93 @@ class CreatePayPalPaymentResponse {
   }
 }
 
-class QrPaymentResponse {
-  final String qrImageUrl;
-  final String bankBin;
-  final String accountNo;
+class SePayPaymentResponse {
+  final int orderId;
+  final String qrCodeUrl;
+  final String bankCode;
+  final String bankAccountNumber;
   final String accountName;
   final String transferContent;
   final double amount;
+  final String paymentStatus;
+  final DateTime? expiresAt;
 
-  QrPaymentResponse({
-    required this.qrImageUrl,
-    required this.bankBin,
-    required this.accountNo,
+  SePayPaymentResponse({
+    required this.orderId,
+    required this.qrCodeUrl,
+    required this.bankCode,
+    required this.bankAccountNumber,
     required this.accountName,
     required this.transferContent,
     required this.amount,
+    required this.paymentStatus,
+    this.expiresAt,
   });
 
-  factory QrPaymentResponse.fromJson(Map<String, dynamic> json) {
-    return QrPaymentResponse(
-      qrImageUrl: json['qrImageUrl'] ?? '',
-      bankBin: json['bankBin'] ?? '',
-      accountNo: json['accountNo'] ?? '',
+  factory SePayPaymentResponse.fromJson(Map<String, dynamic> json) {
+    return SePayPaymentResponse(
+      orderId: json['orderId'] ?? 0,
+      qrCodeUrl: json['qrCodeUrl'] ?? '',
+      bankCode: json['bankCode'] ?? '',
+      bankAccountNumber: json['bankAccountNumber'] ?? '',
       accountName: json['accountName'] ?? '',
       transferContent: json['transferContent'] ?? '',
       amount: (json['amount'] as num? ?? 0).toDouble(),
+      paymentStatus: json['paymentStatus'] ?? '',
+      expiresAt: DateTime.tryParse(json['expiresAt']?.toString() ?? ''),
     );
-  }
-}
-
-class VisaPaymentRequest {
-  final int orderId;
-  final String cardNumber;
-  final String cardHolderName;
-  final String expiryMonth;
-  final String expiryYear;
-  final String cvv;
-  final double? amount;
-
-  VisaPaymentRequest({
-    required this.orderId,
-    required this.cardNumber,
-    required this.cardHolderName,
-    required this.expiryMonth,
-    required this.expiryYear,
-    required this.cvv,
-    this.amount,
-  });
-
-  Map<String, dynamic> toJson() {
-    return {
-      'orderId': orderId,
-      'cardNumber': cardNumber,
-      'cardHolderName': cardHolderName,
-      'expiryMonth': expiryMonth,
-      'expiryYear': expiryYear,
-      'cvv': cvv,
-      if (amount != null) 'amount': amount,
-    };
   }
 }
 
 class PaymentStatus {
   final int orderId;
   final String orderCode;
+  final int paymentId;
   final String orderStatus;
   final String paymentMethod;
   final String paymentStatus;
   final double amount;
   final String? transactionCode;
   final DateTime? paidAt;
+  final DateTime? expiresAt;
+  final String? message;
 
   PaymentStatus({
     required this.orderId,
     required this.orderCode,
+    required this.paymentId,
     required this.orderStatus,
     required this.paymentMethod,
     required this.paymentStatus,
     required this.amount,
     this.transactionCode,
     this.paidAt,
+    this.expiresAt,
+    this.message,
   });
 
   factory PaymentStatus.fromJson(Map<String, dynamic> json) {
     return PaymentStatus(
       orderId: json['orderId'] ?? 0,
       orderCode: json['orderCode'] ?? '',
+      paymentId: json['paymentId'] ?? 0,
       orderStatus: json['orderStatus'] ?? '',
       paymentMethod: json['paymentMethod'] ?? '',
       paymentStatus: json['paymentStatus'] ?? '',
       amount: (json['amount'] as num? ?? 0).toDouble(),
       transactionCode: json['transactionCode'],
       paidAt: DateTime.tryParse(json['paidAt']?.toString() ?? ''),
+      expiresAt: DateTime.tryParse(json['expiresAt']?.toString() ?? ''),
+      message: json['message'],
     );
   }
+
+  bool get isSuccess =>
+      paymentStatus == 'Success' || orderStatus == 'Paid';
+
+  bool get isFailed =>
+      paymentStatus == 'Failed' ||
+      paymentStatus == 'Expired' ||
+      orderStatus == 'Failed' ||
+      orderStatus == 'Cancelled';
 }
