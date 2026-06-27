@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../../config/app_config.dart';
 import '../../localization/app_localization.dart';
 import '../../models/order_model.dart';
 import '../../services/order_service.dart';
@@ -22,9 +21,14 @@ class _RefundRequestScreenState extends State<RefundRequestScreen> {
   final _returnService = ReturnRefundService();
   final _imagePicker = ImagePicker();
   final _detailsController = TextEditingController();
+  final _bankNameController = TextEditingController();
+  final _bankNumberController = TextEditingController();
+  final _bankAccountNameController = TextEditingController();
 
   OrderDetail? _order;
   String? _selectedReason;
+  final Map<int, bool> _selectedItems = {};
+  final Map<int, int> _quantities = {};
   final List<XFile> _evidenceFiles = [];
   bool _loading = true;
   bool _submitting = false;
@@ -45,13 +49,24 @@ class _RefundRequestScreenState extends State<RefundRequestScreen> {
   @override
   void dispose() {
     _detailsController.dispose();
+    _bankNameController.dispose();
+    _bankNumberController.dispose();
+    _bankAccountNameController.dispose();
     super.dispose();
   }
 
   Future<void> _load(int orderId) async {
     try {
       final order = await _orderService.getOrderDetail(orderId);
-      if (mounted) setState(() => _order = order);
+      if (mounted) {
+        setState(() {
+          _order = order;
+          for (final item in order.items) {
+            _selectedItems[item.orderItemId] = true;
+            _quantities[item.orderItemId] = item.quantity;
+          }
+        });
+      }
     } catch (error) {
       if (mounted) _show(error);
     } finally {
@@ -147,6 +162,31 @@ class _RefundRequestScreenState extends State<RefundRequestScreen> {
       return;
     }
 
+    final bankName = _bankNameController.text.trim();
+    final bankNumber = _bankNumberController.text.trim();
+    final bankAccountName = _bankAccountNameController.text.trim();
+    if (bankName.isEmpty || bankNumber.isEmpty || bankAccountName.isEmpty) {
+      _show('Bank name, account number, and account name are required.');
+      return;
+    }
+
+    final items = _order!.items
+        .where((item) => _selectedItems[item.orderItemId] == true)
+        .map(
+          (item) => {
+            'orderItemId': item.orderItemId,
+            'quantity': _quantities[item.orderItemId] ?? 0,
+            'reason': _selectedReason,
+          },
+        )
+        .where((item) => (item['quantity'] as int) > 0)
+        .toList();
+
+    if (items.isEmpty) {
+      _show('Select at least one item to return.');
+      return;
+    }
+
     setState(() => _submitting = true);
     try {
       final evidenceUrls = await _uploadEvidenceFiles();
@@ -162,21 +202,18 @@ class _RefundRequestScreenState extends State<RefundRequestScreen> {
 
       await _returnService.createReturn(
         orderId: _order!.orderId,
-        userId: AppConfig.currentUserId,
         reason: reason,
-        items: _order!.items
-            .map(
-              (item) => {
-                'orderItemId': item.orderItemId,
-                'quantity': item.quantity,
-                'reason': _selectedReason,
-              },
-            )
-            .toList(),
+        customerNote: _detailsController.text.trim().isEmpty
+            ? null
+            : _detailsController.text.trim(),
+        bankName: bankName,
+        bankAccountNumber: bankNumber,
+        bankAccountName: bankAccountName,
+        items: items,
       );
       if (!mounted) return;
-      _show(context.tr('returnSubmitted'));
-      Navigator.pushReplacementNamed(context, '/refund-status');
+      _show('Return request submitted. Please wait for admin approval.');
+      Navigator.pop(context, true);
     } catch (error) {
       if (mounted) _show(error);
     } finally {
@@ -195,29 +232,76 @@ class _RefundRequestScreenState extends State<RefundRequestScreen> {
   Widget _buildOrderItems(OrderDetail order) {
     return Column(
       children: order.items.map((item) {
+        final selected = _selectedItems[item.orderItemId] ?? false;
+        final quantity = _quantities[item.orderItemId] ?? item.quantity;
+
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           child: Padding(
             padding: const EdgeInsets.all(14),
-            child: Row(
+            child: Column(
               children: [
-                Expanded(
-                  child: Column(
+                Row(
+                  children: [
+                    Checkbox(
+                      value: selected,
+                      onChanged: _submitting
+                          ? null
+                          : (value) {
+                              setState(() {
+                                _selectedItems[item.orderItemId] =
+                                    value ?? false;
+                              });
+                            },
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.productName,
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                          Text(
+                            '${context.tr('productSize')}: ${item.size}  '
+                            '${context.tr('productColor')}: ${item.color}',
+                          ),
+                          Text('${context.tr('quantity')}: ${item.quantity}'),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.assignment_return_outlined),
+                  ],
+                ),
+                if (selected) ...[
+                  const SizedBox(height: 10),
+                  Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        item.productName,
-                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      const Text('Return quantity'),
+                      const SizedBox(width: 12),
+                      DropdownButton<int>(
+                        value: quantity.clamp(1, item.quantity),
+                        items: List.generate(item.quantity, (index) => index + 1)
+                            .map(
+                              (value) => DropdownMenuItem(
+                                value: value,
+                                child: Text(value.toString()),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: _submitting
+                            ? null
+                            : (value) {
+                                if (value == null) return;
+                                setState(() {
+                                  _quantities[item.orderItemId] = value;
+                                });
+                              },
                       ),
-                      Text(
-                        '${context.tr('productSize')}: ${item.size}  '
-                        '${context.tr('productColor')}: ${item.color}',
-                      ),
-                      Text('${context.tr('quantity')}: ${item.quantity}'),
                     ],
                   ),
-                ),
-                const Icon(Icons.assignment_return_outlined),
+                ],
               ],
             ),
           ),
@@ -349,6 +433,35 @@ class _RefundRequestScreenState extends State<RefundRequestScreen> {
                         labelText: context.tr('returnDetailsOptional'),
                         alignLabelWithHint: true,
                         border: const OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: _bankNameController,
+                      enabled: !_submitting,
+                      decoration: const InputDecoration(
+                        labelText: 'Bank name',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: _bankNumberController,
+                      enabled: !_submitting,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Bank account number',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: _bankAccountNameController,
+                      enabled: !_submitting,
+                      textCapitalization: TextCapitalization.characters,
+                      decoration: const InputDecoration(
+                        labelText: 'Bank account name',
+                        border: OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 14),

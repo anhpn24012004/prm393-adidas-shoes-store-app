@@ -331,6 +331,8 @@ public partial class AdidasShoesStoreContext : DbContext
             entity.HasKey(e => e.ReturnItemId).HasName("PK__ReturnIt__8D87CD3A9E325E86");
 
             entity.Property(e => e.Reason).HasMaxLength(255);
+            entity.Property(e => e.UnitPrice).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.RefundAmount).HasColumnType("decimal(18, 2)");
 
             entity.HasOne(d => d.OrderItem).WithMany(p => p.ReturnItems)
                 .HasForeignKey(d => d.OrderItemId)
@@ -347,15 +349,41 @@ public partial class AdidasShoesStoreContext : DbContext
         {
             entity.HasKey(e => e.ReturnRequestId).HasName("PK__ReturnRe__0CCD2599808D7145");
 
+            entity.HasIndex(e => e.RequestCode, "UQ_ReturnRequests_RequestCode").IsUnique();
+            entity.HasIndex(e => new { e.OrderId, e.Status }, "IX_ReturnRequests_OrderId_Status");
+
+            entity.Property(e => e.AdminNote).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.BankAccountName).HasMaxLength(100);
+            entity.Property(e => e.BankAccountNumber).HasMaxLength(50);
+            entity.Property(e => e.BankName).HasMaxLength(100);
+            entity.Property(e => e.CustomerNote).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.InspectionNote).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.Reason).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.RefundTransactionNote).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.RequestCode).HasMaxLength(50);
+            entity.Property(e => e.RequestedAmount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.RequestedAt)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
+            entity.Property(e => e.ApprovedAt).HasColumnType("datetime");
+            entity.Property(e => e.RejectedAt).HasColumnType("datetime");
+            entity.Property(e => e.ReturnCarrier).HasMaxLength(50);
+            entity.Property(e => e.ReturnTrackingCode).HasMaxLength(100);
+            entity.Property(e => e.ReturnShipmentNote).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.ReturnShippedAt).HasColumnType("datetime");
+            entity.Property(e => e.ReturnReceivedAt).HasColumnType("datetime");
+            entity.Property(e => e.RefundedAt).HasColumnType("datetime");
             entity.Property(e => e.Status).HasMaxLength(50);
 
             entity.HasOne(d => d.Order).WithMany(p => p.ReturnRequests)
                 .HasForeignKey(d => d.OrderId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__ReturnReq__Order__71D1E811");
+
+            entity.HasOne(d => d.ProcessedByAdmin).WithMany(p => p.ProcessedReturnRequests)
+                .HasForeignKey(d => d.ProcessedByAdminId)
+                .OnDelete(DeleteBehavior.NoAction)
+                .HasConstraintName("FK_ReturnRequests_ProcessedByAdmin");
 
             entity.HasOne(d => d.User).WithMany(p => p.ReturnRequests)
                 .HasForeignKey(d => d.UserId)
