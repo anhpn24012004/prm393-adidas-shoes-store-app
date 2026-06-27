@@ -66,6 +66,7 @@ builder.Services.Configure<SePaySettings>(builder.Configuration.GetSection("SePa
 builder.Services.Configure<PaymentSettings>(builder.Configuration.GetSection("PaymentSettings"));
 builder.Services.Configure<GhnSyncSettings>(builder.Configuration.GetSection("GhnSyncSettings"));
 builder.Services.Configure<ShipmentSettings>(builder.Configuration.GetSection("ShipmentSettings"));
+builder.Services.Configure<ShopReturnAddressSettings>(builder.Configuration.GetSection("ShopReturnAddress"));
 builder.Services.AddHttpClient("GHN");
 
 // Register custom services

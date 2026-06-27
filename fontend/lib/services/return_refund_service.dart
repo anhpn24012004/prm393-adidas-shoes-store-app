@@ -11,7 +11,7 @@ class ReturnRefundService {
 
   Future<List<ReturnRequestModel>> getUserReturns(int userId) async {
     final response = await http.get(
-      Uri.parse('${ApiClient.baseUrl}/returnrequests/user/$userId'),
+      Uri.parse('${ApiClient.baseUrl}/return-requests/my'),
       headers: await _headers(),
     );
     if (response.statusCode == 200) {
@@ -23,7 +23,7 @@ class ReturnRefundService {
 
   Future<List<ReturnRequestModel>> getAllReturns() async {
     final response = await http.get(
-      Uri.parse('${ApiClient.baseUrl}/returnrequests'),
+      Uri.parse('${ApiClient.baseUrl}/admin/return-requests'),
       headers: await _headers(),
     );
     if (response.statusCode == 200) {
@@ -35,17 +35,23 @@ class ReturnRefundService {
 
   Future<void> createReturn({
     required int orderId,
-    required int userId,
     required String reason,
+    String? customerNote,
+    required String bankName,
+    required String bankAccountNumber,
+    required String bankAccountName,
     required List<Map<String, dynamic>> items,
   }) async {
     final response = await http.post(
-      Uri.parse('${ApiClient.baseUrl}/returnrequests'),
+      Uri.parse('${ApiClient.baseUrl}/return-requests'),
       headers: await _headers(),
       body: jsonEncode({
         'orderId': orderId,
-        'userId': userId,
         'reason': reason,
+        'customerNote': customerNote,
+        'bankName': bankName,
+        'bankAccountNumber': bankAccountNumber,
+        'bankAccountName': bankAccountName,
         'items': items,
       }),
     );
@@ -58,7 +64,7 @@ class ReturnRefundService {
   }) async {
     final request = http.MultipartRequest(
       'POST',
-      Uri.parse('${ApiClient.baseUrl}/returnrequests/evidence'),
+      Uri.parse('${ApiClient.baseUrl}/return-requests/evidence'),
     );
 
     request.headers.addAll(await _headers(includeContentType: false));
@@ -83,10 +89,84 @@ class ReturnRefundService {
     String? adminNote,
   }) async {
     final action = approve ? 'approve' : 'reject';
-    final response = await http.put(
-      Uri.parse('${ApiClient.baseUrl}/returnrequests/$returnRequestId/$action'),
+    final response = await http.post(
+      Uri.parse(
+        '${ApiClient.baseUrl}/admin/return-requests/$returnRequestId/$action',
+      ),
       headers: await _headers(),
-      body: jsonEncode(adminNote),
+      body: jsonEncode({'adminNote': adminNote}),
+    );
+    if (response.statusCode != 200) throw Exception(_message(response));
+  }
+
+  Future<void> submitReturnShippingInfo({
+    required int returnRequestId,
+    required String returnCarrier,
+    required String returnTrackingCode,
+    String? returnShipmentNote,
+  }) async {
+    final response = await http.put(
+      Uri.parse(
+        '${ApiClient.baseUrl}/return-requests/$returnRequestId/shipping-info',
+      ),
+      headers: await _headers(),
+      body: jsonEncode({
+        'returnCarrier': returnCarrier,
+        'returnTrackingCode': returnTrackingCode,
+        'returnShipmentNote': returnShipmentNote,
+      }),
+    );
+    if (response.statusCode != 200) throw Exception(_message(response));
+  }
+
+  Future<void> markReturnReceived({
+    required int returnRequestId,
+    String? adminNote,
+  }) async {
+    final response = await http.post(
+      Uri.parse(
+        '${ApiClient.baseUrl}/admin/return-requests/$returnRequestId/mark-received',
+      ),
+      headers: await _headers(),
+      body: jsonEncode({'adminNote': adminNote}),
+    );
+    if (response.statusCode != 200) throw Exception(_message(response));
+  }
+
+  Future<void> inspectReturn({
+    required int returnRequestId,
+    required bool isRestockable,
+    required int restockQuantity,
+    String? inspectionNote,
+  }) async {
+    final response = await http.post(
+      Uri.parse(
+        '${ApiClient.baseUrl}/admin/return-requests/$returnRequestId/inspect',
+      ),
+      headers: await _headers(),
+      body: jsonEncode({
+        'isRestockable': isRestockable,
+        'restockQuantity': restockQuantity,
+        'inspectionNote': inspectionNote,
+      }),
+    );
+    if (response.statusCode != 200) throw Exception(_message(response));
+  }
+
+  Future<void> markReturnRefunded({
+    required int returnRequestId,
+    String? refundTransactionNote,
+    String? adminNote,
+  }) async {
+    final response = await http.post(
+      Uri.parse(
+        '${ApiClient.baseUrl}/admin/return-requests/$returnRequestId/mark-refunded',
+      ),
+      headers: await _headers(),
+      body: jsonEncode({
+        'refundTransactionNote': refundTransactionNote,
+        'adminNote': adminNote,
+      }),
     );
     if (response.statusCode != 200) throw Exception(_message(response));
   }

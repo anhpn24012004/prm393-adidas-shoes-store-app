@@ -43,6 +43,8 @@ public partial class User
 
     public virtual ICollection<ReturnRequest> ReturnRequests { get; set; } = new List<ReturnRequest>();
 
+    public virtual ICollection<ReturnRequest> ProcessedReturnRequests { get; set; } = new List<ReturnRequest>();
+
     public virtual ICollection<RefundRequest> RefundRequests { get; set; } = new List<RefundRequest>();
 
     public virtual ICollection<RefundRequest> ProcessedRefundRequests { get; set; } = new List<RefundRequest>();
