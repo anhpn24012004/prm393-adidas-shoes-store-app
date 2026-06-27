@@ -6,6 +6,7 @@ import '../../services/admin_service.dart';
 import '../../services/shipment_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/currency_formatter.dart';
+import 'admin_refund_request_detail_screen.dart';
 import 'admin_shipment_detail_screen.dart';
 
 class AdminOrderListScreen extends StatefulWidget {
@@ -29,6 +30,7 @@ class _AdminOrderListScreenState extends State<AdminOrderListScreen> {
     'Delivered',
     'Completed',
     'Cancelled',
+    'Refunded',
   ];
 
   @override
@@ -69,6 +71,7 @@ class _AdminOrderListScreenState extends State<AdminOrderListScreen> {
       'Delivered' => context.tr('statusDelivered'),
       'Completed' => context.tr('statusCompleted'),
       'Cancelled' => context.tr('statusCancelled'),
+      'Refunded' => 'Refunded',
       null => context.tr('notAvailable'),
       _ => status,
     };
@@ -224,6 +227,7 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
       'Delivered' => context.tr('statusDelivered'),
       'Completed' => context.tr('statusCompleted'),
       'Cancelled' => context.tr('statusCancelled'),
+      'Refunded' => 'Refunded',
       null => context.tr('notAvailable'),
       _ => status,
     };
@@ -244,6 +248,59 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
       null => context.tr('notAvailable'),
       _ => status,
     };
+  }
+
+  bool _isOnlinePaymentEligible(AdminOrderDetail order) {
+    final paymentMethod = order.summary.paymentMethod?.toUpperCase();
+    final paymentStatus = order.summary.paymentStatus?.toUpperCase();
+    final orderStatus = order.summary.status;
+    final isOnline =
+        paymentMethod == 'SEPAY' || paymentMethod == 'VNPAY' || paymentMethod == 'PAYPAL';
+
+    return isOnline &&
+        paymentStatus == 'SUCCESS' &&
+        (orderStatus == 'Paid' || orderStatus == 'Processing') &&
+        order.shipmentId == null;
+  }
+
+  bool _isCodEligible(AdminOrderDetail order) {
+    return order.summary.paymentMethod?.toUpperCase() == 'COD' &&
+        order.summary.paymentStatus?.toUpperCase() == 'PENDING' &&
+        order.summary.status == 'Processing' &&
+        order.shipmentId == null;
+  }
+
+  bool _hasActiveRefundRequest(AdminOrderDetail order) {
+    final status = order.latestRefundRequestStatus?.toLowerCase();
+    return status == 'pending' || status == 'approved';
+  }
+
+  bool _hasRefundRequest(AdminOrderDetail order) {
+    return order.latestRefundRequestId != null;
+  }
+
+  bool _canCreateShipment(AdminOrderDetail order) {
+    if (_hasActiveRefundRequest(order)) return false;
+    if (order.summary.status == 'Cancelled' ||
+        order.summary.status == 'Failed' ||
+        order.summary.status == 'Delivered' ||
+        order.summary.status == 'Completed' ||
+        order.summary.status == 'Shipping') {
+      return false;
+    }
+    return _isOnlinePaymentEligible(order) || _isCodEligible(order);
+  }
+
+  void _openRefundRequest(int refundRequestId) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            AdminRefundRequestDetailScreen(refundRequestId: refundRequestId),
+      ),
+    ).then((_) {
+      if (mounted) setState(_reloadDetail);
+    });
   }
 
   String _formatDate(DateTime? date) {
@@ -460,20 +517,89 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
                     : '#${order.shipmentId}',
               ),
               _line(
-                'GhnOrderCode',
+                'GHN Code',
                 order.ghnOrderCode ?? context.tr('notAvailable'),
               ),
               _line(
-                'TrackingCode',
+                'Tracking Code',
                 order.trackingCode ?? context.tr('notAvailable'),
               ),
               _line(
-                'ExpectedDeliveryTime',
+                'ETA',
                 _formatDate(order.expectedDeliveryTime),
               ),
+              if (_hasRefundRequest(order)) ...[
+                const SizedBox(height: 18),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.orange),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Refund request',
+                        style: TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Status: ${order.latestRefundRequestStatus ?? '-'}',
+                      ),
+                      Text(
+                        'Requested amount: ${formatVnd(order.latestRefundRequestAmount ?? 0)}',
+                      ),
+                      Text(
+                        'Reason: ${order.latestRefundRequestReason ?? '-'}',
+                      ),
+                      const SizedBox(height: 8),
+                      if (order.latestRefundRequestId != null)
+                        OutlinedButton.icon(
+                          onPressed: () =>
+                              _openRefundRequest(order.latestRefundRequestId!),
+                          icon: const Icon(Icons.open_in_new),
+                          label: const Text('View refund request'),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+              if (_hasActiveRefundRequest(order)) ...[
+                const SizedBox(height: 14),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.amber),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'This order has a pending refund request. Resolve the refund request before creating shipment.',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: order.latestRefundRequestId == null
+                            ? null
+                            : () => _openRefundRequest(
+                                  order.latestRefundRequestId!,
+                                ),
+                        icon: const Icon(Icons.open_in_new),
+                        label: const Text('View refund request'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 20),
-              if (order.summary.status == 'Processing' &&
-                  order.shipmentId == null)
+              if (_canCreateShipment(order))
                 ElevatedButton.icon(
                   onPressed: _updating ? null : _createGhnShipment,
                   icon: const Icon(Icons.local_shipping),
@@ -481,8 +607,7 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
                     _updating ? context.tr('updating') : 'Create GHN Shipment',
                   ),
                 ),
-              if (order.summary.status == 'Processing' &&
-                  order.shipmentId == null) ...[
+              if (_isCodEligible(order)) ...[
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: _updating ? null : () => _cancelOrder(order),

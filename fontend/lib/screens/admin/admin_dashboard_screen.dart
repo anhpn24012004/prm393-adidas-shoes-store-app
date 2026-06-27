@@ -193,10 +193,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               _QuickAction(
                                 icon: Icons.assignment_return_outlined,
                                 title: 'Refund Requests',
-                                subtitle: 'Returns, refunds and decisions',
+                                subtitle: 'Manual refunds and approvals',
                                 onTap: () => Navigator.pushNamed(
                                   context,
-                                  '/admin/returns-refunds',
+                                  '/admin/refund-requests',
                                 ),
                               ),
                             ],
