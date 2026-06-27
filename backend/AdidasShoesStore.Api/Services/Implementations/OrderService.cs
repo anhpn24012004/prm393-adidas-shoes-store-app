@@ -277,6 +277,18 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     Status = o.Status,
                     PaymentMethod = o.Payment == null ? null : o.Payment.PaymentMethod,
                     PaymentStatus = o.Payment == null ? null : o.Payment.Status,
+                    LatestRefundRequestId = o.RefundRequests
+                        .OrderByDescending(r => r.CreatedAt)
+                        .Select(r => (int?)r.RefundRequestId)
+                        .FirstOrDefault(),
+                    LatestRefundRequestAmount = o.RefundRequests
+                        .OrderByDescending(r => r.CreatedAt)
+                        .Select(r => (decimal?)r.RequestedAmount)
+                        .FirstOrDefault(),
+                    LatestRefundRequestReason = o.RefundRequests
+                        .OrderByDescending(r => r.CreatedAt)
+                        .Select(r => r.Reason)
+                        .FirstOrDefault(),
                     ShipmentStatus = o.Shipment == null ? null : o.Shipment.Status,
                     GhnOrderCode = o.Shipment == null ? null : o.Shipment.GhnOrderCode,
                     TrackingCode = o.Shipment == null ? null : o.Shipment.TrackingCode,
@@ -345,6 +357,30 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     ExpectedDeliveryTime = o.Shipment == null ? null : o.Shipment.ExpectedDeliveryTime,
                     ShippedAt = o.Shipment == null ? null : o.Shipment.ShippedAt,
                     DeliveredAt = o.Shipment == null ? null : o.Shipment.DeliveredAt,
+                    LatestRefundRequestId = o.RefundRequests
+                        .OrderByDescending(r => r.CreatedAt)
+                        .Select(r => (int?)r.RefundRequestId)
+                        .FirstOrDefault(),
+                    LatestRefundRequestCode = o.RefundRequests
+                        .OrderByDescending(r => r.CreatedAt)
+                        .Select(r => r.RequestCode)
+                        .FirstOrDefault(),
+                    LatestRefundRequestStatus = o.RefundRequests
+                        .OrderByDescending(r => r.CreatedAt)
+                        .Select(r => r.Status)
+                        .FirstOrDefault(),
+                    LatestRefundRequestAmount = o.RefundRequests
+                        .OrderByDescending(r => r.CreatedAt)
+                        .Select(r => (decimal?)r.RequestedAmount)
+                        .FirstOrDefault(),
+                    LatestRefundRequestReason = o.RefundRequests
+                        .OrderByDescending(r => r.CreatedAt)
+                        .Select(r => r.Reason)
+                        .FirstOrDefault(),
+                    LatestRefundRequestCustomerNote = o.RefundRequests
+                        .OrderByDescending(r => r.CreatedAt)
+                        .Select(r => r.CustomerNote)
+                        .FirstOrDefault(),
                     Items = o.OrderItems.Select(i => new OrderItemDto
                     {
                         OrderItemId = i.OrderItemId,
@@ -398,15 +434,6 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     return OrderServiceResult<OrderDetailDto>.Fail("Order is already cancelled");
                 }
 
-                if (order.Status == "Paid")
-                {
-                    await transaction.RollbackAsync();
-
-                    return OrderServiceResult<OrderDetailDto>.Fail(
-                        "Paid orders cannot be cancelled directly. Please request refund."
-                    );
-                }
-
                 if (order.Status == "Shipping" ||
                     order.Status == "Delivered" ||
                     order.Status == "Completed")
@@ -414,16 +441,30 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     await transaction.RollbackAsync();
 
                     return OrderServiceResult<OrderDetailDto>.Fail(
-                        "This order cannot be cancelled at its current status"
+                        "This order is already being shipped. Please contact support for cancellation or refund."
                     );
                 }
 
-                var isCodProcessing = order.Status == "Processing" &&
-                    order.Payment != null &&
-                    string.Equals(order.Payment.PaymentMethod, "COD", StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(order.Payment.Status, "Success", StringComparison.OrdinalIgnoreCase);
+                var paymentMethod = order.Payment?.PaymentMethod?.Trim().ToUpperInvariant();
+                var paymentStatus = order.Payment?.Status?.Trim();
+                var isOnlinePaid = order.Payment != null &&
+                    AllowedPaymentMethods.Contains(paymentMethod ?? string.Empty) &&
+                    string.Equals(paymentStatus, "Success", StringComparison.OrdinalIgnoreCase);
+                var isPendingPayment = string.Equals(order.Status, "PendingPayment", StringComparison.OrdinalIgnoreCase);
+                var isCodProcessing = string.Equals(order.Status, "Processing", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(paymentMethod, "COD", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(paymentStatus, "Success", StringComparison.OrdinalIgnoreCase);
 
-                if (order.Status != "PendingPayment" && !isCodProcessing)
+                if (isOnlinePaid)
+                {
+                    await transaction.RollbackAsync();
+
+                    return OrderServiceResult<OrderDetailDto>.Fail(
+                        "Paid online orders cannot be cancelled directly. Please request cancellation/refund."
+                    );
+                }
+
+                if (!isPendingPayment && !isCodProcessing)
                 {
                     await transaction.RollbackAsync();
 

@@ -78,6 +78,7 @@ builder.Services.AddHttpClient<IAiAssistantService, AiAssistantService>();
 builder.Services.AddScoped<IReviewService, ReviewService>();
 builder.Services.AddScoped<IReturnRequestService, ReturnRequestService>();
 builder.Services.AddScoped<IRefundService, RefundService>();
+builder.Services.AddScoped<IRefundRequestService, RefundRequestService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IShipmentService, ShipmentService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();

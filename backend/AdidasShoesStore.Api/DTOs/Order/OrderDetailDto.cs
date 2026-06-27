@@ -62,6 +62,18 @@ namespace AdidasShoesStore.Api.DTOs.Order
 
         public DateTime? DeliveredAt { get; set; }
 
+        public int? LatestRefundRequestId { get; set; }
+
+        public string? LatestRefundRequestCode { get; set; }
+
+        public string? LatestRefundRequestStatus { get; set; }
+
+        public decimal? LatestRefundRequestAmount { get; set; }
+
+        public string? LatestRefundRequestReason { get; set; }
+
+        public string? LatestRefundRequestCustomerNote { get; set; }
+
         public List<OrderItemDto> Items { get; set; } = new();
     }
 }

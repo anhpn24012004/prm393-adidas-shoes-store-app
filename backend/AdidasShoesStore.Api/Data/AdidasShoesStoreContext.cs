@@ -38,6 +38,8 @@ public partial class AdidasShoesStoreContext : DbContext
 
     public virtual DbSet<Refund> Refunds { get; set; }
 
+    public virtual DbSet<RefundRequest> RefundRequests { get; set; }
+
     public virtual DbSet<ReturnItem> ReturnItems { get; set; }
 
     public virtual DbSet<ReturnRequest> ReturnRequests { get; set; }
@@ -284,6 +286,44 @@ public partial class AdidasShoesStoreContext : DbContext
                 .HasForeignKey<Refund>(d => d.ReturnRequestId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__Refunds__ReturnR__7A672E12");
+        });
+
+        modelBuilder.Entity<RefundRequest>(entity =>
+        {
+            entity.HasKey(e => e.RefundRequestId).HasName("PK__RefundReq__0CCD259900000001");
+
+            entity.HasIndex(e => e.RequestCode, "UQ_RefundRequests_RequestCode").IsUnique();
+            entity.HasIndex(e => new { e.OrderId, e.Status }, "IX_RefundRequests_OrderId_Status");
+
+            entity.Property(e => e.AdminNote).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.BankAccountName).HasMaxLength(100);
+            entity.Property(e => e.BankAccountNumber).HasMaxLength(50);
+            entity.Property(e => e.BankName).HasMaxLength(100);
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.ProofImageUrl).HasMaxLength(255);
+            entity.Property(e => e.ProcessedByAdminId);
+            entity.Property(e => e.Reason).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.RefundTransactionNote).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.RequestCode).HasMaxLength(50);
+            entity.Property(e => e.RequestedAmount).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.Status).HasMaxLength(50);
+
+            entity.HasOne(d => d.Order).WithMany(p => p.RefundRequests)
+                .HasForeignKey(d => d.OrderId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RefundRequests_Orders");
+
+            entity.HasOne(d => d.ProcessedByAdmin).WithMany(p => p.ProcessedRefundRequests)
+                .HasForeignKey(d => d.ProcessedByAdminId)
+                .OnDelete(DeleteBehavior.NoAction)
+                .HasConstraintName("FK_RefundRequests_ProcessedByAdmin");
+
+            entity.HasOne(d => d.User).WithMany(p => p.RefundRequests)
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RefundRequests_Users");
         });
 
         modelBuilder.Entity<ReturnItem>(entity =>
