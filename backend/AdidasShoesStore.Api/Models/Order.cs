@@ -49,6 +49,8 @@ public partial class Order
 
     public virtual ICollection<ReturnRequest> ReturnRequests { get; set; } = new List<ReturnRequest>();
 
+    public virtual ICollection<RefundRequest> RefundRequests { get; set; } = new List<RefundRequest>();
+
     public virtual Shipment? Shipment { get; set; }
 
     public virtual User User { get; set; } = null!;

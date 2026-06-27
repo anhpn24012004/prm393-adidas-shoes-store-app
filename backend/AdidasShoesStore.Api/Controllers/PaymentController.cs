@@ -14,15 +14,18 @@ namespace AdidasShoesStore.Api.Controllers
         private readonly IPaymentService _paymentService;
         private readonly ISePayService _sePayService;
         private readonly IConfiguration _configuration;
+        private readonly ILogger<PaymentController> _logger;
 
         public PaymentController(
             IPaymentService paymentService,
             ISePayService sePayService,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            ILogger<PaymentController> logger)
         {
             _paymentService = paymentService;
             _sePayService = sePayService;
             _configuration = configuration;
+            _logger = logger;
         }
 
         [Authorize]
@@ -183,23 +186,44 @@ namespace AdidasShoesStore.Api.Controllers
         [HttpPost("sepay/webhook")]
         public async Task<IActionResult> SePayWebhook()
         {
-            using var reader = new StreamReader(Request.Body);
-            var rawBody = await reader.ReadToEndAsync();
-            var result = await _sePayService.ProcessWebhookAsync(
-                rawBody,
-                Request.Headers.Authorization.FirstOrDefault(),
-                Request.Headers["X-SePay-Signature"].FirstOrDefault(),
-                Request.Headers["X-SePay-Timestamp"].FirstOrDefault()
-            );
-
-            if (!result.Success)
+            try
             {
-                return result.ErrorType == "Unauthorized"
-                    ? Unauthorized(new { success = false, message = result.Error })
-                    : BadRequest(new { success = false, message = result.Error });
-            }
+                _logger.LogInformation("===== SEPAY WEBHOOK CONTROLLER HIT =====");
 
-            return Ok(new { success = true });
+                using var reader = new StreamReader(Request.Body);
+                var rawBody = await reader.ReadToEndAsync();
+
+                _logger.LogInformation("SePay webhook controller rawBody: {RawBody}", rawBody);
+
+                var result = await _sePayService.ProcessWebhookAsync(
+                    rawBody,
+                    Request.Headers.Authorization.FirstOrDefault(),
+                    Request.Headers["X-SePay-Signature"].FirstOrDefault(),
+                    Request.Headers["X-SePay-Timestamp"].FirstOrDefault()
+                );
+
+                if (!result.Success)
+                {
+                    _logger.LogWarning("SePay webhook failed: {Error}", result.Error);
+
+                    return result.ErrorType == "Unauthorized"
+                        ? Unauthorized(new { success = false, message = result.Error })
+                        : BadRequest(new { success = false, message = result.Error });
+                }
+
+                return Ok(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "SePay webhook endpoint crashed");
+
+                return StatusCode(500, new
+                {
+                    success = false,
+                    message = ex.Message,
+                    detail = ex.ToString()
+                });
+            }
         }
 
         [Authorize]

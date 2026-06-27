@@ -86,96 +86,144 @@ public class SePayService : ISePayService
         string? signature,
         string? timestamp)
     {
-        if (!VerifyWebhook(rawBody, authorization, signature, timestamp))
-            return PaymentServiceResult<PaymentStatusDto?>.Fail("Invalid SePay webhook authentication", "Unauthorized");
-
-        SePayWebhookDto? payload;
         try
         {
-            payload = JsonSerializer.Deserialize<SePayWebhookDto>(
-                rawBody,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-        }
-        catch (JsonException)
-        {
-            return PaymentServiceResult<PaymentStatusDto?>.Fail("Invalid SePay webhook payload");
-        }
+            _logger.LogInformation("===== SEPAY WEBHOOK HIT =====");
+            _logger.LogInformation("SePay rawBody: {RawBody}", rawBody);
+            _logger.LogInformation(
+                "SePay headers present. Authorization={HasAuthorization}, Signature={HasSignature}, Timestamp={HasTimestamp}",
+                !string.IsNullOrWhiteSpace(authorization),
+                !string.IsNullOrWhiteSpace(signature),
+                !string.IsNullOrWhiteSpace(timestamp));
 
-        if (payload == null || payload.Id <= 0 || payload.TransferAmount <= 0)
-            return PaymentServiceResult<PaymentStatusDto?>.Fail("Invalid SePay webhook payload");
-        if (!string.Equals(payload.TransferType, "in", StringComparison.OrdinalIgnoreCase))
-            return PaymentServiceResult<PaymentStatusDto?>.Ok(null);
+            if (!VerifyWebhook(rawBody, authorization, signature, timestamp))
+                return PaymentServiceResult<PaymentStatusDto?>.Fail("Invalid SePay webhook authentication", "Unauthorized");
 
-        var providerTransactionId = payload.Id.ToString(CultureInfo.InvariantCulture);
-        var existing = await _context.Payments
-            .AsNoTracking()
-            .FirstOrDefaultAsync(p => p.ProviderTransactionId == providerTransactionId);
-        if (existing != null)
-            return PaymentServiceResult<PaymentStatusDto?>.Ok(null);
+            SePayWebhookDto? payload;
+            try
+            {
+                payload = JsonSerializer.Deserialize<SePayWebhookDto>(
+                    rawBody,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            }
+            catch (JsonException)
+            {
+                return PaymentServiceResult<PaymentStatusDto?>.Fail("Invalid SePay webhook payload");
+            }
 
-        var content = $"{payload.Code} {payload.Content}".Trim();
-        var order = await _context.Orders
-            .Include(o => o.Payment)
-            .Include(o => o.User)
-            .Include(o => o.OrderItems)
+            if (payload == null || payload.Id <= 0 || payload.TransferAmount <= 0)
+                return PaymentServiceResult<PaymentStatusDto?>.Fail("Invalid SePay webhook payload");
+            if (!string.Equals(payload.TransferType, "in", StringComparison.OrdinalIgnoreCase))
+                return PaymentServiceResult<PaymentStatusDto?>.Ok(null);
+
+            var providerTransactionId = payload.Id.ToString(CultureInfo.InvariantCulture);
+            var existing = await _context.Payments
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.ProviderTransactionId == providerTransactionId);
+            if (existing != null)
+                return PaymentServiceResult<PaymentStatusDto?>.Ok(null);
+
+            var content = $"{payload.Code} {payload.Content} {payload.Description}".Trim();
+            var normalizedContent = NormalizeTransferContent(content);
+
+            _logger.LogInformation("SePay normalized content: {NormalizedContent}", normalizedContent);
+
+            var candidates = await _context.Orders
+                .Include(o => o.Payment)
+                .Include(o => o.User)
+                .Include(o => o.OrderItems)
                 .ThenInclude(i => i.Variant)
-            .FirstOrDefaultAsync(o =>
-                o.Payment != null &&
-                o.Payment.PaymentMethod == "SEPAY" &&
-                o.Payment.TransferContent != null &&
-                content.Contains(o.Payment.TransferContent, StringComparison.OrdinalIgnoreCase));
+                .Where(o =>
+                    o.Payment != null &&
+                    o.Payment.PaymentMethod == "SEPAY" &&
+                    o.Payment.TransferContent != null)
+                .ToListAsync();
 
-        if (order?.Payment == null)
-        {
-            _logger.LogWarning(
-                "SePay webhook transaction {TransactionId} did not match an order. Content: {Content}",
-                providerTransactionId,
-                content);
-            return PaymentServiceResult<PaymentStatusDto?>.Ok(null);
-        }
+            var order = candidates.FirstOrDefault(o =>
+            {
+                var transferContent = o.Payment?.TransferContent;
+                if (string.IsNullOrWhiteSpace(transferContent))
+                    return false;
 
-        if (order.Payment.Status == "Success" || order.Status == "Paid")
+                var normalizedTransferContent = NormalizeTransferContent(transferContent);
+
+                _logger.LogInformation(
+                    "Checking SePay order match. OrderId={OrderId}, OrderCode={OrderCode}, TransferContent={TransferContent}, NormalizedTransferContent={NormalizedTransferContent}",
+                    o.OrderId,
+                    o.OrderCode,
+                    transferContent,
+                    normalizedTransferContent);
+
+                return normalizedContent.Contains(normalizedTransferContent);
+            });
+
+            if (order?.Payment == null)
+            {
+                _logger.LogWarning(
+                    "SePay webhook did not match any order. TransactionId={TransactionId}, Content={Content}, NormalizedContent={NormalizedContent}",
+                    providerTransactionId,
+                    content,
+                    normalizedContent);
+
+                return PaymentServiceResult<PaymentStatusDto?>.Ok(null);
+            }
+
+            if (order.Payment.Status == "Success" || order.Status == "Paid")
+                return PaymentServiceResult<PaymentStatusDto?>.Ok(MapStatus(order));
+
+            var expectedAmount = (long)Math.Ceiling(order.FinalAmount);
+            if (payload.TransferAmount < expectedAmount)
+            {
+                _logger.LogWarning(
+                    "SePay transaction {TransactionId} amount {PaidAmount} is below order {OrderCode} total {OrderTotal}",
+                    providerTransactionId,
+                    payload.TransferAmount,
+                    order.OrderCode,
+                    expectedAmount);
+                return PaymentServiceResult<PaymentStatusDto?>.Ok(null);
+            }
+
+            order.Payment.Status = "Success";
+            order.Payment.PaymentProvider = "SEPAY";
+            order.Payment.ProviderTransactionId = providerTransactionId;
+            order.Payment.TransactionCode = payload.ReferenceCode ?? providerTransactionId;
+            order.Payment.PaidAmount = payload.TransferAmount;
+            order.Payment.PaidAt = DateTime.UtcNow;
+            order.Payment.RawWebhookData = rawBody;
+            order.Status = "Paid";
+            await ClearUserCartAsync(order.UserId);
+            await _context.SaveChangesAsync();
+
+            try
+            {
+                await _emailService.SendInvoiceEmailAsync(order);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not send invoice for SePay order {OrderCode}", order.OrderCode);
+            }
+
             return PaymentServiceResult<PaymentStatusDto?>.Ok(MapStatus(order));
-
-        var expectedAmount = (long)Math.Ceiling(order.FinalAmount);
-        if (payload.TransferAmount < expectedAmount)
-        {
-            _logger.LogWarning(
-                "SePay transaction {TransactionId} amount {PaidAmount} is below order {OrderCode} total {OrderTotal}",
-                providerTransactionId,
-                payload.TransferAmount,
-                order.OrderCode,
-                expectedAmount);
-            return PaymentServiceResult<PaymentStatusDto?>.Ok(null);
-        }
-
-        order.Payment.Status = "Success";
-        order.Payment.PaymentProvider = "SEPAY";
-        order.Payment.ProviderTransactionId = providerTransactionId;
-        order.Payment.TransactionCode = payload.ReferenceCode ?? providerTransactionId;
-        order.Payment.PaidAmount = payload.TransferAmount;
-        order.Payment.PaidAt = DateTime.UtcNow;
-        order.Payment.RawWebhookData = rawBody;
-        order.Status = "Paid";
-        await ClearUserCartAsync(order.UserId);
-        await _context.SaveChangesAsync();
-
-        try
-        {
-            await _emailService.SendInvoiceEmailAsync(order);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Could not send invoice for SePay order {OrderCode}", order.OrderCode);
+            _logger.LogError(ex, "SePay webhook processing failed");
+            throw;
         }
-
-        return PaymentServiceResult<PaymentStatusDto?>.Ok(MapStatus(order));
     }
 
     private string BuildTransferContent(string orderCode)
     {
         var prefix = _settings.PaymentContentPrefix.Trim().ToUpperInvariant();
         return $"{prefix}-{orderCode}".Replace(" ", string.Empty);
+    }
+
+    private static string NormalizeTransferContent(string value)
+    {
+        return new string(value
+            .Where(char.IsLetterOrDigit)
+            .ToArray())
+            .ToUpperInvariant();
     }
 
     private string? GetConfigurationError()
@@ -197,27 +245,45 @@ public class SePayService : ISePayService
     {
         if (!string.IsNullOrWhiteSpace(_settings.WebhookSecret))
         {
-            if (string.IsNullOrWhiteSpace(signature) || string.IsNullOrWhiteSpace(timestamp))
-                return false;
-            if (!long.TryParse(timestamp, out var unixTimestamp))
+            if (string.IsNullOrWhiteSpace(signature))
                 return false;
 
-            var webhookTime = DateTimeOffset.FromUnixTimeSeconds(unixTimestamp);
-            if (Math.Abs((DateTimeOffset.UtcNow - webhookTime).TotalMinutes) > 5)
-                return false;
-
-            var payload = $"{timestamp}.{rawBody}";
-            var expectedBytes = HMACSHA256.HashData(
-                Encoding.UTF8.GetBytes(_settings.WebhookSecret),
-                Encoding.UTF8.GetBytes(payload));
-            var expected = Convert.ToHexString(expectedBytes).ToLowerInvariant();
             var received = signature.StartsWith("sha256=", StringComparison.OrdinalIgnoreCase)
                 ? signature[7..]
                 : signature;
 
-            return CryptographicOperations.FixedTimeEquals(
-                Encoding.UTF8.GetBytes(expected),
-                Encoding.UTF8.GetBytes(received.ToLowerInvariant()));
+            received = received.Trim().ToLowerInvariant();
+
+            bool CheckSignature(string payloadToSign)
+            {
+                var expectedBytes = HMACSHA256.HashData(
+                    Encoding.UTF8.GetBytes(_settings.WebhookSecret),
+                    Encoding.UTF8.GetBytes(payloadToSign));
+
+                var expected = Convert.ToHexString(expectedBytes).ToLowerInvariant();
+
+                if (expected.Length != received.Length)
+                    return false;
+
+                return CryptographicOperations.FixedTimeEquals(
+                    Encoding.UTF8.GetBytes(expected),
+                    Encoding.UTF8.GetBytes(received));
+            }
+
+            if (!string.IsNullOrWhiteSpace(timestamp))
+            {
+                if (long.TryParse(timestamp, out var unixTimestamp))
+                {
+                    var webhookTime = DateTimeOffset.FromUnixTimeSeconds(unixTimestamp);
+                    if (Math.Abs((DateTimeOffset.UtcNow - webhookTime).TotalMinutes) <= 5)
+                    {
+                        if (CheckSignature($"{timestamp}.{rawBody}"))
+                            return true;
+                    }
+                }
+            }
+
+            return CheckSignature(rawBody);
         }
 
         if (string.IsNullOrWhiteSpace(_settings.ApiKey))

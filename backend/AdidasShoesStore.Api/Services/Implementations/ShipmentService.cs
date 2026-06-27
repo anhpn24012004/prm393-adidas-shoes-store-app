@@ -218,6 +218,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
             var order = await _context.Orders
                 .Include(o => o.Shipment)
                 .Include(o => o.Payment)
+                .Include(o => o.RefundRequests)
                 .Include(o => o.OrderItems)
                 .FirstOrDefaultAsync(o => o.OrderId == dto.OrderId);
 
@@ -231,13 +232,24 @@ namespace AdidasShoesStore.Api.Services.Implementations
 
             if (order.Shipment != null)
             {
-                return ShipmentServiceResult<AdminShipmentDetailDto>.Fail("Shipment already exists for this order");
+                return ShipmentServiceResult<AdminShipmentDetailDto>.Fail("Shipment already exists.");
             }
 
-            if (!CanCreateShipment(order))
+            var activeRefundRequest = order.RefundRequests
+                .OrderByDescending(r => r.CreatedAt)
+                .FirstOrDefault(r => r.Status == "Pending" || r.Status == "Approved");
+
+            if (activeRefundRequest != null)
             {
                 return ShipmentServiceResult<AdminShipmentDetailDto>.Fail(
-                    "Shipment can only be created for ready COD orders or paid online orders"
+                    "Order has a pending refund request. Resolve it before creating shipment."
+                );
+            }
+
+            if (!CanCreateShipment(order, out var shipmentError))
+            {
+                return ShipmentServiceResult<AdminShipmentDetailDto>.Fail(
+                    shipmentError
                 );
             }
 
@@ -471,30 +483,60 @@ namespace AdidasShoesStore.Api.Services.Implementations
                    nextStatuses.Contains(newStatus, StringComparer.Ordinal);
         }
 
-        private static bool CanCreateShipment(Order order)
+        private static bool CanCreateShipment(Order order, out string error)
         {
             if (order.Status == "Cancelled" ||
                 order.Status == "Failed" ||
-                order.Status == "PendingPayment" ||
                 order.Status == "Shipping" ||
                 order.Status == "Delivered" ||
                 order.Status == "Completed" ||
+                order.Status == "Refunded" ||
                 order.Payment == null)
             {
+                error = "Order status is not eligible for shipment.";
                 return false;
             }
 
             var method = order.Payment.PaymentMethod;
             var paymentStatus = order.Payment.Status;
+            var isCod = string.Equals(method, "COD", StringComparison.OrdinalIgnoreCase);
+            var isOnline = string.Equals(method, "SEPAY", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(method, "VNPAY", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(method, "PAYPAL", StringComparison.OrdinalIgnoreCase);
 
-            if (string.Equals(method, "COD", StringComparison.OrdinalIgnoreCase))
+            if (isCod)
             {
-                return order.Status == "Processing" &&
-                       string.Equals(paymentStatus, "Pending", StringComparison.OrdinalIgnoreCase);
+                if (order.Status == "Processing" &&
+                    string.Equals(paymentStatus, "Pending", StringComparison.OrdinalIgnoreCase))
+                {
+                    error = string.Empty;
+                    return true;
+                }
+
+                error = "Order status is not eligible for shipment.";
+                return false;
             }
 
-            return (order.Status == "Paid" || order.Status == "Processing") &&
-                   string.Equals(paymentStatus, "Success", StringComparison.OrdinalIgnoreCase);
+            if (isOnline)
+            {
+                if (!string.Equals(paymentStatus, "Success", StringComparison.OrdinalIgnoreCase))
+                {
+                    error = "Online payment has not been completed.";
+                    return false;
+                }
+
+                if (order.Status == "Paid" || order.Status == "Processing")
+                {
+                    error = string.Empty;
+                    return true;
+                }
+
+                error = "Order status is not eligible for shipment.";
+                return false;
+            }
+
+            error = "Order status is not eligible for shipment.";
+            return false;
         }
 
         private GhnCreateOrderRequestDto BuildGhnCreateOrderRequest(Order order)
