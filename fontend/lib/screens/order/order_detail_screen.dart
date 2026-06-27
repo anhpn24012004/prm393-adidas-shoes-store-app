@@ -29,7 +29,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   int? _orderId;
   bool _isCancelling = false;
   bool _isCompleting = false;
-  PaymentStatus? _paymentStatus;
 
   @override
   void didChangeDependencies() {
@@ -144,30 +143,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           _isCancelling = false;
         });
       }
-    }
-  }
-
-  Future<void> _refreshPaymentStatus(OrderDetail order) async {
-    try {
-      final status = await _orderService.getPaymentStatus(order.orderId);
-
-      if (!mounted) return;
-
-      setState(() {
-        _paymentStatus = status;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('paymentStatusRefreshed'))),
-      );
-
-      await _refresh();
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-      );
     }
   }
 
@@ -576,12 +551,29 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Widget _buildDetail(OrderDetail order, ShipmentDetail? shipment) {
-    final canCancel =
-        order.shipmentId == null &&
-        (order.status == 'PendingPayment' || order.status == 'Processing');
-    final paymentStatus =
-        _paymentStatus?.paymentStatus ?? order.payment.paymentStatus;
-    final paidAt = _paymentStatus?.paidAt ?? order.payment.paidAt;
+    final paymentMethod = order.payment.paymentMethod?.trim().toUpperCase();
+    final paymentStatus = order.payment.paymentStatus;
+    final hasShipment = order.shipmentId != null || order.shipmentStatus != null;
+    final hasShippedOrCompleted =
+        order.status == 'Shipping' || order.status == 'Completed';
+    final isDelivered = order.status == 'Delivered';
+    final isOnlinePaid =
+        !hasShipment &&
+        (paymentMethod == 'SEPAY' ||
+            paymentMethod == 'VNPAY' ||
+            paymentMethod == 'PAYPAL') &&
+        paymentStatus == 'Success' &&
+        (order.status == 'Paid' || order.status == 'Processing');
+    final isPendingPaymentCancelable =
+        !hasShipment && order.status == 'PendingPayment';
+    final isCodCancelable = !hasShipment &&
+        order.status == 'Processing' &&
+        paymentMethod == 'COD' &&
+        paymentStatus != 'Success';
+    final hasActiveRefundRequest =
+        order.latestRefundRequestStatus == 'Pending' ||
+        order.latestRefundRequestStatus == 'Approved';
+    final paidAt = order.payment.paidAt;
     final canReview = order.canReview;
 
     return RefreshIndicator(
@@ -619,24 +611,44 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           _infoRow(context.tr('discount'), formatPrice(order.discountAmount)),
           _infoRow(context.tr('finalAmount'), formatPrice(order.finalAmount)),
           const SizedBox(height: 20),
-          OutlinedButton.icon(
-            onPressed: () => _refreshPaymentStatus(order),
-            icon: const Icon(Icons.refresh),
-            label: Text(context.tr('refreshPaymentStatus')),
-          ),
-          if (order.status == 'Delivered' || order.status == 'Completed') ...[
+          if (hasActiveRefundRequest) ...[
+            const Text(
+              'Refund request already submitted for this order.',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
+              onPressed: () => Navigator.pushNamed(context, '/refund-status'),
+              icon: const Icon(Icons.receipt_long_outlined),
+              label: const Text('View refund requests'),
+            ),
+          ] else if (isOnlinePaid) ...[
+            ElevatedButton.icon(
               onPressed: () => Navigator.pushNamed(
                 context,
                 '/refund-request',
                 arguments: order.orderId,
               ),
               icon: const Icon(Icons.assignment_return_outlined),
-              label: Text(context.tr('requestReturn')),
+              label: const Text('Request cancellation / refund'),
             ),
-          ],
-          if (order.status == 'Delivered') ...[
+          ] else if (hasShippedOrCompleted) ...[
+            const Text(
+              'This order is already being shipped. Please contact support for cancellation or refund.',
+            ),
+          ] else if (isPendingPaymentCancelable || isCodCancelable) ...[
+            ElevatedButton.icon(
+              onPressed: _isCancelling ? null : () => _cancelOrder(order),
+              icon: _isCancelling
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.cancel),
+              label: Text(context.tr('cancelOrder')),
+            ),
+          ] else if (isDelivered) ...[
             const SizedBox(height: 8),
             ElevatedButton.icon(
               onPressed: _isCompleting ? null : () => _completeOrder(order),
@@ -648,26 +660,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     )
                   : const Icon(Icons.check_circle_outline),
               label: Text(context.tr('confirmReceived')),
-            ),
-          ],
-          if (order.status == 'Shipping') ...[
-            const SizedBox(height: 8),
-            const Text(
-              'Order is being shipped. Please contact support to cancel.',
-            ),
-          ],
-          if (canCancel) ...[
-            const SizedBox(height: 8),
-            ElevatedButton.icon(
-              onPressed: _isCancelling ? null : () => _cancelOrder(order),
-              icon: _isCancelling
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.cancel),
-              label: Text(context.tr('cancelOrder')),
             ),
           ],
         ],

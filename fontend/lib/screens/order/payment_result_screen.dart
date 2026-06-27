@@ -19,8 +19,7 @@ class PaymentResultScreen extends StatefulWidget {
   State<PaymentResultScreen> createState() => _PaymentResultScreenState();
 }
 
-class _PaymentResultScreenState extends State<PaymentResultScreen>
-    with WidgetsBindingObserver {
+class _PaymentResultScreenState extends State<PaymentResultScreen> {
   final OrderService _orderService = OrderService();
 
   PaymentStatus? _paymentStatus;
@@ -30,23 +29,9 @@ class _PaymentResultScreenState extends State<PaymentResultScreen>
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshPaymentStatus();
     });
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _refreshPaymentStatus();
-    }
   }
 
   String formatPrice(double price) {
@@ -172,21 +157,6 @@ class _PaymentResultScreenState extends State<PaymentResultScreen>
                 ),
             ],
             const Spacer(),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _isLoading ? null : _refreshPaymentStatus,
-                icon: _isLoading
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.refresh),
-                label: Text(context.tr('refreshPaymentStatus')),
-              ),
-            ),
-            const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(

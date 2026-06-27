@@ -37,6 +37,7 @@ import 'screens/admin/admin_shipment_detail_screen.dart';
 import 'screens/admin/admin_shipment_form_screen.dart';
 import 'screens/admin/admin_dashboard_screen.dart';
 import 'screens/admin/admin_order_list_screen.dart';
+import 'screens/admin/admin_refund_requests_screen.dart';
 import 'screens/admin/admin_returns_refunds_screen.dart';
 import 'screens/admin/admin_user_list_screen.dart';
 import 'theme/app_theme.dart';
@@ -149,6 +150,8 @@ class AdidasShoesStoreApp extends StatelessWidget {
           },
           '/admin/users': (context) => const AdminUserListScreen(),
           '/admin/orders': (context) => const AdminOrderListScreen(),
+          '/admin/refund-requests': (context) =>
+              const AdminRefundRequestsScreen(),
           '/admin/returns-refunds': (context) =>
               const AdminReturnsRefundsScreen(),
           '/admin/categories': (context) => const AdminCategoryListScreen(),

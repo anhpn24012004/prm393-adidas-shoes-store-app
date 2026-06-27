@@ -52,6 +52,10 @@ class AdminOrderSummary {
   final String status;
   final String? paymentMethod;
   final String? paymentStatus;
+  final int? latestRefundRequestId;
+  final String? latestRefundRequestStatus;
+  final double? latestRefundRequestAmount;
+  final String? latestRefundRequestReason;
   final DateTime? createdAt;
 
   const AdminOrderSummary({
@@ -65,6 +69,10 @@ class AdminOrderSummary {
     required this.status,
     this.paymentMethod,
     this.paymentStatus,
+    this.latestRefundRequestId,
+    this.latestRefundRequestStatus,
+    this.latestRefundRequestAmount,
+    this.latestRefundRequestReason,
     this.createdAt,
   });
 
@@ -80,6 +88,11 @@ class AdminOrderSummary {
       status: json['status'] ?? '',
       paymentMethod: json['paymentMethod'],
       paymentStatus: json['paymentStatus'],
+      latestRefundRequestId: json['latestRefundRequestId'],
+      latestRefundRequestStatus: json['latestRefundRequestStatus'],
+      latestRefundRequestAmount:
+          (json['latestRefundRequestAmount'] as num?)?.toDouble(),
+      latestRefundRequestReason: json['latestRefundRequestReason'],
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
     );
   }
@@ -97,6 +110,12 @@ class AdminOrderDetail {
   final DateTime? expectedDeliveryTime;
   final DateTime? shippedAt;
   final DateTime? deliveredAt;
+  final int? latestRefundRequestId;
+  final String? latestRefundRequestCode;
+  final String? latestRefundRequestStatus;
+  final double? latestRefundRequestAmount;
+  final String? latestRefundRequestReason;
+  final String? latestRefundRequestCustomerNote;
   final List<OrderItem> items;
 
   const AdminOrderDetail({
@@ -111,6 +130,12 @@ class AdminOrderDetail {
     this.expectedDeliveryTime,
     this.shippedAt,
     this.deliveredAt,
+    this.latestRefundRequestId,
+    this.latestRefundRequestCode,
+    this.latestRefundRequestStatus,
+    this.latestRefundRequestAmount,
+    this.latestRefundRequestReason,
+    this.latestRefundRequestCustomerNote,
     required this.items,
   });
 
@@ -129,6 +154,13 @@ class AdminOrderDetail {
       ),
       shippedAt: DateTime.tryParse(json['shippedAt']?.toString() ?? ''),
       deliveredAt: DateTime.tryParse(json['deliveredAt']?.toString() ?? ''),
+      latestRefundRequestId: json['latestRefundRequestId'],
+      latestRefundRequestCode: json['latestRefundRequestCode'],
+      latestRefundRequestStatus: json['latestRefundRequestStatus'],
+      latestRefundRequestAmount:
+          (json['latestRefundRequestAmount'] as num?)?.toDouble(),
+      latestRefundRequestReason: json['latestRefundRequestReason'],
+      latestRefundRequestCustomerNote: json['latestRefundRequestCustomerNote'],
       items: (json['items'] as List? ?? [])
           .map((item) => OrderItem.fromJson(item))
           .toList(),

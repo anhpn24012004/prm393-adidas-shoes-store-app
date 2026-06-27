@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../config/app_config.dart';
-import '../../localization/app_localization.dart';
-import '../../models/return_refund_model.dart';
-import '../../services/return_refund_service.dart';
-import '../../theme/app_theme.dart';
+import '../../models/refund_request_model.dart';
+import '../../services/refund_request_service.dart';
+import '../../utils/currency_formatter.dart';
 
 class RefundStatusScreen extends StatefulWidget {
   const RefundStatusScreen({super.key});
@@ -14,8 +12,8 @@ class RefundStatusScreen extends StatefulWidget {
 }
 
 class _RefundStatusScreenState extends State<RefundStatusScreen> {
-  final _service = ReturnRefundService();
-  late Future<List<ReturnRequestModel>> _future;
+  final _service = RefundRequestService();
+  late Future<List<RefundRequestModel>> _future;
 
   @override
   void initState() {
@@ -24,7 +22,7 @@ class _RefundStatusScreenState extends State<RefundStatusScreen> {
   }
 
   void _reload() {
-    _future = _service.getUserReturns(AppConfig.currentUserId);
+    _future = _service.getMyRefundRequests();
   }
 
   Future<void> _refresh() async {
@@ -43,18 +41,18 @@ class _RefundStatusScreenState extends State<RefundStatusScreen> {
 
   String _statusLabel(String status) {
     return switch (status.toLowerCase()) {
-      'approved' => context.tr('statusApproved'),
-      'refunded' => context.tr('statusRefunded'),
-      'rejected' => context.tr('statusRejected'),
-      _ => context.tr('statusPending'),
+      'approved' => 'Approved',
+      'refunded' => 'Refunded',
+      'rejected' => 'Rejected',
+      _ => 'Pending',
     };
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(context.tr('returnsRefunds').toUpperCase())),
-      body: FutureBuilder<List<ReturnRequestModel>>(
+      appBar: AppBar(title: const Text('My refund requests')),
+      body: FutureBuilder<List<RefundRequestModel>>(
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -72,7 +70,7 @@ class _RefundStatusScreenState extends State<RefundStatusScreen> {
           }
           final requests = snapshot.data ?? [];
           if (requests.isEmpty) {
-            return Center(child: Text(context.tr('returnsRefundsEmpty')));
+            return const Center(child: Text('No refund requests yet.'));
           }
           return RefreshIndicator(
             onRefresh: _refresh,
@@ -92,7 +90,7 @@ class _RefundStatusScreenState extends State<RefundStatusScreen> {
                           children: [
                             Expanded(
                               child: Text(
-                                '${context.tr('order').toUpperCase()} #${request.orderId}',
+                                '${request.requestCode} - Order #${request.orderId}',
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w900,
                                 ),
@@ -117,11 +115,19 @@ class _RefundStatusScreenState extends State<RefundStatusScreen> {
                         ),
                         const SizedBox(height: 10),
                         Text(request.reason),
+                        const SizedBox(height: 6),
+                        Text('Requested amount: ${formatVnd(request.requestedAmount)}'),
+                        if (request.bankName.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            '${request.bankName} - ${request.bankAccountName} (${request.bankAccountNumber})',
+                          ),
+                        ],
                         if (request.adminNote?.isNotEmpty == true) ...[
                           const SizedBox(height: 8),
                           Text(
-                            '${context.tr('adminNote')}: ${request.adminNote}',
-                            style: const TextStyle(color: AppColors.muted),
+                            'Admin note: ${request.adminNote}',
+                            style: const TextStyle(fontStyle: FontStyle.italic),
                           ),
                         ],
                       ],

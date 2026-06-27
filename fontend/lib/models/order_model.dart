@@ -133,6 +133,9 @@ class OrderDetail {
   final DateTime? expectedDeliveryTime;
   final DateTime? shippedAt;
   final DateTime? deliveredAt;
+  final int? latestRefundRequestId;
+  final String? latestRefundRequestCode;
+  final String? latestRefundRequestStatus;
   final List<OrderItem> items;
 
   OrderDetail({
@@ -163,6 +166,9 @@ class OrderDetail {
     this.expectedDeliveryTime,
     this.shippedAt,
     this.deliveredAt,
+    this.latestRefundRequestId,
+    this.latestRefundRequestCode,
+    this.latestRefundRequestStatus,
     required this.items,
   });
 
@@ -197,6 +203,9 @@ class OrderDetail {
       ),
       shippedAt: DateTime.tryParse(json['shippedAt']?.toString() ?? ''),
       deliveredAt: DateTime.tryParse(json['deliveredAt']?.toString() ?? ''),
+      latestRefundRequestId: json['latestRefundRequestId'],
+      latestRefundRequestCode: json['latestRefundRequestCode'],
+      latestRefundRequestStatus: json['latestRefundRequestStatus'],
       items: (json['items'] as List? ?? [])
           .map((item) => OrderItem.fromJson(item))
           .toList(),
