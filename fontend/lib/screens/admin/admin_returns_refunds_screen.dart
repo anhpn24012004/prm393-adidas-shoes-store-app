@@ -20,6 +20,7 @@ class _AdminReturnsRefundsScreenState extends State<AdminReturnsRefundsScreen>
   late TabController _tabController;
   late Future<List<ReturnRequestModel>> _returns;
   late Future<List<RefundModel>> _refunds;
+  String _statusFilter = 'All';
 
   @override
   void initState() {
@@ -66,6 +67,26 @@ class _AdminReturnsRefundsScreenState extends State<AdminReturnsRefundsScreen>
     return result;
   }
 
+  Future<bool> _confirm(String message) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(context.tr('cancel').toUpperCase()),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(context.tr('confirm').toUpperCase()),
+          ),
+        ],
+      ),
+    );
+    return result == true;
+  }
+
   Future<void> _review(ReturnRequestModel request, bool approve) async {
     final note = await _askNote(
       approve ? context.tr('approveReturn') : context.tr('rejectReturn'),
@@ -76,6 +97,126 @@ class _AdminReturnsRefundsScreenState extends State<AdminReturnsRefundsScreen>
         returnRequestId: request.returnRequestId,
         approve: approve,
         adminNote: note.isEmpty ? null : note,
+      );
+      if (mounted) setState(_reload);
+    } catch (error) {
+      if (mounted) _show(error);
+    }
+  }
+
+  Future<void> _markReceived(ReturnRequestModel request) async {
+    final confirmed = await _confirm(
+      'Have you received the returned item from the customer?',
+    );
+    if (!confirmed) return;
+    final note = await _askNote(context.tr('adminNote'));
+    if (note == null) return;
+    try {
+      await _service.markReturnReceived(
+        returnRequestId: request.returnRequestId,
+        adminNote: note.isEmpty ? null : note,
+      );
+      if (mounted) setState(_reload);
+    } catch (error) {
+      if (mounted) _show(error);
+    }
+  }
+
+  Future<void> _inspect(ReturnRequestModel request) async {
+    final noteController = TextEditingController();
+    final restockController = TextEditingController(
+      text: request.items.fold<int>(0, (sum, item) => sum + item.quantity).toString(),
+    );
+    var isRestockable = true;
+
+    final submitted = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Inspection'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SwitchListTile(
+                    value: isRestockable,
+                    title: const Text('Restockable'),
+                    onChanged: (value) {
+                      setDialogState(() => isRestockable = value);
+                    },
+                  ),
+                  TextField(
+                    controller: restockController,
+                    enabled: isRestockable,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Restock quantity',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: noteController,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Inspection note',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(context.tr('cancel').toUpperCase()),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(context.tr('confirm').toUpperCase()),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (submitted != true) {
+      noteController.dispose();
+      restockController.dispose();
+      return;
+    }
+
+    try {
+      await _service.inspectReturn(
+        returnRequestId: request.returnRequestId,
+        isRestockable: isRestockable,
+        restockQuantity:
+            isRestockable ? int.tryParse(restockController.text.trim()) ?? 0 : 0,
+        inspectionNote:
+            noteController.text.trim().isEmpty ? null : noteController.text.trim(),
+      );
+      if (mounted) setState(_reload);
+    } catch (error) {
+      if (mounted) _show(error);
+    } finally {
+      noteController.dispose();
+      restockController.dispose();
+    }
+  }
+
+  Future<void> _markRefunded(ReturnRequestModel request) async {
+    final confirmed = await _confirm(
+      'Have you manually transferred ${formatVnd(request.requestedAmount)} to ${request.bankName} - ${request.bankAccountNumber} - ${request.bankAccountName}?',
+    );
+    if (!confirmed) return;
+    final note = await _askNote('Refund transaction note');
+    if (note == null) return;
+    try {
+      await _service.markReturnRefunded(
+        returnRequestId: request.returnRequestId,
+        refundTransactionNote: note.isEmpty ? null : note,
       );
       if (mounted) setState(_reload);
     } catch (error) {
@@ -104,6 +245,8 @@ class _AdminReturnsRefundsScreenState extends State<AdminReturnsRefundsScreen>
     return switch (status) {
       'Pending' => context.tr('statusPending'),
       'Approved' => context.tr('statusApproved'),
+      'ReturnShipped' => 'Return shipped',
+      'ReturnReceived' => 'Return received',
       'Refunded' => context.tr('statusRefunded'),
       'Rejected' => context.tr('statusRejected'),
       'Completed' => context.tr('statusCompleted'),
@@ -142,61 +285,178 @@ class _AdminReturnsRefundsScreenState extends State<AdminReturnsRefundsScreen>
           return Center(child: Text(snapshot.error.toString()));
         }
         final items = snapshot.data ?? [];
+        final filtered = _statusFilter == 'All'
+            ? items
+            : items.where((item) => item.status == _statusFilter).toList();
         if (items.isEmpty) {
           return Center(child: Text(context.tr('returnsRefundsEmpty')));
         }
         return ListView.separated(
           padding: const EdgeInsets.all(16),
-          itemCount: items.length,
+          itemCount: filtered.length + 1,
           separatorBuilder: (_, _) => const SizedBox(height: 10),
           itemBuilder: (context, index) {
-            final item = items[index];
-            return Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${context.tr('returnRequest')} #${item.returnRequestId} - ${context.tr('order')} #${item.orderId}',
-                      style: const TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(item.reason),
-                    Text(
-                      _statusLabel(item.status),
-                      style: const TextStyle(
-                        color: AppColors.blue,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    if (item.status == 'Pending') ...[
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () => _review(item, false),
-                              child: Text(context.tr('reject').toUpperCase()),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: () => _review(item, true),
-                              child: Text(context.tr('approve').toUpperCase()),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            );
+            if (index == 0) {
+              return _buildStatusFilters();
+            }
+
+            final item = filtered[index - 1];
+            return _buildReturnCard(item);
           },
         );
       },
+    );
+  }
+
+  Widget _buildStatusFilters() {
+    final statuses = [
+      'All',
+      'Pending',
+      'Approved',
+      'ReturnShipped',
+      'ReturnReceived',
+      'Refunded',
+      'Rejected',
+    ];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: statuses
+            .map(
+              (status) => Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(status == 'All' ? 'All' : _statusLabel(status)),
+                  selected: _statusFilter == status,
+                  onSelected: (_) => setState(() => _statusFilter = status),
+                ),
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+
+  Widget _buildReturnCard(ReturnRequestModel item) {
+    return Card(
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        title: Text(
+          '${item.requestCode.isEmpty ? '#${item.returnRequestId}' : item.requestCode} - ${item.orderCode.isEmpty ? 'Order #${item.orderId}' : item.orderCode}',
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
+        subtitle: Text(
+          '${item.customerName ?? context.tr('notAvailable')} - ${_statusLabel(item.status)}\n${formatVnd(item.requestedAmount)}',
+        ),
+        isThreeLine: true,
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        children: [
+          _line('Customer', '${item.customerName ?? ''} ${item.customerPhone ?? ''}'),
+          _line('Payment', '${item.paymentMethod ?? ''} - ${item.paymentStatus ?? ''}'),
+          _line('Reason', item.reason),
+          if (item.customerNote?.isNotEmpty == true)
+            _line('Customer note', item.customerNote!),
+          _line(
+            'Bank',
+            '${item.bankName} - ${item.bankAccountNumber} - ${item.bankAccountName}',
+          ),
+          const SizedBox(height: 8),
+          ...item.items.map(
+            (returnItem) => _line(
+              returnItem.productName,
+              '${returnItem.quantity} x ${formatVnd(returnItem.unitPrice)} = ${formatVnd(returnItem.refundAmount)}',
+            ),
+          ),
+          if (item.returnTrackingCode?.isNotEmpty == true) ...[
+            const SizedBox(height: 8),
+            _line('Return carrier', item.returnCarrier ?? ''),
+            _line('Tracking code', item.returnTrackingCode!),
+            if (item.returnShipmentNote?.isNotEmpty == true)
+              _line('Return note', item.returnShipmentNote!),
+          ],
+          if (item.inspectionNote?.isNotEmpty == true)
+            _line('Inspection', item.inspectionNote!),
+          if (item.adminNote?.isNotEmpty == true)
+            _line('Admin note', item.adminNote!),
+          const SizedBox(height: 12),
+          _buildReturnActions(item),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReturnActions(ReturnRequestModel item) {
+    if (item.status == 'Pending') {
+      return Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: () => _review(item, false),
+              child: Text(context.tr('reject').toUpperCase()),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: ElevatedButton(
+              onPressed: () => _review(item, true),
+              child: Text(context.tr('approve').toUpperCase()),
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (item.status == 'Approved' || item.status == 'ReturnShipped') {
+      return ElevatedButton(
+        onPressed: () => _markReceived(item),
+        child: const Text('MARK RETURN AS RECEIVED'),
+      );
+    }
+
+    if (item.status == 'ReturnReceived') {
+      return Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: [
+          OutlinedButton(
+            onPressed: () => _inspect(item),
+            child: const Text('INSPECT'),
+          ),
+          ElevatedButton(
+            onPressed: item.isRestockable == true ? () => _markRefunded(item) : null,
+            child: const Text('MARK AS REFUNDED'),
+          ),
+          OutlinedButton(
+            onPressed: () => _review(item, false),
+            child: const Text('REJECT'),
+          ),
+        ],
+      );
+    }
+
+    return const Align(
+      alignment: Alignment.centerLeft,
+      child: Text('Readonly'),
+    );
+  }
+
+  Widget _line(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+          Expanded(child: Text(value)),
+        ],
+      ),
     );
   }
 

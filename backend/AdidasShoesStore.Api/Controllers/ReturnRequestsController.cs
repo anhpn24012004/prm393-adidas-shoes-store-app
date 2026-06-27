@@ -1,12 +1,15 @@
+using System.Security.Claims;
 using AdidasShoesStore.Api.DTOs.Returns;
 using AdidasShoesStore.Api.Services.Interfaces;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 
 namespace AdidasShoesStore.Api.Controllers;
 
-[Route("api/[controller]")]
+[Authorize]
 [ApiController]
+[Route("api/return-requests")]
+[Route("api/returnrequests")]
 public class ReturnRequestsController : ControllerBase
 {
     private readonly IReturnRequestService _returnRequestService;
@@ -28,9 +31,44 @@ public class ReturnRequestsController : ControllerBase
         return Ok(result);
     }
 
-    [HttpGet("user/{userId}")]
+    [HttpGet("my")]
+    public async Task<IActionResult> GetMy()
+    {
+        if (!TryGetUserId(out var userId))
+        {
+            return Unauthorized(new { message = "Invalid token" });
+        }
+
+        var result = await _returnRequestService.GetByUserIdAsync(userId);
+        return Ok(result);
+    }
+
+    [HttpGet("my/{id:int}")]
+    public async Task<IActionResult> GetMyById(int id)
+    {
+        if (!TryGetUserId(out var userId))
+        {
+            return Unauthorized(new { message = "Invalid token" });
+        }
+
+        var result = await _returnRequestService.GetByUserIdAsync(userId, id);
+        return result == null ? NotFound(new { message = "Return request not found" }) : Ok(result);
+    }
+
+    [Obsolete("Use /api/return-requests/my instead.")]
+    [HttpGet("user/{userId:int}")]
     public async Task<IActionResult> GetByUserId(int userId)
     {
+        if (!TryGetUserId(out var tokenUserId))
+        {
+            return Unauthorized(new { message = "Invalid token" });
+        }
+
+        if (tokenUserId != userId && !User.IsInRole("Admin"))
+        {
+            return Forbid();
+        }
+
         var result = await _returnRequestService.GetByUserIdAsync(userId);
         return Ok(result);
     }
@@ -38,12 +76,36 @@ public class ReturnRequestsController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateReturnRequestDto dto)
     {
-        var result = await _returnRequestService.CreateAsync(dto);
+        if (!TryGetUserId(out var userId))
+        {
+            return Unauthorized(new { message = "Invalid token" });
+        }
+
+        var result = await _returnRequestService.CreateAsync(userId, dto);
 
         if (result == null)
-            return BadRequest("Invalid return request. Order must be delivered/completed and items must belong to the order.");
+        {
+            return BadRequest(new
+            {
+                message = "Invalid return request. Order must be delivered/completed, payment must be success, and selected quantities must be available."
+            });
+        }
 
         return Ok(result);
+    }
+
+    [HttpPut("{id:int}/shipping-info")]
+    public async Task<IActionResult> UpdateShippingInfo(int id, [FromBody] ReturnShippingInfoDto dto)
+    {
+        if (!TryGetUserId(out var userId))
+        {
+            return Unauthorized(new { message = "Invalid token" });
+        }
+
+        var result = await _returnRequestService.UpdateShippingInfoAsync(userId, id, dto);
+        return result == null
+            ? BadRequest(new { message = "Cannot update return shipping info." })
+            : Ok(result);
     }
 
     [HttpPost("evidence")]
@@ -52,23 +114,25 @@ public class ReturnRequestsController : ControllerBase
     public async Task<IActionResult> UploadEvidence(IFormFile file)
     {
         if (file == null || file.Length == 0)
+        {
             return BadRequest(new { message = "File is required." });
+        }
 
         var allowedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        ".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp4", ".mov", ".webm"
-    };
+        {
+            ".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp4", ".mov", ".webm"
+        };
 
         var extension = Path.GetExtension(file.FileName);
-
         if (!allowedExtensions.Contains(extension))
+        {
             return BadRequest(new { message = "Unsupported evidence file type." });
+        }
 
         var webRoot = _environment.WebRootPath ??
             Path.Combine(_environment.ContentRootPath, "wwwroot");
 
         var uploadsRoot = Path.Combine(webRoot, "uploads", "returns");
-
         Directory.CreateDirectory(uploadsRoot);
 
         var fileName = $"{Guid.NewGuid():N}{extension.ToLowerInvariant()}";
@@ -82,25 +146,76 @@ public class ReturnRequestsController : ControllerBase
         return Ok(new { url = $"/uploads/returns/{fileName}" });
     }
 
-    [HttpPut("{id}/approve")]
-    public async Task<IActionResult> Approve(int id, [FromBody] string? adminNote)
+    [Authorize(Roles = "Admin")]
+    [HttpPut("{id:int}/approve")]
+    [HttpPost("{id:int}/approve")]
+    public async Task<IActionResult> Approve(int id, [FromBody] ReviewReturnRequestDto dto)
     {
-        var success = await _returnRequestService.ApproveAsync(id, adminNote);
+        if (!TryGetUserId(out var adminUserId))
+        {
+            return Unauthorized(new { message = "Invalid token" });
+        }
 
-        if (!success)
-            return BadRequest("Cannot approve this return request.");
-
-        return Ok("Return request approved.");
+        var result = await _returnRequestService.ApproveAsync(id, adminUserId, dto);
+        return result == null ? BadRequest(new { message = "Cannot approve this return request." }) : Ok(result);
     }
 
-    [HttpPut("{id}/reject")]
-    public async Task<IActionResult> Reject(int id, [FromBody] string? adminNote)
+    [Authorize(Roles = "Admin")]
+    [HttpPut("{id:int}/reject")]
+    [HttpPost("{id:int}/reject")]
+    public async Task<IActionResult> Reject(int id, [FromBody] ReviewReturnRequestDto dto)
     {
-        var success = await _returnRequestService.RejectAsync(id, adminNote);
+        if (!TryGetUserId(out var adminUserId))
+        {
+            return Unauthorized(new { message = "Invalid token" });
+        }
 
-        if (!success)
-            return BadRequest("Cannot reject this return request.");
+        var result = await _returnRequestService.RejectAsync(id, adminUserId, dto);
+        return result == null ? BadRequest(new { message = "Cannot reject this return request. Admin note is required." }) : Ok(result);
+    }
 
-        return Ok("Return request rejected.");
+    [Authorize(Roles = "Admin")]
+    [HttpPost("{id:int}/mark-received")]
+    public async Task<IActionResult> MarkReceived(int id, [FromBody] ReviewReturnRequestDto dto)
+    {
+        if (!TryGetUserId(out var adminUserId))
+        {
+            return Unauthorized(new { message = "Invalid token" });
+        }
+
+        var result = await _returnRequestService.MarkReceivedAsync(id, adminUserId, dto);
+        return result == null ? BadRequest(new { message = "Cannot mark this return as received." }) : Ok(result);
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost("{id:int}/inspect")]
+    public async Task<IActionResult> Inspect(int id, [FromBody] InspectReturnRequestDto dto)
+    {
+        if (!TryGetUserId(out var adminUserId))
+        {
+            return Unauthorized(new { message = "Invalid token" });
+        }
+
+        var result = await _returnRequestService.InspectAsync(id, adminUserId, dto);
+        return result == null ? BadRequest(new { message = "Cannot inspect this return request." }) : Ok(result);
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost("{id:int}/mark-refunded")]
+    public async Task<IActionResult> MarkRefunded(int id, [FromBody] MarkRefundedReturnRequestDto dto)
+    {
+        if (!TryGetUserId(out var adminUserId))
+        {
+            return Unauthorized(new { message = "Invalid token" });
+        }
+
+        var result = await _returnRequestService.MarkRefundedAsync(id, adminUserId, dto);
+        return result == null ? BadRequest(new { message = "Cannot mark this return as refunded." }) : Ok(result);
+    }
+
+    private bool TryGetUserId(out int userId)
+    {
+        var value = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        return int.TryParse(value, out userId);
     }
 }

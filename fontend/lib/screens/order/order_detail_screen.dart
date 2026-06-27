@@ -4,9 +4,11 @@ import '../../config/app_config.dart';
 import '../../localization/app_localization.dart';
 import '../../models/order_model.dart';
 import '../../models/review_model.dart';
+import '../../models/return_refund_model.dart';
 import '../../models/shipment_model.dart';
 import '../../services/order_service.dart';
 import '../../services/review_service.dart';
+import '../../services/return_refund_service.dart';
 import '../../services/shipment_service.dart';
 import '../../utils/currency_formatter.dart';
 
@@ -23,12 +25,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   final OrderService _orderService = OrderService();
   final ShipmentService _shipmentService = ShipmentService();
   final ReviewService _reviewService = ReviewService();
+  final ReturnRefundService _returnService = ReturnRefundService();
 
   Future<OrderDetail>? _orderFuture;
   Future<ShipmentDetail?>? _shipmentFuture;
+  Future<List<ReturnRequestModel>>? _returnsFuture;
   int? _orderId;
   bool _isCancelling = false;
   bool _isCompleting = false;
+  PaymentStatus? _paymentStatus;
 
   @override
   void didChangeDependencies() {
@@ -47,6 +52,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   void _loadOrder() {
     _orderFuture = _orderService.getOrderDetail(_orderId!);
     _shipmentFuture = _shipmentService.getUserShipment(_orderId!);
+    _returnsFuture = _returnService.getUserReturns(AppConfig.currentUserId);
   }
 
   String formatPrice(double price) {
@@ -143,6 +149,30 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           _isCancelling = false;
         });
       }
+    }
+  }
+
+  Future<void> _refreshPaymentStatus(OrderDetail order) async {
+    try {
+      final status = await _orderService.getPaymentStatus(order.orderId);
+
+      if (!mounted) return;
+
+      setState(() {
+        _paymentStatus = status;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('paymentStatusRefreshed'))),
+      );
+
+      await _refresh();
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
     }
   }
 
@@ -470,7 +500,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _sectionTitle(context.tr('shipping')),
-          const Text('Đang chờ shop xử lý vận chuyển'),
+          const Text('Dang cho shop xu ly van chuyen'),
           const SizedBox(height: 6),
           if (!hasOrderShipment)
             _infoRow(context.tr('orderStatus'), _statusLabel(order.status)),
@@ -550,12 +580,248 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
-  Widget _buildDetail(OrderDetail order, ShipmentDetail? shipment) {
+  ReturnRequestModel? _activeReturnForOrder(
+    OrderDetail order,
+    List<ReturnRequestModel> returns,
+  ) {
+    final activeStatuses = {
+      'Pending',
+      'Approved',
+      'ReturnShipped',
+      'ReturnReceived',
+      'Refunded',
+    };
+
+    for (final request in returns) {
+      if (request.orderId == order.orderId &&
+          activeStatuses.contains(request.status)) {
+        return request;
+      }
+    }
+
+    return null;
+  }
+
+  Future<void> _openReturnRequest(OrderDetail order) async {
+    final created = await Navigator.pushNamed(
+      context,
+      '/refund-request',
+      arguments: order.orderId,
+    );
+
+    if (created == true && mounted) {
+      await _refresh();
+    }
+  }
+
+  Future<void> _submitReturnShipping(ReturnRequestModel request) async {
+    final carrierController = TextEditingController(text: 'GHN');
+    final trackingController = TextEditingController();
+    final noteController = TextEditingController();
+
+    final submitted = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Return shipping info'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  value: carrierController.text,
+                  decoration: const InputDecoration(
+                    labelText: 'Return carrier',
+                    border: OutlineInputBorder(),
+                  ),
+                  items:
+                      const [
+                            'GHN',
+                            'J&T',
+                            'Viettel Post',
+                            'Vietnam Post',
+                            'Other',
+                          ]
+                          .map(
+                            (carrier) => DropdownMenuItem(
+                              value: carrier,
+                              child: Text(carrier),
+                            ),
+                          )
+                          .toList(),
+                  onChanged: (value) {
+                    if (value != null) carrierController.text = value;
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: trackingController,
+                  decoration: const InputDecoration(
+                    labelText: 'Return tracking code',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: noteController,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Return shipment note',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(context.tr('cancel').toUpperCase()),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(context.tr('confirm').toUpperCase()),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (submitted != true) {
+      carrierController.dispose();
+      trackingController.dispose();
+      noteController.dispose();
+      return;
+    }
+
+    final trackingCode = trackingController.text.trim();
+    if (trackingCode.isEmpty) {
+      _showMessage('Return tracking code is required.');
+      carrierController.dispose();
+      trackingController.dispose();
+      noteController.dispose();
+      return;
+    }
+
+    try {
+      await _returnService.submitReturnShippingInfo(
+        returnRequestId: request.returnRequestId,
+        returnCarrier: carrierController.text.trim(),
+        returnTrackingCode: trackingCode,
+        returnShipmentNote: noteController.text.trim().isEmpty
+            ? null
+            : noteController.text.trim(),
+      );
+      if (!mounted) return;
+      _showMessage(
+        'Return shipment submitted. Shop will confirm after receiving the item.',
+      );
+      await _refresh();
+    } catch (error) {
+      if (mounted) _showMessage(error);
+    } finally {
+      carrierController.dispose();
+      trackingController.dispose();
+      noteController.dispose();
+    }
+  }
+
+  void _showMessage(Object message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message.toString().replaceFirst('Exception: ', '')),
+      ),
+    );
+  }
+
+  Widget _buildReturnSection(
+    OrderDetail order,
+    List<ReturnRequestModel> returns,
+  ) {
+    final activeReturn = _activeReturnForOrder(order, returns);
+    final paymentStatus =
+        _paymentStatus?.paymentStatus ?? order.payment.paymentStatus;
+    final canRequest =
+        activeReturn == null &&
+        (order.status == 'Delivered' || order.status == 'Completed') &&
+        paymentStatus == 'Success' &&
+        order.items.isNotEmpty;
+
+    if (activeReturn == null) {
+      if (!canRequest) return const SizedBox.shrink();
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _sectionTitle('Return / refund'),
+          OutlinedButton.icon(
+            onPressed: () => _openReturnRequest(order),
+            icon: const Icon(Icons.assignment_return_outlined),
+            label: const Text('Request return / refund'),
+          ),
+        ],
+      );
+    }
+
+    final address = activeReturn.shopReturnAddress;
+    final message = switch (activeReturn.status) {
+      'Pending' => 'Return request pending. Please wait for admin approval.',
+      'Approved' => 'Return approved. Please send the item back to shop.',
+      'ReturnShipped' =>
+        'Return shipment submitted. Waiting for shop to receive the item.',
+      'ReturnReceived' =>
+        'Shop has received your returned item. Refund is being processed.',
+      'Refunded' => 'Refund completed.',
+      'Rejected' => 'Return request rejected.',
+      _ => activeReturn.status,
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionTitle('Return / refund'),
+        Text(message),
+        if (activeReturn.adminNote?.isNotEmpty == true)
+          _infoRow('Admin note', activeReturn.adminNote!),
+        if (activeReturn.status == 'Approved' && address != null) ...[
+          const SizedBox(height: 8),
+          _infoRow('Receiver', address.shopName),
+          _infoRow('Phone', address.phone),
+          _infoRow('Address', address.fullAddress),
+          const SizedBox(height: 8),
+          const Text(
+            'Please send the product back using GHN, J&T, Viettel Post, Vietnam Post, or another carrier. After shipping, enter the return tracking code below.',
+          ),
+          const SizedBox(height: 8),
+          ElevatedButton.icon(
+            onPressed: () => _submitReturnShipping(activeReturn),
+            icon: const Icon(Icons.local_shipping_outlined),
+            label: const Text('Submit return shipping info'),
+          ),
+        ],
+        if (activeReturn.returnTrackingCode?.isNotEmpty == true) ...[
+          _infoRow(
+            'Return carrier',
+            activeReturn.returnCarrier ?? context.tr('notAvailable'),
+          ),
+          _infoRow('Return tracking code', activeReturn.returnTrackingCode!),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildDetail(
+    OrderDetail order,
+    ShipmentDetail? shipment,
+    List<ReturnRequestModel> returns,
+  ) {
     final paymentMethod = order.payment.paymentMethod?.trim().toUpperCase();
-    final paymentStatus = order.payment.paymentStatus;
-    final hasShipment = order.shipmentId != null || order.shipmentStatus != null;
-    final hasShippedOrCompleted =
-        order.status == 'Shipping' || order.status == 'Completed';
+    final paymentStatus =
+        _paymentStatus?.paymentStatus ?? order.payment.paymentStatus;
+    final paidAt = _paymentStatus?.paidAt ?? order.payment.paidAt;
+    final hasShipment =
+        order.shipmentId != null || order.shipmentStatus != null;
+    final isShipping = order.status == 'Shipping';
     final isDelivered = order.status == 'Delivered';
     final isOnlinePaid =
         !hasShipment &&
@@ -566,14 +832,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         (order.status == 'Paid' || order.status == 'Processing');
     final isPendingPaymentCancelable =
         !hasShipment && order.status == 'PendingPayment';
-    final isCodCancelable = !hasShipment &&
+    final isCodCancelable =
+        !hasShipment &&
         order.status == 'Processing' &&
         paymentMethod == 'COD' &&
         paymentStatus != 'Success';
     final hasActiveRefundRequest =
         order.latestRefundRequestStatus == 'Pending' ||
         order.latestRefundRequestStatus == 'Approved';
-    final paidAt = order.payment.paidAt;
     final canReview = order.canReview;
 
     return RefreshIndicator(
@@ -610,8 +876,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           _infoRow(context.tr('shippingFee'), formatPrice(order.shippingFee)),
           _infoRow(context.tr('discount'), formatPrice(order.discountAmount)),
           _infoRow(context.tr('finalAmount'), formatPrice(order.finalAmount)),
+          _buildReturnSection(order, returns),
           const SizedBox(height: 20),
+          OutlinedButton.icon(
+            onPressed: () => _refreshPaymentStatus(order),
+            icon: const Icon(Icons.refresh),
+            label: Text(context.tr('refreshPaymentStatus')),
+          ),
           if (hasActiveRefundRequest) ...[
+            const SizedBox(height: 8),
             const Text(
               'Refund request already submitted for this order.',
               style: TextStyle(fontWeight: FontWeight.w700),
@@ -623,6 +896,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               label: const Text('View refund requests'),
             ),
           ] else if (isOnlinePaid) ...[
+            const SizedBox(height: 8),
             ElevatedButton.icon(
               onPressed: () => Navigator.pushNamed(
                 context,
@@ -632,11 +906,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               icon: const Icon(Icons.assignment_return_outlined),
               label: const Text('Request cancellation / refund'),
             ),
-          ] else if (hasShippedOrCompleted) ...[
+          ] else if (isShipping) ...[
+            const SizedBox(height: 8),
             const Text(
               'This order is already being shipped. Please contact support for cancellation or refund.',
             ),
           ] else if (isPendingPaymentCancelable || isCodCancelable) ...[
+            const SizedBox(height: 8),
             ElevatedButton.icon(
               onPressed: _isCancelling ? null : () => _cancelOrder(order),
               icon: _isCancelling
@@ -648,7 +924,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   : const Icon(Icons.cancel),
               label: Text(context.tr('cancelOrder')),
             ),
-          ] else if (isDelivered) ...[
+          ],
+          if (isDelivered) ...[
             const SizedBox(height: 8),
             ElevatedButton.icon(
               onPressed: _isCompleting ? null : () => _completeOrder(order),
@@ -721,11 +998,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 return FutureBuilder<ShipmentDetail?>(
                   future: _shipmentFuture,
                   builder: (context, shipmentSnapshot) {
-                    if (shipmentSnapshot.hasError) {
-                      return _buildDetail(order, null);
-                    }
+                    return FutureBuilder<List<ReturnRequestModel>>(
+                      future: _returnsFuture,
+                      builder: (context, returnsSnapshot) {
+                        final returns = returnsSnapshot.data ?? [];
 
-                    return _buildDetail(order, shipmentSnapshot.data);
+                        if (shipmentSnapshot.hasError) {
+                          return _buildDetail(order, null, returns);
+                        }
+
+                        return _buildDetail(
+                          order,
+                          shipmentSnapshot.data,
+                          returns,
+                        );
+                      },
+                    );
                   },
                 );
               },

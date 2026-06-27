@@ -13,6 +13,10 @@ public partial class ReturnItem
 
     public int Quantity { get; set; }
 
+    public decimal UnitPrice { get; set; }
+
+    public decimal RefundAmount { get; set; }
+
     public string? Reason { get; set; }
 
     public virtual OrderItem OrderItem { get; set; } = null!;
