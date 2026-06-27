@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../config/app_config.dart';
 import '../../localization/app_localization.dart';
 import '../../models/return_refund_model.dart';
 import '../../services/return_refund_service.dart';
@@ -16,6 +18,15 @@ class AdminReturnsRefundsScreen extends StatefulWidget {
 
 class _AdminReturnsRefundsScreenState extends State<AdminReturnsRefundsScreen>
     with SingleTickerProviderStateMixin {
+  static final _evidenceLinePattern = RegExp(
+    r'^(?:Evidence image/video|Ảnh/video bằng chứng)\s*:\s*(.+)$',
+    caseSensitive: false,
+  );
+
+  static final _uploadsPathPattern = RegExp(
+    r'(/uploads/returns/[^\s,]+|https?://[^\s,]+/uploads/returns/[^\s,]+)',
+  );
+
   final _service = ReturnRefundService();
   late TabController _tabController;
   late Future<List<ReturnRequestModel>> _returns;
@@ -125,7 +136,9 @@ class _AdminReturnsRefundsScreenState extends State<AdminReturnsRefundsScreen>
   Future<void> _inspect(ReturnRequestModel request) async {
     final noteController = TextEditingController();
     final restockController = TextEditingController(
-      text: request.items.fold<int>(0, (sum, item) => sum + item.quantity).toString(),
+      text: request.items
+          .fold<int>(0, (sum, item) => sum + item.quantity)
+          .toString(),
     );
     var isRestockable = true;
 
@@ -192,10 +205,12 @@ class _AdminReturnsRefundsScreenState extends State<AdminReturnsRefundsScreen>
       await _service.inspectReturn(
         returnRequestId: request.returnRequestId,
         isRestockable: isRestockable,
-        restockQuantity:
-            isRestockable ? int.tryParse(restockController.text.trim()) ?? 0 : 0,
-        inspectionNote:
-            noteController.text.trim().isEmpty ? null : noteController.text.trim(),
+        restockQuantity: isRestockable
+            ? int.tryParse(restockController.text.trim()) ?? 0
+            : 0,
+        inspectionNote: noteController.text.trim().isEmpty
+            ? null
+            : noteController.text.trim(),
       );
       if (mounted) setState(_reload);
     } catch (error) {
@@ -238,6 +253,211 @@ class _AdminReturnsRefundsScreenState extends State<AdminReturnsRefundsScreen>
   void _show(Object error) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+    );
+  }
+
+  List<String> _extractEvidenceUrls(String reason) {
+    final urls = <String>[];
+
+    for (final line in reason.split('\n')) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) continue;
+
+      final evidenceMatch = _evidenceLinePattern.firstMatch(trimmed);
+      if (evidenceMatch != null) {
+        urls.addAll(_parseEvidenceUrlList(evidenceMatch.group(1)!));
+        continue;
+      }
+
+      for (final match in _uploadsPathPattern.allMatches(trimmed)) {
+        final path = match.group(1);
+        if (path != null && path.isNotEmpty) {
+          urls.add(path);
+        }
+      }
+    }
+
+    return urls.toSet().toList();
+  }
+
+  List<String> _parseEvidenceUrlList(String value) {
+    return value
+        .split(',')
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList();
+  }
+
+  String _reasonWithoutEvidence(String reason) {
+    final kept = <String>[];
+
+    for (final line in reason.split('\n')) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) continue;
+      if (_evidenceLinePattern.hasMatch(trimmed)) continue;
+      if (_uploadsPathPattern.hasMatch(trimmed) &&
+          trimmed.replaceAll(_uploadsPathPattern, '').trim().isEmpty) {
+        continue;
+      }
+      kept.add(line);
+    }
+
+    return kept.join('\n').trim();
+  }
+
+  String _resolveEvidenceUrl(String path) => AppConfig.resolveImageUrl(path);
+
+  String _fileExtension(String path) {
+    final uri = Uri.tryParse(path);
+    final target = uri?.path.isNotEmpty == true ? uri!.path : path;
+    final dotIndex = target.lastIndexOf('.');
+    if (dotIndex == -1) return '';
+    return target.substring(dotIndex).toLowerCase();
+  }
+
+  bool _isImageEvidence(String path) {
+    return const {
+      '.jpg',
+      '.jpeg',
+      '.png',
+      '.webp',
+    }.contains(_fileExtension(path));
+  }
+
+  bool _isVideoEvidence(String path) {
+    return const {'.mp4', '.mov', '.webm'}.contains(_fileExtension(path));
+  }
+
+  Future<void> _openEvidenceUrl(String path) async {
+    final url = _resolveEvidenceUrl(path);
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && mounted) {
+      _show('Cannot open evidence file.');
+    }
+  }
+
+  void _showFullEvidenceImage(String path) {
+    final url = _resolveEvidenceUrl(path);
+    showDialog<void>(
+      context: context,
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        child: Stack(
+          children: [
+            InteractiveViewer(
+              child: Image.network(
+                url,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                  return const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text('Cannot load evidence image'),
+                  );
+                },
+              ),
+            ),
+            Positioned(
+              top: 4,
+              right: 4,
+              child: IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEvidenceSection(List<String> evidencePaths) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Evidence', style: TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          ...evidencePaths.map(_buildEvidenceItem),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEvidenceItem(String rawPath) {
+    if (_isImageEvidence(rawPath)) {
+      return _buildEvidenceImagePreview(rawPath);
+    }
+
+    final label = _isVideoEvidence(rawPath)
+        ? 'Open evidence video'
+        : 'Open evidence file';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          OutlinedButton.icon(
+            onPressed: () => _openEvidenceUrl(rawPath),
+            icon: Icon(
+              _isVideoEvidence(rawPath)
+                  ? Icons.videocam_outlined
+                  : Icons.attach_file,
+            ),
+            label: Text(label),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            rawPath,
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEvidenceImagePreview(String rawPath) {
+    final fullUrl = _resolveEvidenceUrl(rawPath);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            onTap: () => _showFullEvidenceImage(rawPath),
+            child: Container(
+              constraints: const BoxConstraints(maxHeight: 220),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(
+                  fullUrl,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text('Cannot load evidence image'),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            rawPath,
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+          ),
+        ],
+      ),
     );
   }
 
@@ -339,6 +559,9 @@ class _AdminReturnsRefundsScreenState extends State<AdminReturnsRefundsScreen>
   }
 
   Widget _buildReturnCard(ReturnRequestModel item) {
+    final evidenceUrls = _extractEvidenceUrls(item.reason);
+    final displayReason = _reasonWithoutEvidence(item.reason);
+
     return Card(
       child: ExpansionTile(
         tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -349,14 +572,20 @@ class _AdminReturnsRefundsScreenState extends State<AdminReturnsRefundsScreen>
         subtitle: Text(
           '${item.customerName ?? context.tr('notAvailable')} - ${_statusLabel(item.status)}\n${formatVnd(item.requestedAmount)}',
         ),
-        isThreeLine: true,
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         children: [
-          _line('Customer', '${item.customerName ?? ''} ${item.customerPhone ?? ''}'),
-          _line('Payment', '${item.paymentMethod ?? ''} - ${item.paymentStatus ?? ''}'),
-          _line('Reason', item.reason),
+          _line(
+            'Customer',
+            '${item.customerName ?? ''} ${item.customerPhone ?? ''}',
+          ),
+          _line(
+            'Payment',
+            '${item.paymentMethod ?? ''} - ${item.paymentStatus ?? ''}',
+          ),
+          if (displayReason.isNotEmpty) _line('Reason', displayReason),
           if (item.customerNote?.isNotEmpty == true)
             _line('Customer note', item.customerNote!),
+          if (evidenceUrls.isNotEmpty) _buildEvidenceSection(evidenceUrls),
           _line(
             'Bank',
             '${item.bankName} - ${item.bankAccountNumber} - ${item.bankAccountName}',
@@ -424,7 +653,9 @@ class _AdminReturnsRefundsScreenState extends State<AdminReturnsRefundsScreen>
             child: const Text('INSPECT'),
           ),
           ElevatedButton(
-            onPressed: item.isRestockable == true ? () => _markRefunded(item) : null,
+            onPressed: item.isRestockable == true
+                ? () => _markRefunded(item)
+                : null,
             child: const Text('MARK AS REFUNDED'),
           ),
           OutlinedButton(
