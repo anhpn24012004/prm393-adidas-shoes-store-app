@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../config/app_config.dart';
@@ -6,10 +8,12 @@ import '../../models/product_model.dart';
 import '../../localization/app_localization.dart';
 import '../../providers/badge_notifier.dart';
 import '../../services/category_service.dart';
+import '../../services/inventory_realtime_service.dart';
 import '../../services/product_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/currency_formatter.dart';
 import '../../widgets/cart_wishlist_badges.dart';
+import '../../widgets/notification_bell.dart';
 import '../../widgets/product_rating.dart';
 import '../../widgets/store_brand.dart';
 import '../product/product_detail_screen.dart';
@@ -24,15 +28,37 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final _productService = ProductService();
   final _categoryService = CategoryService();
-  late final Future<List<ProductModel>> _products;
+  late Future<List<ProductModel>> _products;
   late final Future<List<CategoryModel>> _categories;
+  StreamSubscription? _stockChangedSubscription;
+  Timer? _stockReloadDebounce;
 
   @override
   void initState() {
     super.initState();
     _products = _productService.getProductList();
     _categories = _categoryService.getCategories();
+    _stockChangedSubscription = InventoryRealtimeService
+        .instance.stockChangedStream
+        .listen((_) => _scheduleProductsReload());
     BadgeNotifier.instance.refreshCounts();
+  }
+
+  @override
+  void dispose() {
+    _stockReloadDebounce?.cancel();
+    _stockChangedSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleProductsReload() {
+    _stockReloadDebounce?.cancel();
+    _stockReloadDebounce = Timer(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
+      setState(() {
+        _products = _productService.getProductList();
+      });
+    });
   }
 
   void _openProduct(ProductModel product) {
@@ -49,7 +75,11 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const StoreBrand(),
-        actions: const [CartWishlistBadges(), SizedBox(width: 4)],
+        actions: const [
+          NotificationBell(),
+          CartWishlistBadges(),
+          SizedBox(width: 4),
+        ],
       ),
       body: CustomScrollView(
         slivers: [

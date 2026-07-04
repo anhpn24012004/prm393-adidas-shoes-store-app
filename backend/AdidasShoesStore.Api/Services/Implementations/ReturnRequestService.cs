@@ -1,5 +1,7 @@
 using AdidasShoesStore.Api.Data;
 using AdidasShoesStore.Api.DTOs.Returns;
+using AdidasShoesStore.Api.Constants;
+using AdidasShoesStore.Api.Helpers;
 using AdidasShoesStore.Api.Models;
 using AdidasShoesStore.Api.Services.Interfaces;
 using AdidasShoesStore.Api.Settings;
@@ -21,13 +23,22 @@ public class ReturnRequestService : IReturnRequestService
 
     private readonly AdidasShoesStoreContext _context;
     private readonly ShopReturnAddressSettings _shopReturnAddress;
+    private readonly INotificationService _notificationService;
+    private readonly IInventoryRealtimeService _inventoryRealtimeService;
+    private readonly ILogger<ReturnRequestService> _logger;
 
     public ReturnRequestService(
         AdidasShoesStoreContext context,
-        IOptions<ShopReturnAddressSettings> shopReturnAddress)
+        IOptions<ShopReturnAddressSettings> shopReturnAddress,
+        INotificationService notificationService,
+        IInventoryRealtimeService inventoryRealtimeService,
+        ILogger<ReturnRequestService> logger)
     {
         _context = context;
         _shopReturnAddress = shopReturnAddress.Value;
+        _notificationService = notificationService;
+        _inventoryRealtimeService = inventoryRealtimeService;
+        _logger = logger;
     }
 
     public async Task<List<ReturnRequestDto>> GetAllAsync()
@@ -151,12 +162,25 @@ public class ReturnRequestService : IReturnRequestService
         _context.ReturnRequests.Add(request);
         await _context.SaveChangesAsync();
 
+        await NotificationDispatch.TryAsync(
+            _notificationService,
+            _logger,
+            service => service.CreateForRoleAsync(
+                "Admin",
+                "New return request",
+                $"Return request for order {order.OrderCode} was submitted.",
+                NotificationTypes.ReturnRequestCreated,
+                relatedOrderId: order.OrderId,
+                relatedReturnRequestId: request.ReturnRequestId));
+
         return await GetByUserIdAsync(userId, request.ReturnRequestId);
     }
 
     public async Task<ReturnRequestDto?> ApproveAsync(int returnRequestId, int adminUserId, ReviewReturnRequestDto dto)
     {
-        var request = await _context.ReturnRequests.FirstOrDefaultAsync(r => r.ReturnRequestId == returnRequestId);
+        var request = await _context.ReturnRequests
+            .Include(r => r.Order)
+            .FirstOrDefaultAsync(r => r.ReturnRequestId == returnRequestId);
         if (request == null || request.Status != "Pending")
         {
             return null;
@@ -168,6 +192,18 @@ public class ReturnRequestService : IReturnRequestService
         request.AdminNote = Clean(dto.AdminNote);
 
         await _context.SaveChangesAsync();
+
+        await NotificationDispatch.TryAsync(
+            _notificationService,
+            _logger,
+            service => service.CreateForUserAsync(
+                request.UserId,
+                "Return request approved",
+                $"Your return request for order {request.Order.OrderCode} was approved.",
+                NotificationTypes.ReturnApproved,
+                relatedOrderId: request.OrderId,
+                relatedReturnRequestId: request.ReturnRequestId));
+
         return await GetByIdAsync(returnRequestId);
     }
 
@@ -178,7 +214,9 @@ public class ReturnRequestService : IReturnRequestService
             return null;
         }
 
-        var request = await _context.ReturnRequests.FirstOrDefaultAsync(r => r.ReturnRequestId == returnRequestId);
+        var request = await _context.ReturnRequests
+            .Include(r => r.Order)
+            .FirstOrDefaultAsync(r => r.ReturnRequestId == returnRequestId);
         if (request == null || (request.Status != "Pending" && request.Status != "ReturnReceived"))
         {
             return null;
@@ -190,6 +228,18 @@ public class ReturnRequestService : IReturnRequestService
         request.AdminNote = dto.AdminNote.Trim();
 
         await _context.SaveChangesAsync();
+
+        await NotificationDispatch.TryAsync(
+            _notificationService,
+            _logger,
+            service => service.CreateForUserAsync(
+                request.UserId,
+                "Return request rejected",
+                $"Your return request for order {request.Order.OrderCode} was rejected.",
+                NotificationTypes.ReturnRejected,
+                relatedOrderId: request.OrderId,
+                relatedReturnRequestId: request.ReturnRequestId));
+
         return await GetByIdAsync(returnRequestId);
     }
 
@@ -202,6 +252,7 @@ public class ReturnRequestService : IReturnRequestService
         }
 
         var request = await _context.ReturnRequests
+            .Include(r => r.Order)
             .FirstOrDefaultAsync(r => r.ReturnRequestId == returnRequestId && r.UserId == userId);
 
         if (request == null || request.Status != "Approved")
@@ -216,12 +267,37 @@ public class ReturnRequestService : IReturnRequestService
         request.ReturnShippedAt = DateTime.Now;
 
         await _context.SaveChangesAsync();
+
+        await NotificationDispatch.TryAsync(
+            _notificationService,
+            _logger,
+            async service =>
+            {
+                await service.CreateForRoleAsync(
+                    "Admin",
+                    "Return shipment submitted",
+                    $"Customer submitted return tracking for order {request.Order.OrderCode}.",
+                    NotificationTypes.ReturnShipped,
+                    relatedOrderId: request.OrderId,
+                    relatedReturnRequestId: request.ReturnRequestId);
+
+                await service.CreateForRoleAsync(
+                    "Admin",
+                    "Returned item waiting for shop confirmation",
+                    $"Returned item for order {request.Order.OrderCode} is waiting for shop confirmation.",
+                    NotificationTypes.ReturnWaitingConfirmation,
+                    relatedOrderId: request.OrderId,
+                    relatedReturnRequestId: request.ReturnRequestId);
+            });
+
         return await GetByUserIdAsync(userId, returnRequestId);
     }
 
     public async Task<ReturnRequestDto?> MarkReceivedAsync(int returnRequestId, int adminUserId, ReviewReturnRequestDto dto)
     {
-        var request = await _context.ReturnRequests.FirstOrDefaultAsync(r => r.ReturnRequestId == returnRequestId);
+        var request = await _context.ReturnRequests
+            .Include(r => r.Order)
+            .FirstOrDefaultAsync(r => r.ReturnRequestId == returnRequestId);
         if (request == null || (request.Status != "ReturnShipped" && request.Status != "Approved"))
         {
             return null;
@@ -233,6 +309,18 @@ public class ReturnRequestService : IReturnRequestService
         request.AdminNote = Clean(dto.AdminNote) ?? request.AdminNote;
 
         await _context.SaveChangesAsync();
+
+        await NotificationDispatch.TryAsync(
+            _notificationService,
+            _logger,
+            service => service.CreateForUserAsync(
+                request.UserId,
+                "Returned item received",
+                $"Shop has received your returned item for order {request.Order.OrderCode}.",
+                NotificationTypes.ReturnReceived,
+                relatedOrderId: request.OrderId,
+                relatedReturnRequestId: request.ReturnRequestId));
+
         return await GetByIdAsync(returnRequestId);
     }
 
@@ -291,6 +379,7 @@ public class ReturnRequestService : IReturnRequestService
 
         request.Order.Payment.Status = IsFullOrderRefund(request) ? "Refunded" : "PartiallyRefunded";
 
+        var restoredVariants = new List<(int ProductId, int VariantId)>();
         var restockLeft = request.RestockQuantity ?? 0;
         if (request.IsRestockable == true && restockLeft > 0)
         {
@@ -303,6 +392,7 @@ public class ReturnRequestService : IReturnRequestService
 
                 var quantity = Math.Min(item.Quantity, restockLeft);
                 item.OrderItem.Variant.StockQuantity = (item.OrderItem.Variant.StockQuantity ?? 0) + quantity;
+                restoredVariants.Add((item.OrderItem.Variant.ProductId, item.OrderItem.Variant.VariantId));
                 restockLeft -= quantity;
             }
         }
@@ -313,6 +403,20 @@ public class ReturnRequestService : IReturnRequestService
         }
 
         await _context.SaveChangesAsync();
+
+        await _inventoryRealtimeService.NotifyStockChangedAsync(restoredVariants, "ReturnRestocked");
+
+        await NotificationDispatch.TryAsync(
+            _notificationService,
+            _logger,
+            service => service.CreateForUserAsync(
+                request.UserId,
+                "Return/refund completed",
+                $"Refund for returned item in order {request.Order.OrderCode} has been completed.",
+                NotificationTypes.ReturnRefunded,
+                relatedOrderId: request.OrderId,
+                relatedReturnRequestId: request.ReturnRequestId));
+
         return await GetByIdAsync(returnRequestId);
     }
 

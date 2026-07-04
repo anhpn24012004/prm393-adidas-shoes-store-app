@@ -1,29 +1,21 @@
-import 'package:flutter/foundation.dart';
-
 class AppConfig {
-  /// Set your PC LAN IP when testing on a physical phone, e.g. '192.168.1.10'.
-  static const String? deviceHostOverride = null;
+  static const String apiBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://localhost:5209/api',
+  );
 
-  static String get apiHost {
-    if (deviceHostOverride != null && deviceHostOverride!.isNotEmpty) {
-      return deviceHostOverride!;
+  static const String signalRBaseUrl = String.fromEnvironment(
+    'SIGNALR_BASE_URL',
+    defaultValue: 'http://localhost:5209',
+  );
+
+  static String get staticBaseUrl {
+    if (apiBaseUrl.endsWith('/api')) {
+      return apiBaseUrl.substring(0, apiBaseUrl.length - 4);
     }
 
-    if (kIsWeb) {
-      return 'localhost';
-    }
-
-    switch (defaultTargetPlatform) {
-      case TargetPlatform.android:
-        return '10.0.2.2';
-      default:
-        return 'localhost';
-    }
+    return signalRBaseUrl;
   }
-
-  static String get apiBaseUrl => 'http://$apiHost:5209/api';
-
-  static String get staticBaseUrl => 'http://$apiHost:5209';
 
   static String resolveImageUrl(String imageUrl) {
     final trimmed = imageUrl.trim();

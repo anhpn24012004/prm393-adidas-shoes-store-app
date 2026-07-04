@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/auth_storage.dart';
+import '../../services/notification_realtime_service.dart';
 import '../../config/app_config.dart';
 import '../../localization/app_localization.dart';
 import '../../theme/app_theme.dart';
@@ -241,6 +242,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 24),
                 OutlinedButton(
                   onPressed: () async {
+                    await NotificationRealtimeService.instance
+                        .disconnectAfterLogout();
                     await storage.clear();
                     AppConfig.currentUserId = 0;
                     if (!context.mounted) return;

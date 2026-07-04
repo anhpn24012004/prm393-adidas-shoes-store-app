@@ -2,14 +2,29 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/review_model.dart';
 import 'api_client.dart';
+import 'auth_storage.dart';
 
 class ReviewService {
+  final AuthStorage _authStorage = AuthStorage();
+
+  Future<Map<String, String>> _authHeaders() async {
+    final token = await _authStorage.getToken();
+    if (token == null || token.isEmpty) {
+      throw Exception('Please sign in again.');
+    }
+
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    };
+  }
+
   Future<ReviewResponse> createReview(CreateReviewRequest request) async {
     final url = Uri.parse('${ApiClient.baseUrl}/reviews');
 
     final response = await http.post(
       url,
-      headers: {'Content-Type': 'application/json'},
+      headers: await _authHeaders(),
       body: jsonEncode(request.toJson()),
     );
 
@@ -21,14 +36,21 @@ class ReviewService {
   }
 
   Future<ReviewResponse?> getUserReview({
-    required int userId,
     required int productId,
   }) async {
     final url = Uri.parse(
-      '${ApiClient.baseUrl}/reviews/user/$userId/product/$productId',
+      '${ApiClient.baseUrl}/reviews/my/product/$productId',
     );
 
-    final response = await http.get(url);
+    final token = await _authStorage.getToken();
+    if (token == null || token.isEmpty) {
+      return null;
+    }
+
+    final response = await http.get(
+      url,
+      headers: {'Authorization': 'Bearer $token'},
+    );
 
     if (response.statusCode == 200) {
       return ReviewResponse.fromJson(jsonDecode(response.body));
@@ -43,7 +65,6 @@ class ReviewService {
 
   Future<ReviewResponse> updateReview({
     required int reviewId,
-    required int userId,
     required int rating,
     required String comment,
   }) async {
@@ -51,9 +72,8 @@ class ReviewService {
 
     final response = await http.put(
       url,
-      headers: {'Content-Type': 'application/json'},
+      headers: await _authHeaders(),
       body: jsonEncode({
-        'userId': userId,
         'rating': rating,
         'comment': comment,
       }),

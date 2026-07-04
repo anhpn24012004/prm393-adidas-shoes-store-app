@@ -6,6 +6,7 @@ import '../../services/admin_service.dart';
 import '../../services/product_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/currency_formatter.dart';
+import '../../widgets/notification_bell.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -84,11 +85,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       appBar: AppBar(
         title: const Text('Admin Dashboard'),
         actions: [
-          IconButton(
-            tooltip: 'Notifications',
-            onPressed: () {},
-            icon: const Icon(Icons.notifications_none_outlined),
-          ),
+          const NotificationBell(),
           IconButton(
             tooltip: 'Account',
             onPressed: () => Navigator.pushNamed(context, '/profile'),
@@ -197,6 +194,24 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                 onTap: () => Navigator.pushNamed(
                                   context,
                                   '/admin/refund-requests',
+                                ),
+                              ),
+                              _QuickAction(
+                                icon: Icons.undo_outlined,
+                                title: 'Returns & Refunds',
+                                subtitle: 'Return requests and manual refunds',
+                                onTap: () => Navigator.pushNamed(
+                                  context,
+                                  '/admin/returns-refunds',
+                                ),
+                              ),
+                              _QuickAction(
+                                icon: Icons.campaign_outlined,
+                                title: 'Marketing Notifications',
+                                subtitle: 'Broadcast deals to customers',
+                                onTap: () => Navigator.pushNamed(
+                                  context,
+                                  '/admin/marketing-notifications',
                                 ),
                               ),
                             ],

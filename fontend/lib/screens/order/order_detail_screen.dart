@@ -318,7 +318,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   Widget _buildReviewAction(OrderItem item) {
     return FutureBuilder<ReviewResponse?>(
       future: _reviewService.getUserReview(
-        userId: AppConfig.currentUserId,
         productId: item.productId,
       ),
       builder: (context, snapshot) {

@@ -6,6 +6,7 @@ import '../config/app_config.dart';
 import '../models/auth_model.dart';
 import 'api_client.dart';
 import 'auth_storage.dart';
+import 'notification_realtime_service.dart';
 
 class AuthService {
   final AuthStorage _storage = AuthStorage();
@@ -134,7 +135,6 @@ class AuthService {
 
   Future<UserProfile> updateProfile({
     required String fullName,
-    required String email,
     String? phone,
     String? gender,
     DateTime? dateOfBirth,
@@ -152,7 +152,6 @@ class AuthService {
       },
       body: jsonEncode({
         'fullName': fullName,
-        'email': email,
         'phone': phone,
         'gender': gender,
         'dateOfBirth': dateOfBirth?.toIso8601String().split('T').first,
@@ -189,6 +188,7 @@ class AuthService {
       role: session.role,
     );
     AppConfig.currentUserId = session.userId;
+    await NotificationRealtimeService.instance.reconnectAfterLogin();
     return session;
   }
 

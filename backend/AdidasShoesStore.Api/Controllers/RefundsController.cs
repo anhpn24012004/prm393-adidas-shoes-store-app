@@ -1,11 +1,13 @@
 using AdidasShoesStore.Api.DTOs.Refunds;
 using AdidasShoesStore.Api.Services.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AdidasShoesStore.Api.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
+[Authorize(Roles = "Admin")]
 public class RefundsController : ControllerBase
 {
     private readonly IRefundService _refundService;

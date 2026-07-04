@@ -21,6 +21,7 @@ public class ProductImagesController : ControllerBase
         ".png",
         ".webp"
     };
+    private const long MaxImageBytes = 5 * 1024 * 1024;
 
     public ProductImagesController(
         AdidasShoesStoreContext context,
@@ -144,6 +145,11 @@ public class ProductImagesController : ControllerBase
             return BadRequest(new { message = "Image file is required" });
         }
 
+        if (file.Length > MaxImageBytes)
+        {
+            return BadRequest(new { message = "Image file must be 5MB or smaller" });
+        }
+
         var extension = Path.GetExtension(file.FileName);
         if (string.IsNullOrWhiteSpace(extension) || !AllowedExtensions.Contains(extension))
         {
@@ -168,7 +174,9 @@ public class ProductImagesController : ControllerBase
 
         var fileName = $"{Guid.NewGuid():N}{extension.ToLowerInvariant()}";
         var relativeDirectory = Path.Combine("images", "products", productId.ToString());
-        var absoluteDirectory = Path.Combine(_environment.WebRootPath, relativeDirectory);
+        var webRoot = _environment.WebRootPath ??
+            Path.Combine(_environment.ContentRootPath, "wwwroot");
+        var absoluteDirectory = Path.Combine(webRoot, relativeDirectory);
         Directory.CreateDirectory(absoluteDirectory);
 
         var absolutePath = Path.Combine(absoluteDirectory, fileName);

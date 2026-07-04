@@ -110,7 +110,7 @@ public class ReturnRequestsController : ControllerBase
 
     [HttpPost("evidence")]
     [Consumes("multipart/form-data")]
-    [RequestSizeLimit(50_000_000)]
+    [RequestSizeLimit(5_242_880)]
     public async Task<IActionResult> UploadEvidence(IFormFile file)
     {
         if (file == null || file.Length == 0)
@@ -118,15 +118,20 @@ public class ReturnRequestsController : ControllerBase
             return BadRequest(new { message = "File is required." });
         }
 
+        if (file.Length > 5 * 1024 * 1024)
+        {
+            return BadRequest(new { message = "Evidence image must be 5MB or smaller." });
+        }
+
         var allowedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            ".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp4", ".mov", ".webm"
+            ".jpg", ".jpeg", ".png", ".webp"
         };
 
         var extension = Path.GetExtension(file.FileName);
         if (!allowedExtensions.Contains(extension))
         {
-            return BadRequest(new { message = "Unsupported evidence file type." });
+            return BadRequest(new { message = "Only .jpg, .jpeg, .png and .webp evidence images are allowed." });
         }
 
         var webRoot = _environment.WebRootPath ??

@@ -183,19 +183,11 @@ namespace AdidasShoesStore.Api.Controllers
         {
             try
             {
-                var result = await _authService.ForgotPasswordAsync(request.Email);
-
-                if (!result)
-                {
-                    return BadRequest(new
-                    {
-                        message = "Email này chưa đăng ký tài khoản."
-                    });
-                }
+                await _authService.ForgotPasswordAsync(request.Email);
 
                 return Ok(new
                 {
-                    message = "Mã OTP đã được gửi về email."
+                    message = "If the email exists, a reset code has been sent."
                 });
             }
             catch (InvalidOperationException exception)

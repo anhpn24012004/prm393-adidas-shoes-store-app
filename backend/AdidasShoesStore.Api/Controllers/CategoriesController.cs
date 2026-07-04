@@ -1,6 +1,7 @@
 using AdidasShoesStore.Api.Data;
 using AdidasShoesStore.Api.DTOs.Categories;
 using AdidasShoesStore.Api.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -58,6 +59,7 @@ public class CategoriesController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> CreateCategory(CreateCategoryDto dto)
     {
         var categoryNameExists = await _context.Categories
@@ -89,6 +91,7 @@ public class CategoriesController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> UpdateCategory(int id, UpdateCategoryDto dto)
     {
         var category = await _context.Categories.FindAsync(id);
@@ -115,6 +118,7 @@ public class CategoriesController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> DeleteCategory(int id)
     {
         var category = await _context.Categories

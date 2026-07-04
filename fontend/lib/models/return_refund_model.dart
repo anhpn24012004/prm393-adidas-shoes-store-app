@@ -192,7 +192,7 @@ class ShopReturnAddressModel {
       wardName,
       districtName,
       provinceName,
-    ].where((part) => part != null && part!.trim().isNotEmpty).join(', ');
+    ].where((part) => part != null && part.trim().isNotEmpty).join(', ');
   }
 }
 

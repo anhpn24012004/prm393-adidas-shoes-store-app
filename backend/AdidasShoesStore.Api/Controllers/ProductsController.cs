@@ -82,6 +82,7 @@ public class ProductsController : ControllerBase
 
         var query = _context.Products
             .AsNoTracking()
+            .AsSplitQuery()
             .Include(p => p.Category)
             .Include(p => p.ProductImages)
             .Include(p => p.Reviews)
@@ -168,6 +169,7 @@ public class ProductsController : ControllerBase
     {
         var product = await _context.Products
             .AsNoTracking()
+            .AsSplitQuery()
             .Include(p => p.Category)
             .Include(p => p.ProductImages)
             .Include(p => p.ProductVariants)

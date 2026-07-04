@@ -253,7 +253,58 @@ CREATE TABLE Wishlists (
 );
 
 -- =========================
--- 9. AI RECOMMENDATION
+-- 9. NOTIFICATIONS
+-- =========================
+
+CREATE TABLE Notifications (
+    NotificationId INT IDENTITY(1,1) PRIMARY KEY,
+    UserId INT NULL,
+    Role NVARCHAR(50) NULL,
+    Title NVARCHAR(200) NOT NULL,
+    Message NVARCHAR(1000) NOT NULL,
+    Type NVARCHAR(100) NOT NULL,
+    IsRead BIT NOT NULL DEFAULT 0,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    ReadAt DATETIME2 NULL,
+    RelatedOrderId INT NULL,
+    RelatedPaymentId INT NULL,
+    RelatedShipmentId INT NULL,
+    RelatedRefundRequestId INT NULL,
+    RelatedReturnRequestId INT NULL,
+    RelatedProductId INT NULL,
+    ActionUrl NVARCHAR(500) NULL,
+    MetadataJson NVARCHAR(MAX) NULL,
+
+    FOREIGN KEY (UserId) REFERENCES Users(UserId)
+);
+
+CREATE INDEX IX_Notifications_UserId ON Notifications(UserId);
+CREATE INDEX IX_Notifications_Role ON Notifications(Role);
+CREATE INDEX IX_Notifications_CreatedAt ON Notifications(CreatedAt);
+
+CREATE TABLE NotificationRecipients (
+    NotificationRecipientId INT IDENTITY(1,1) PRIMARY KEY,
+    NotificationId INT NOT NULL,
+    UserId INT NOT NULL,
+    IsRead BIT NOT NULL DEFAULT 0,
+    ReadAt DATETIME2 NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+
+    FOREIGN KEY (NotificationId) REFERENCES Notifications(NotificationId) ON DELETE CASCADE,
+    FOREIGN KEY (UserId) REFERENCES Users(UserId) ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX UX_NotificationRecipients_Notification_User
+ON NotificationRecipients(NotificationId, UserId);
+
+CREATE INDEX IX_NotificationRecipients_UserId_IsRead
+ON NotificationRecipients(UserId, IsRead);
+
+CREATE INDEX IX_NotificationRecipients_CreatedAt
+ON NotificationRecipients(CreatedAt);
+
+-- =========================
+-- 10. AI RECOMMENDATION
 -- =========================
 
 CREATE TABLE AIRecommendationLogs (
@@ -268,7 +319,7 @@ CREATE TABLE AIRecommendationLogs (
 );
 
 -- =========================
--- 10. SAMPLE DATA
+-- 11. SAMPLE DATA
 -- =========================
 
 INSERT INTO Roles (RoleName)

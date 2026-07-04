@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../config/app_config.dart';
@@ -14,6 +16,7 @@ import '../../widgets/product_rating.dart';
 import '../../theme/app_theme.dart';
 import '../../models/review_model.dart';
 import '../../services/review_service.dart';
+import '../../services/inventory_realtime_service.dart';
 import '../../utils/currency_formatter.dart';
 
 class ProductDetailScreen extends StatefulWidget {
@@ -42,13 +45,39 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   String? _selectedSize;
 
   bool _isLoading = false;
+  StreamSubscription? _stockChangedSubscription;
+  Timer? _stockReloadDebounce;
 
   @override
   void initState() {
     super.initState();
     _productFuture = _productService.getProductById(widget.productId);
     _reviewsFuture = _reviewService.getReviewsByProductId(widget.productId);
+    _stockChangedSubscription = InventoryRealtimeService
+        .instance
+        .stockChangedStream
+        .listen((event) {
+          if (event.productId != widget.productId) return;
+          _scheduleProductReload();
+        });
     BadgeNotifier.instance.refreshCounts();
+  }
+
+  @override
+  void dispose() {
+    _stockReloadDebounce?.cancel();
+    _stockChangedSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleProductReload() {
+    _stockReloadDebounce?.cancel();
+    _stockReloadDebounce = Timer(const Duration(milliseconds: 400), () {
+      if (!mounted) return;
+      setState(() {
+        _productFuture = _productService.getProductById(widget.productId);
+      });
+    });
   }
 
   String formatPrice(double price) {
@@ -74,6 +103,148 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return url.trim().split('?').first.toLowerCase();
   }
 
+  String _normalizeText(String? value) {
+    final input = (value ?? '').trim().toLowerCase();
+    if (input.isEmpty) return '';
+
+    const replacements = {
+      'đ': 'd',
+      'á': 'a',
+      'à': 'a',
+      'ả': 'a',
+      'ã': 'a',
+      'ạ': 'a',
+      'ă': 'a',
+      'ắ': 'a',
+      'ằ': 'a',
+      'ẳ': 'a',
+      'ẵ': 'a',
+      'ặ': 'a',
+      'â': 'a',
+      'ấ': 'a',
+      'ầ': 'a',
+      'ẩ': 'a',
+      'ẫ': 'a',
+      'ậ': 'a',
+      'é': 'e',
+      'è': 'e',
+      'ẻ': 'e',
+      'ẽ': 'e',
+      'ẹ': 'e',
+      'ê': 'e',
+      'ế': 'e',
+      'ề': 'e',
+      'ể': 'e',
+      'ễ': 'e',
+      'ệ': 'e',
+      'í': 'i',
+      'ì': 'i',
+      'ỉ': 'i',
+      'ĩ': 'i',
+      'ị': 'i',
+      'ó': 'o',
+      'ò': 'o',
+      'ỏ': 'o',
+      'õ': 'o',
+      'ọ': 'o',
+      'ô': 'o',
+      'ố': 'o',
+      'ồ': 'o',
+      'ổ': 'o',
+      'ỗ': 'o',
+      'ộ': 'o',
+      'ơ': 'o',
+      'ớ': 'o',
+      'ờ': 'o',
+      'ở': 'o',
+      'ỡ': 'o',
+      'ợ': 'o',
+      'ú': 'u',
+      'ù': 'u',
+      'ủ': 'u',
+      'ũ': 'u',
+      'ụ': 'u',
+      'ư': 'u',
+      'ứ': 'u',
+      'ừ': 'u',
+      'ử': 'u',
+      'ữ': 'u',
+      'ự': 'u',
+      'ý': 'y',
+      'ỳ': 'y',
+      'ỷ': 'y',
+      'ỹ': 'y',
+      'ỵ': 'y',
+    };
+
+    final buffer = StringBuffer();
+    for (final rune in input.runes) {
+      final char = String.fromCharCode(rune);
+      buffer.write(replacements[char] ?? char);
+    }
+
+    return buffer.toString();
+  }
+
+  String _normalizeColor(String? color) {
+    final normalized = _normalizeText(color);
+    if (normalized.isEmpty) return '';
+
+    if (normalized.contains('xanh la') || normalized.contains('green')) {
+      return 'green';
+    }
+    if (normalized.contains('red') || normalized.contains('do')) return 'red';
+    if (normalized.contains('black') || normalized.contains('den')) {
+      return 'black';
+    }
+    if (normalized.contains('white') || normalized.contains('trang')) {
+      return 'white';
+    }
+    if (normalized.contains('gray') ||
+        normalized.contains('grey') ||
+        normalized.contains('xam')) {
+      return 'gray';
+    }
+    if (normalized.contains('blue') || normalized.contains('xanh')) {
+      return 'blue';
+    }
+
+    return normalized;
+  }
+
+  List<String> _imageUrlTokens(String? imageUrl) {
+    final normalized = _normalizeText(_normalizeImageUrl(imageUrl));
+    return normalized
+        .split(RegExp(r'[\/\\\-_ .%]+'))
+        .where((token) => token.isNotEmpty)
+        .toList();
+  }
+
+  bool _imageUrlMatchesColor(String? imageUrl, String color) {
+    final normalizedColor = _normalizeColor(color);
+    if (normalizedColor.isEmpty) return false;
+
+    final tokens = _imageUrlTokens(imageUrl);
+    if (normalizedColor == 'gray') {
+      return tokens.contains('gray') || tokens.contains('grey');
+    }
+
+    return tokens.contains(normalizedColor);
+  }
+
+  String _detectColorFromImageUrl(String? imageUrl) {
+    final tokens = _imageUrlTokens(imageUrl);
+
+    if (tokens.contains('red')) return 'red';
+    if (tokens.contains('black')) return 'black';
+    if (tokens.contains('white')) return 'white';
+    if (tokens.contains('gray') || tokens.contains('grey')) return 'gray';
+    if (tokens.contains('blue')) return 'blue';
+    if (tokens.contains('green')) return 'green';
+
+    return '';
+  }
+
   List<ProductImageModel> _uniqueGalleryImages(ProductDetailModel product) {
     final galleryImages = <ProductImageModel>[];
     final seenUrls = <String>{};
@@ -92,21 +263,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         return first.imageId.compareTo(second.imageId);
       });
 
-    // When variants provide color images, they define the gallery: one image
-    // per color, never one image per size.
-    final representedColors = <String>{};
-    final colorImages = <ProductImageModel>[];
+    for (final image in productImages) {
+      addImage(image);
+    }
+
     for (final variant in product.variants.where((variant) {
       return variant.isActive &&
           _normalizeImageUrl(variant.imageUrl).isNotEmpty;
     })) {
-      final normalizedColor = variant.color.trim().toLowerCase();
-      final colorKey = normalizedColor.isEmpty
-          ? _normalizeImageUrl(variant.imageUrl)
-          : normalizedColor;
-      if (!representedColors.add(colorKey)) continue;
-
-      colorImages.add(
+      addImage(
         ProductImageModel(
           imageId: -variant.variantId,
           imageUrl: variant.imageUrl!.trim(),
@@ -115,49 +280,23 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       );
     }
 
-    if (colorImages.isNotEmpty) {
-      final productImagesByUrl = <String, ProductImageModel>{
-        for (final image in productImages)
-          _normalizeImageUrl(image.imageUrl): image,
-      };
-
-      for (final colorImage in colorImages) {
-        final matchingProductImage =
-            productImagesByUrl[_normalizeImageUrl(colorImage.imageUrl)];
-        addImage(matchingProductImage ?? colorImage);
-      }
-
-      galleryImages.sort((first, second) {
-        if (first.isMain != second.isMain) {
-          return first.isMain ? -1 : 1;
-        }
-        return 0;
-      });
-      return galleryImages;
-    }
-
-    // Products without variant images fall back to their real product images.
-    for (final image in productImages) {
-      addImage(image);
-    }
-
     return galleryImages;
   }
 
-  ProductImageModel? _findUniqueImageByUrl(
+  List<ProductImageModel> _galleryImagesForSelectedColor(
     ProductDetailModel product,
-    String? imageUrl,
   ) {
-    final normalizedUrl = _normalizeImageUrl(imageUrl);
-    if (normalizedUrl.isEmpty) return null;
+    final galleryImages = _uniqueGalleryImages(product);
+    final normalizedColor = _normalizeColor(_selectedColor);
+    if (normalizedColor.isEmpty) return galleryImages;
 
-    for (final image in _uniqueGalleryImages(product)) {
-      if (_normalizeImageUrl(image.imageUrl) == normalizedUrl) {
-        return image;
-      }
-    }
+    final colorImages = galleryImages
+        .where(
+          (image) => _imageUrlMatchesColor(image.imageUrl, normalizedColor),
+        )
+        .toList();
 
-    return null;
+    return colorImages.isNotEmpty ? colorImages : galleryImages;
   }
 
   String? getMainImage(ProductDetailModel product) {
@@ -165,13 +304,50 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return galleryImages.isEmpty ? null : galleryImages.first.imageUrl;
   }
 
+  String? _resolveImageForColor(ProductDetailModel product, String? color) {
+    final normalizedColor = _normalizeColor(color);
+    if (normalizedColor.isEmpty) return getMainImage(product);
+
+    final matchedVariant = product.variants.where((variant) {
+      return variant.isActive &&
+          _normalizeColor(variant.color) == normalizedColor &&
+          _normalizeImageUrl(variant.imageUrl).isNotEmpty &&
+          _imageUrlMatchesColor(variant.imageUrl, normalizedColor);
+    }).toList();
+
+    if (matchedVariant.isNotEmpty) return matchedVariant.first.imageUrl;
+
+    final matchedImage = _uniqueGalleryImages(product).where((image) {
+      return _imageUrlMatchesColor(image.imageUrl, normalizedColor);
+    }).toList();
+
+    if (matchedImage.isNotEmpty) return matchedImage.first.imageUrl;
+
+    final fallbackVariant = product.variants.where((variant) {
+      return variant.isActive &&
+          _normalizeColor(variant.color) == normalizedColor &&
+          _normalizeImageUrl(variant.imageUrl).isNotEmpty;
+    }).toList();
+
+    if (fallbackVariant.isNotEmpty) return fallbackVariant.first.imageUrl;
+
+    return getMainImage(product);
+  }
+
   String? getSelectedImage(ProductDetailModel product) {
-    final selectedImage = _findUniqueImageByUrl(product, _selectedImageUrl);
+    final currentGallery = _galleryImagesForSelectedColor(product);
+    final selectedImages = currentGallery.where((image) {
+      return _normalizeImageUrl(image.imageUrl) ==
+          _normalizeImageUrl(_selectedImageUrl);
+    }).toList();
+    final selectedImage = selectedImages.isEmpty ? null : selectedImages.first;
     if (selectedImage != null) {
       return selectedImage.imageUrl;
     }
 
-    return getMainImage(product);
+    return _resolveImageForColor(product, _selectedColor) ??
+        (currentGallery.isEmpty ? null : currentGallery.first.imageUrl) ??
+        getMainImage(product);
   }
 
   Widget _buildImage(String? imageUrl) {
@@ -201,19 +377,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Widget _buildImageGallery(ProductDetailModel product) {
-    final galleryImages = _uniqueGalleryImages(product);
+    final galleryImages = _galleryImagesForSelectedColor(product);
     final selectedImageUrl = getSelectedImage(product);
     final normalizedSelectedImageUrl = _normalizeImageUrl(selectedImageUrl);
-    final variantsWithImages = product.variants.where(
-      (variant) =>
-          variant.imageUrl != null && variant.imageUrl!.trim().isNotEmpty,
-    );
-
-    debugPrint('Product gallery raw images: ${product.images.length}');
-    debugPrint(
-      'Product gallery variants with images: ${variantsWithImages.length}',
-    );
-    debugPrint('Product gallery unique images: ${galleryImages.length}');
 
     return Container(
       color: AppColors.surface,
@@ -238,6 +404,23 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     onTap: () {
                       setState(() {
                         _selectedImageUrl = image.imageUrl;
+                        final detectedColor = _detectColorFromImageUrl(
+                          image.imageUrl,
+                        );
+                        if (detectedColor.isNotEmpty &&
+                            detectedColor != _normalizeColor(_selectedColor)) {
+                          final matchingColor = _availableColors(product)
+                              .where(
+                                (color) =>
+                                    _normalizeColor(color) == detectedColor,
+                              )
+                              .toList();
+                          if (matchingColor.isNotEmpty) {
+                            _selectedColor = matchingColor.first;
+                            _ensureValidSizeForColor(product);
+                            _syncSelectedVariant(product);
+                          }
+                        }
                       });
                     },
                     child: Container(
@@ -271,22 +454,25 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   List<String> _availableColors(ProductDetailModel product) {
-    final colors = product.variants
-        .where((variant) => variant.isActive)
-        .map((variant) => variant.color)
-        .where((color) => color.isNotEmpty)
-        .toSet()
-        .toList();
+    final colorByKey = <String, String>{};
+    for (final variant in product.variants.where((variant) {
+      return variant.isActive && variant.color.trim().isNotEmpty;
+    })) {
+      colorByKey.putIfAbsent(_normalizeColor(variant.color), () {
+        return variant.color.trim();
+      });
+    }
 
-    colors.sort();
+    final colors = colorByKey.values.toList()..sort();
     return colors;
   }
 
   List<String> _availableSizes(ProductDetailModel product) {
-    final selectedColor = _selectedColor;
+    final selectedColor = _normalizeColor(_selectedColor);
     final variants = product.variants.where((variant) {
       return variant.isActive &&
-          (selectedColor == null || variant.color == selectedColor);
+          (selectedColor.isEmpty ||
+              _normalizeColor(variant.color) == selectedColor);
     });
 
     final sizes = variants
@@ -310,10 +496,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   void _syncSelectedVariant(ProductDetailModel product) {
-    final selectedColor = _selectedColor;
+    final selectedColor = _normalizeColor(_selectedColor);
     final selectedSize = _selectedSize;
 
-    if (selectedSize == null) {
+    if (selectedSize == null || selectedColor.isEmpty) {
       selectedVariant = null;
       return;
     }
@@ -321,39 +507,89 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final matches = product.variants.where((variant) {
       return variant.isActive &&
           variant.size == selectedSize &&
-          (selectedColor == null
-              ? variant.color.trim().isEmpty
-              : variant.color == selectedColor);
+          _normalizeColor(variant.color) == selectedColor;
     }).toList();
 
-    selectedVariant = matches.isEmpty ? null : matches.first;
+    final inStockMatches = matches
+        .where((variant) => variant.stockQuantity > 0)
+        .toList();
+
+    selectedVariant = inStockMatches.isNotEmpty
+        ? inStockMatches.first
+        : matches.isEmpty
+        ? null
+        : matches.first;
+  }
+
+  void _ensureValidSizeForColor(ProductDetailModel product) {
+    final selectedColor = _normalizeColor(_selectedColor);
+    if (selectedColor.isEmpty) {
+      _selectedSize = null;
+      return;
+    }
+
+    final colorVariants = product.variants.where((variant) {
+      return variant.isActive &&
+          _normalizeColor(variant.color) == selectedColor;
+    }).toList();
+
+    final currentSizeHasStock = colorVariants.any((variant) {
+      return variant.size == _selectedSize && variant.stockQuantity > 0;
+    });
+
+    if (currentSizeHasStock) return;
+
+    final firstInStock = colorVariants
+        .where((variant) => variant.stockQuantity > 0)
+        .toList();
+
+    _selectedSize = firstInStock.isNotEmpty ? firstInStock.first.size : null;
+  }
+
+  void _ensureInitialSelection(ProductDetailModel product) {
+    final activeVariants = product.variants
+        .where((variant) => variant.isActive)
+        .toList();
+    if (activeVariants.isEmpty) return;
+
+    final colorIsValid =
+        _selectedColor != null &&
+        activeVariants.any((variant) {
+          return _normalizeColor(variant.color) ==
+              _normalizeColor(_selectedColor);
+        });
+
+    if (!colorIsValid) {
+      final inStockVariants = activeVariants
+          .where((variant) => variant.stockQuantity > 0)
+          .toList();
+      _selectedColor =
+          (inStockVariants.isNotEmpty
+                  ? inStockVariants.first
+                  : activeVariants.first)
+              .color;
+    }
+
+    _ensureValidSizeForColor(product);
+    _syncSelectedVariant(product);
+
+    final currentImageMatchesColor =
+        _selectedImageUrl != null &&
+        _imageUrlMatchesColor(
+          _selectedImageUrl,
+          _normalizeColor(_selectedColor),
+        );
+
+    if (!currentImageMatchesColor) {
+      _selectedImageUrl = _resolveImageForColor(product, _selectedColor);
+    }
   }
 
   void _selectColor(ProductDetailModel product, String color) {
     setState(() {
       _selectedColor = color;
-
-      final sizesForColor = product.variants
-          .where((variant) => variant.isActive && variant.color == color)
-          .map((variant) => variant.size)
-          .toSet();
-
-      if (_selectedSize != null && !sizesForColor.contains(_selectedSize)) {
-        _selectedSize = null;
-      }
-
-      final colorVariants = product.variants.where((variant) {
-        return variant.isActive &&
-            variant.color == color &&
-            _normalizeImageUrl(variant.imageUrl).isNotEmpty;
-      });
-      final colorImage = colorVariants.isEmpty
-          ? null
-          : colorVariants.first.imageUrl;
-      _selectedImageUrl =
-          _findUniqueImageByUrl(product, colorImage)?.imageUrl ??
-          getMainImage(product);
-
+      _ensureValidSizeForColor(product);
+      _selectedImageUrl = _resolveImageForColor(product, color);
       _syncSelectedVariant(product);
     });
   }
@@ -362,12 +598,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     setState(() {
       _selectedSize = size;
       _syncSelectedVariant(product);
-      final variantImage = selectedVariant?.imageUrl;
-      if (variantImage != null && variantImage.trim().isNotEmpty) {
-        _selectedImageUrl =
-            _findUniqueImageByUrl(product, variantImage)?.imageUrl ??
-            getMainImage(product);
-      }
+      _selectedImageUrl = _resolveImageForColor(product, _selectedColor);
     });
   }
 
@@ -392,7 +623,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       spacing: 8,
       runSpacing: 8,
       children: colors.map((color) {
-        final isSelected = _selectedColor == color;
+        final isSelected =
+            _normalizeColor(_selectedColor) == _normalizeColor(color);
 
         return ChoiceChip(
           selected: isSelected,
@@ -417,7 +649,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         final matchingVariants = product.variants.where((variant) {
           return variant.isActive &&
               variant.size == size &&
-              (_selectedColor == null || variant.color == _selectedColor);
+              _normalizeColor(variant.color) == _normalizeColor(_selectedColor);
         }).toList();
         final hasStock = matchingVariants.any(
           (variant) => variant.stockQuantity > 0,
@@ -612,21 +844,36 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return true;
   }
 
-  Future<void> _addToCart() async {
+  ProductVariantModel? _findSelectedPurchasableVariant(
+    ProductDetailModel product,
+  ) {
+    final selectedColor = _normalizeColor(_selectedColor);
+    final selectedSize = _selectedSize;
+
+    if (selectedColor.isEmpty || selectedSize == null) {
+      return null;
+    }
+
+    final matches = product.variants.where((variant) {
+      return variant.isActive &&
+          variant.stockQuantity > 0 &&
+          variant.size == selectedSize &&
+          _normalizeColor(variant.color) == selectedColor;
+    }).toList();
+
+    return matches.isEmpty ? null : matches.first;
+  }
+
+  Future<void> _addToCart(ProductDetailModel product) async {
     if (!await _requireLogin()) return;
     if (!mounted) return;
 
-    if (selectedVariant == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('selectSizeColorPrompt'))),
-      );
-      return;
-    }
+    final variant = _findSelectedPurchasableVariant(product);
 
-    if (selectedVariant!.stockQuantity <= 0) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Out of stock')));
+    if (variant == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vui lòng chọn màu và size còn hàng.')),
+      );
       return;
     }
 
@@ -637,7 +884,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
       final totalItems = await _cartService.addToCart(
         userId: AppConfig.currentUserId,
-        variantId: selectedVariant!.variantId,
+        variantId: variant.variantId,
         quantity: 1,
       );
 
@@ -670,17 +917,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     if (!await _requireLogin()) return;
     if (!mounted) return;
 
-    if (selectedVariant == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('selectSizeColorPrompt'))),
-      );
-      return;
-    }
+    final variant = _findSelectedPurchasableVariant(product);
 
-    if (selectedVariant!.stockQuantity <= 0) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Out of stock')));
+    if (variant == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vui lòng chọn màu và size còn hàng.')),
+      );
       return;
     }
 
@@ -688,13 +930,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       context,
       '/checkout',
       arguments: {
-        'variantId': selectedVariant!.variantId,
+        'variantId': variant.variantId,
         'quantity': 1,
-        'unitPrice': selectedVariant!.price,
+        'unitPrice': variant.price,
         'productName': product.productName,
-        'imageUrl': selectedVariant!.imageUrl ?? getMainImage(product),
-        'size': selectedVariant!.size,
-        'color': selectedVariant!.color,
+        'imageUrl': _resolveImageForColor(product, variant.color),
+        'size': variant.size,
+        'color': variant.color,
       },
     );
   }
@@ -705,7 +947,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
     try {
       final totalItems = await _wishlistService.addWishlist(
-        userId: AppConfig.currentUserId,
         productId: widget.productId,
         variantId: selectedVariant?.variantId,
       );
@@ -758,6 +999,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         }
 
         final product = snapshot.data!;
+        _ensureInitialSelection(product);
         final displayPrice = selectedVariant?.price ?? product.basePrice;
         final canPurchase =
             selectedVariant != null && selectedVariant!.stockQuantity > 0;
@@ -873,7 +1115,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         child: OutlinedButton.icon(
                           onPressed: _isLoading || !canPurchase
                               ? null
-                              : _addToCart,
+                              : () => _addToCart(product),
                           icon: const Icon(Icons.shopping_bag_outlined),
                           label: Text(context.tr('addToBag').toUpperCase()),
                         ),

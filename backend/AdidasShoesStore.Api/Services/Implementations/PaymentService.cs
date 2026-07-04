@@ -1,5 +1,6 @@
 using AdidasShoesStore.Api.Data;
 using AdidasShoesStore.Api.DTOs.Payment;
+using AdidasShoesStore.Api.Constants;
 using AdidasShoesStore.Api.Helpers;
 using AdidasShoesStore.Api.Models;
 using AdidasShoesStore.Api.Services.Interfaces;
@@ -19,6 +20,8 @@ namespace AdidasShoesStore.Api.Services.Implementations
         private readonly IConfiguration _configuration;
         private readonly VnPayHelper _vnPayHelper;
         private readonly IEmailService _emailService;
+        private readonly INotificationService _notificationService;
+        private readonly IInventoryRealtimeService _inventoryRealtimeService;
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly ILogger<PaymentService> _logger;
         private readonly PaymentSettings _paymentSettings;
@@ -28,6 +31,8 @@ namespace AdidasShoesStore.Api.Services.Implementations
             IConfiguration configuration,
             VnPayHelper vnPayHelper,
             IEmailService emailService,
+            INotificationService notificationService,
+            IInventoryRealtimeService inventoryRealtimeService,
             IHttpClientFactory httpClientFactory,
             ILogger<PaymentService> logger,
             IOptions<PaymentSettings> paymentSettings)
@@ -36,6 +41,8 @@ namespace AdidasShoesStore.Api.Services.Implementations
             _configuration = configuration;
             _vnPayHelper = vnPayHelper;
             _emailService = emailService;
+            _notificationService = notificationService;
+            _inventoryRealtimeService = inventoryRealtimeService;
             _httpClientFactory = httpClientFactory;
             _logger = logger;
             _paymentSettings = paymentSettings.Value;
@@ -198,6 +205,24 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 transactionStatus == "00" &&
                 amountMatches)
             {
+                if (!CanAcceptPaymentSuccess(order, out var guardMessage))
+                {
+                    _logger.LogWarning(
+                        "Ignored late or invalid VNPay success callback for order {OrderCode}. OrderStatus={OrderStatus}, PaymentStatus={PaymentStatus}, Reason={Reason}",
+                        order.OrderCode,
+                        order.Status,
+                        order.Payment.Status,
+                        guardMessage);
+
+                    return new VnPayPaymentResponseDto
+                    {
+                        Success = false,
+                        OrderId = order.OrderId,
+                        OrderCode = order.OrderCode,
+                        Message = guardMessage
+                    };
+                }
+
                 order.Payment.Status = "Success";
                 order.Payment.TransactionCode = transactionNo;
                 order.Payment.PaidAt = DateTime.UtcNow;
@@ -205,6 +230,8 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 await ClearUserCartAsync(order.UserId);
 
                 await _context.SaveChangesAsync();
+
+                await NotifyPaymentSuccessAsync(order);
 
                 var message = "Payment successful";
 
@@ -226,9 +253,15 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 };
             }
 
-            order.Payment.Status = "Failed";
-            await RestoreStockForUnpaidOrderAsync(order);
-            await _context.SaveChangesAsync();
+            if (CanMarkPaymentFailed(order))
+            {
+                order.Payment.Status = "Failed";
+                var restoredVariants = RestoreStockForUnpaidOrder(order);
+                await _context.SaveChangesAsync();
+
+                await _inventoryRealtimeService.NotifyStockChangedAsync(restoredVariants, "PaymentFailed");
+                await NotifyPaymentFailedAsync(order, NotificationTypes.PaymentFailed);
+            }
 
             return new VnPayPaymentResponseDto
             {
@@ -442,6 +475,25 @@ namespace AdidasShoesStore.Api.Services.Implementations
 
                 if (captureResult.Success && amountMatches)
                 {
+                    if (!CanAcceptPaymentSuccess(order, out var guardMessage))
+                    {
+                        _logger.LogWarning(
+                            "Ignored late or invalid PayPal success callback for order {OrderCode}. OrderStatus={OrderStatus}, PaymentStatus={PaymentStatus}, Reason={Reason}",
+                            order.OrderCode,
+                            order.Status,
+                            order.Payment.Status,
+                            guardMessage);
+
+                        return new PayPalPaymentResponseDto
+                        {
+                            Success = false,
+                            OrderId = order.OrderId,
+                            OrderCode = order.OrderCode,
+                            PayPalOrderId = paypalOrderId,
+                            Message = guardMessage
+                        };
+                    }
+
                     order.Payment.Status = "Success";
                     order.Payment.TransactionCode = captureResult.TransactionCode ?? paypalOrderId;
                     order.Payment.PaidAt = DateTime.UtcNow;
@@ -449,6 +501,8 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     await ClearUserCartAsync(order.UserId);
 
                     await _context.SaveChangesAsync();
+
+                    await NotifyPaymentSuccessAsync(order);
 
                     var message = "Payment successful";
 
@@ -471,9 +525,15 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     };
                 }
 
-                order.Payment.Status = "Failed";
-                await RestoreStockForUnpaidOrderAsync(order);
-                await _context.SaveChangesAsync();
+                if (CanMarkPaymentFailed(order))
+                {
+                    order.Payment.Status = "Failed";
+                    var restoredVariants = RestoreStockForUnpaidOrder(order);
+                    await _context.SaveChangesAsync();
+
+                    await _inventoryRealtimeService.NotifyStockChangedAsync(restoredVariants, "PaymentFailed");
+                    await NotifyPaymentFailedAsync(order, NotificationTypes.PaymentFailed);
+                }
 
                 return new PayPalPaymentResponseDto
                 {
@@ -516,13 +576,18 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 };
             }
 
-            if (order.Payment.Status != "Success")
+            if (CanMarkPaymentFailed(order))
             {
                 order.Payment.Status = "Failed";
-                await RestoreStockForUnpaidOrderAsync(order);
+                var restoredVariants = RestoreStockForUnpaidOrder(order);
+                await _context.SaveChangesAsync();
+                await _inventoryRealtimeService.NotifyStockChangedAsync(restoredVariants, "PaymentFailed");
             }
 
-            await _context.SaveChangesAsync();
+            if (order.Payment.Status == "Failed")
+            {
+                await NotifyPaymentFailedAsync(order, NotificationTypes.PaymentFailed);
+            }
 
             return new PayPalPaymentResponseDto
             {
@@ -761,11 +826,13 @@ namespace AdidasShoesStore.Api.Services.Implementations
             }
         }
 
-        private Task RestoreStockForUnpaidOrderAsync(Order order)
+        private List<(int ProductId, int VariantId)> RestoreStockForUnpaidOrder(Order order)
         {
+            var restoredVariants = new List<(int ProductId, int VariantId)>();
+
             if (order.Status != "PendingPayment")
             {
-                return Task.CompletedTask;
+                return restoredVariants;
             }
 
             foreach (var item in order.OrderItems)
@@ -773,12 +840,46 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 if (item.Variant != null)
                 {
                     item.Variant.StockQuantity = (item.Variant.StockQuantity ?? 0) + item.Quantity;
+                    restoredVariants.Add((item.Variant.ProductId, item.Variant.VariantId));
                 }
             }
 
             order.Status = "Failed";
 
-            return Task.CompletedTask;
+            return restoredVariants;
+        }
+
+        private bool CanAcceptPaymentSuccess(Order order, out string message)
+        {
+            if (order.Payment == null)
+            {
+                message = "Payment not found";
+                return false;
+            }
+
+            if (!string.Equals(order.Status, "PendingPayment", StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(order.Payment.Status, "Pending", StringComparison.OrdinalIgnoreCase))
+            {
+                message = "Order is no longer awaiting payment";
+                return false;
+            }
+
+            var expiresAt = GetPaymentExpiresAt(order);
+            if (expiresAt.HasValue && DateTime.UtcNow > expiresAt.Value)
+            {
+                message = "Payment callback arrived after the payment window expired";
+                return false;
+            }
+
+            message = "Payment can be marked successful";
+            return true;
+        }
+
+        private static bool CanMarkPaymentFailed(Order order)
+        {
+            return order.Payment != null &&
+                string.Equals(order.Status, "PendingPayment", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(order.Payment.Status, "Pending", StringComparison.OrdinalIgnoreCase);
         }
 
         private PaymentStatusDto MapPaymentStatus(Order order)
@@ -993,6 +1094,56 @@ namespace AdidasShoesStore.Api.Services.Implementations
             public string? Amount { get; set; }
 
             public string? Message { get; set; }
+        }
+
+        private Task NotifyPaymentSuccessAsync(Order order)
+        {
+            return NotificationDispatch.TryAsync(
+                _notificationService,
+                _logger,
+                async service =>
+                {
+                    await service.CreateForUserAsync(
+                        order.UserId,
+                        "Payment successful",
+                        $"Your payment for order {order.OrderCode} has been confirmed.",
+                        NotificationTypes.PaymentSuccess,
+                        relatedOrderId: order.OrderId,
+                        relatedPaymentId: order.Payment?.PaymentId);
+
+                    await service.CreateForRoleAsync(
+                        "Admin",
+                        "Payment confirmed",
+                        $"Order {order.OrderCode} has been paid successfully and is ready for processing.",
+                        NotificationTypes.PaymentSuccess,
+                        relatedOrderId: order.OrderId,
+                        relatedPaymentId: order.Payment?.PaymentId);
+                });
+        }
+
+        private Task NotifyPaymentFailedAsync(Order order, string type)
+        {
+            return NotificationDispatch.TryAsync(
+                _notificationService,
+                _logger,
+                async service =>
+                {
+                    await service.CreateForUserAsync(
+                        order.UserId,
+                        type == NotificationTypes.PaymentExpired ? "Payment expired" : "Payment failed",
+                        $"Payment for order {order.OrderCode} was not completed.",
+                        type,
+                        relatedOrderId: order.OrderId,
+                        relatedPaymentId: order.Payment?.PaymentId);
+
+                    await service.CreateForRoleAsync(
+                        "Admin",
+                        type == NotificationTypes.PaymentExpired ? "Payment expired" : "Payment failed",
+                        $"Payment for order {order.OrderCode} was not completed.",
+                        type,
+                        relatedOrderId: order.OrderId,
+                        relatedPaymentId: order.Payment?.PaymentId);
+                });
         }
 
     }

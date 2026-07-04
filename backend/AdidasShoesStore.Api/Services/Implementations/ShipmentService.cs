@@ -1,6 +1,8 @@
 using AdidasShoesStore.Api.Data;
 using AdidasShoesStore.Api.DTOs.Ghn;
 using AdidasShoesStore.Api.DTOs.Shipments;
+using AdidasShoesStore.Api.Constants;
+using AdidasShoesStore.Api.Helpers;
 using AdidasShoesStore.Api.Models;
 using AdidasShoesStore.Api.Services.Interfaces;
 using AdidasShoesStore.Api.Settings;
@@ -28,6 +30,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
 
         private readonly AdidasShoesStoreContext _context;
         private readonly IEmailService _emailService;
+        private readonly INotificationService _notificationService;
         private readonly IGhnService _ghnService;
         private readonly ILogger<ShipmentService> _logger;
         private readonly GhnSettings _ghnSettings;
@@ -36,6 +39,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
         public ShipmentService(
             AdidasShoesStoreContext context,
             IEmailService emailService,
+            INotificationService notificationService,
             IGhnService ghnService,
             ILogger<ShipmentService> logger,
             IOptions<GhnSettings> ghnOptions,
@@ -43,6 +47,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
         {
             _context = context;
             _emailService = emailService;
+            _notificationService = notificationService;
             _ghnService = ghnService;
             _logger = logger;
             _ghnSettings = ghnOptions.Value;
@@ -291,6 +296,17 @@ namespace AdidasShoesStore.Api.Services.Implementations
             _context.Shipments.Add(shipment);
             await _context.SaveChangesAsync();
 
+            await NotificationDispatch.TryAsync(
+                _notificationService,
+                _logger,
+                service => service.CreateForUserAsync(
+                    order.UserId,
+                    "Shipment created",
+                    $"Your order {order.OrderCode} has been handed to GHN.",
+                    NotificationTypes.ShipmentCreated,
+                    relatedOrderId: order.OrderId,
+                    relatedShipmentId: shipment.ShipmentId));
+
             var detail = await GetAdminShipmentAsync(shipment.ShipmentId);
 
             return ShipmentServiceResult<AdminShipmentDetailDto>.Ok(detail!);
@@ -358,6 +374,8 @@ namespace AdidasShoesStore.Api.Services.Implementations
             }
 
             await _context.SaveChangesAsync();
+
+            await NotifyShipmentStatusChangeAsync(shipment, currentStatus, newStatus);
 
             if (shouldSendCodInvoice)
             {
@@ -439,6 +457,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 );
             }
 
+            var previousStatus = shipment.Status;
             var shouldSendCodInvoice = ApplyGhnTracking(
                 shipment,
                 tracking.Data.Status,
@@ -447,6 +466,11 @@ namespace AdidasShoesStore.Api.Services.Implementations
             );
 
             await _context.SaveChangesAsync();
+
+            await NotifyShipmentStatusChangeAsync(
+                shipment,
+                previousStatus,
+                shipment.Status ?? tracking.Data.Status);
 
             if (shouldSendCodInvoice)
             {
@@ -704,6 +728,50 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 "Delivered" => 5,
                 _ => null
             };
+        }
+
+        private Task NotifyShipmentStatusChangeAsync(
+            Shipment shipment,
+            string? previousStatus,
+            string newStatus)
+        {
+            if (string.Equals(previousStatus, newStatus, StringComparison.Ordinal))
+            {
+                return Task.CompletedTask;
+            }
+
+            var order = shipment.Order;
+            var orderCode = order.OrderCode;
+
+            if (newStatus is "Picking" or "Shipped" or "InTransit" or "OutForDelivery")
+            {
+                return NotificationDispatch.TryAsync(
+                    _notificationService,
+                    _logger,
+                    service => service.CreateForUserAsync(
+                        order.UserId,
+                        "Order is on the way",
+                        $"Your order {orderCode} is being shipped.",
+                        NotificationTypes.Shipping,
+                        relatedOrderId: order.OrderId,
+                        relatedShipmentId: shipment.ShipmentId));
+            }
+
+            if (newStatus == "Delivered")
+            {
+                return NotificationDispatch.TryAsync(
+                    _notificationService,
+                    _logger,
+                    service => service.CreateForUserAsync(
+                        order.UserId,
+                        "Order delivered",
+                        $"Your order {orderCode} has been delivered.",
+                        NotificationTypes.Delivered,
+                        relatedOrderId: order.OrderId,
+                        relatedShipmentId: shipment.ShipmentId));
+            }
+
+            return Task.CompletedTask;
         }
     }
 }
