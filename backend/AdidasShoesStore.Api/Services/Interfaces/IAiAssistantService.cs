@@ -6,4 +6,6 @@ public interface IAiAssistantService
 {
     Task<AiShoeRecommendationResponseDto> RecommendShoesAsync(
         AiShoeRecommendationRequestDto request);
+
+    object GetGeminiHealth();
 }

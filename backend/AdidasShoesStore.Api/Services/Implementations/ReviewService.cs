@@ -45,7 +45,7 @@ public class ReviewService : IReviewService
         return review == null ? null : ToDto(review);
     }
 
-    public async Task<ReviewDto?> CreateReviewAsync(CreateReviewDto dto)
+    public async Task<ReviewDto?> CreateReviewAsync(int userId, CreateReviewDto dto)
     {
         if (dto.Rating < 1 || dto.Rating > 5)
         {
@@ -61,14 +61,14 @@ public class ReviewService : IReviewService
         }
 
         var userExists = await _context.Users
-            .AnyAsync(u => u.UserId == dto.UserId);
+            .AnyAsync(u => u.UserId == userId);
 
         if (!userExists)
         {
             return null;
         }
 
-        var hasPurchased = await CanReviewProductAsync(dto.UserId, dto.ProductId);
+        var hasPurchased = await CanReviewProductAsync(userId, dto.ProductId);
 
         if (!hasPurchased)
         {
@@ -77,7 +77,7 @@ public class ReviewService : IReviewService
 
         var alreadyReviewed = await _context.Reviews
             .AnyAsync(r =>
-                r.UserId == dto.UserId &&
+                r.UserId == userId &&
                 r.ProductId == dto.ProductId
             );
 
@@ -88,11 +88,11 @@ public class ReviewService : IReviewService
 
         var review = new Review
         {
-            UserId = dto.UserId,
+            UserId = userId,
             ProductId = dto.ProductId,
             Rating = dto.Rating,
             Comment = dto.Comment,
-            CreatedAt = DateTime.Now
+            CreatedAt = DateTime.UtcNow
         };
 
         _context.Reviews.Add(review);
@@ -111,7 +111,7 @@ public class ReviewService : IReviewService
         };
     }
 
-    public async Task<ReviewDto?> UpdateReviewAsync(int reviewId, UpdateReviewDto dto)
+    public async Task<ReviewDto?> UpdateReviewAsync(int userId, int reviewId, UpdateReviewDto dto, bool canUpdateAny = false)
     {
         if (dto.Rating < 1 || dto.Rating > 5)
         {
@@ -121,7 +121,7 @@ public class ReviewService : IReviewService
         var review = await _context.Reviews
             .FirstOrDefaultAsync(r =>
                 r.ReviewId == reviewId &&
-                r.UserId == dto.UserId);
+                (canUpdateAny || r.UserId == userId));
 
         if (review == null || review.EditCount >= 1)
         {
@@ -129,7 +129,7 @@ public class ReviewService : IReviewService
         }
 
         var canStillReview = await CanReviewProductAsync(
-            dto.UserId,
+            review.UserId,
             review.ProductId);
 
         if (!canStillReview)

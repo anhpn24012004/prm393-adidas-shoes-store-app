@@ -59,14 +59,12 @@ class _CreateReviewScreenState extends State<CreateReviewScreen> {
       if (_editMode) {
         await _reviewService.updateReview(
           reviewId: _reviewId!,
-          userId: AppConfig.currentUserId,
           rating: _rating,
           comment: _commentController.text.trim(),
         );
       } else {
         await _reviewService.createReview(
           CreateReviewRequest(
-            userId: AppConfig.currentUserId,
             productId: _productId!,
             rating: _rating,
             comment: _commentController.text.trim(),

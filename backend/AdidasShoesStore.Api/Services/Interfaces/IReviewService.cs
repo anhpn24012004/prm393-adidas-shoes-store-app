@@ -6,6 +6,6 @@ public interface IReviewService
 {
     Task<List<ReviewDto>> GetReviewsByProductIdAsync(int productId);
     Task<ReviewDto?> GetUserReviewAsync(int userId, int productId);
-    Task<ReviewDto?> CreateReviewAsync(CreateReviewDto dto);
-    Task<ReviewDto?> UpdateReviewAsync(int reviewId, UpdateReviewDto dto);
+    Task<ReviewDto?> CreateReviewAsync(int userId, CreateReviewDto dto);
+    Task<ReviewDto?> UpdateReviewAsync(int userId, int reviewId, UpdateReviewDto dto, bool canUpdateAny = false);
 }

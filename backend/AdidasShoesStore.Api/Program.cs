@@ -1,5 +1,6 @@
 using AdidasShoesStore.Api.Data;
 using AdidasShoesStore.Api.Helpers;
+using AdidasShoesStore.Api.Hubs;
 using AdidasShoesStore.Api.Models;
 using AdidasShoesStore.Api.Services.Implementations;
 using AdidasShoesStore.Api.Services.Interfaces;
@@ -7,7 +8,6 @@ using AdidasShoesStore.Api.Settings;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.Net.Http.Headers;
 using Microsoft.OpenApi.Models;
 using System.Text;
 
@@ -15,15 +15,34 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
 builder.Services.AddControllers();
+builder.Services.AddSignalR();
 
-// CORS for Flutter Web
+// CORS for Flutter Web / production frontend
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowFlutterWeb", policy =>
+    options.AddPolicy("FrontendOnly", policy =>
     {
-        policy.AllowAnyOrigin()
+        var origins = builder.Configuration
+            .GetSection("AllowedOrigins")
+            .Get<string[]>() ?? Array.Empty<string>();
+
+        if (origins.Length == 0 && builder.Environment.IsDevelopment())
+        {
+            origins =
+            [
+                "http://localhost:1859",
+                "http://localhost:3000",
+                "http://localhost:5209",
+                "http://127.0.0.1:1859",
+                "http://127.0.0.1:3000",
+                "http://127.0.0.1:5209"
+            ];
+        }
+
+        policy.WithOrigins(origins)
               .AllowAnyHeader()
-              .AllowAnyMethod();
+              .AllowAnyMethod()
+              .AllowCredentials();
     });
 });
 
@@ -86,6 +105,8 @@ builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IGhnService, GhnService>();
 builder.Services.AddScoped<ISePayService, SePayService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IInventoryRealtimeService, InventoryRealtimeService>();
 builder.Services.AddScoped<IAdminDashboardService, AdminDashboardService>();
 builder.Services.AddHostedService<PendingPaymentExpirationService>();
 builder.Services.AddHostedService<GhnShipmentSyncService>();
@@ -112,6 +133,23 @@ builder.Services.AddAuthentication(options =>
             Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)
         )
     };
+
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+
+            if (!string.IsNullOrEmpty(accessToken) &&
+                path.StartsWithSegments("/hubs"))
+            {
+                context.Token = accessToken;
+            }
+
+            return Task.CompletedTask;
+        }
+    };
 });
 
 // Add authorization
@@ -132,21 +170,17 @@ if (!app.Environment.IsDevelopment())
 }
 
 // CORS must run before static files and Authentication/Authorization.
-app.UseCors("AllowFlutterWeb");
+app.UseCors("FrontendOnly");
 
-app.UseStaticFiles(new StaticFileOptions
-{
-    OnPrepareResponse = context =>
-    {
-        context.Context.Response.Headers[HeaderNames.AccessControlAllowOrigin] = "*";
-    }
-});
+app.UseStaticFiles();
 
 // Authentication must be before Authorization
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<NotificationHub>("/hubs/notifications");
+app.MapHub<InventoryHub>("/hubs/inventory");
 
 // Seed admin in Development
 if (app.Environment.IsDevelopment())

@@ -1,11 +1,9 @@
 class CreateReviewRequest {
-  final int userId;
   final int productId;
   final int rating;
   final String comment;
 
   CreateReviewRequest({
-    required this.userId,
     required this.productId,
     required this.rating,
     required this.comment,
@@ -13,7 +11,6 @@ class CreateReviewRequest {
 
   Map<String, dynamic> toJson() {
     return {
-      'userId': userId,
       'productId': productId,
       'rating': rating,
       'comment': comment,

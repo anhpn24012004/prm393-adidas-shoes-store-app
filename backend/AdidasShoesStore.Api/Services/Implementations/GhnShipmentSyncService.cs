@@ -1,4 +1,6 @@
 using AdidasShoesStore.Api.Data;
+using AdidasShoesStore.Api.Constants;
+using AdidasShoesStore.Api.Helpers;
 using AdidasShoesStore.Api.Models;
 using AdidasShoesStore.Api.Services.Interfaces;
 using AdidasShoesStore.Api.Settings;
@@ -88,6 +90,7 @@ public class GhnShipmentSyncService : BackgroundService
                 await ApplyTrackingAsync(
                     context,
                     emailService,
+                    scope.ServiceProvider.GetRequiredService<INotificationService>(),
                     item.ShipmentId,
                     tracking.Data.Status,
                     tracking.Data.RawStatus,
@@ -108,6 +111,7 @@ public class GhnShipmentSyncService : BackgroundService
     private async Task ApplyTrackingAsync(
         AdidasShoesStoreContext context,
         IEmailService emailService,
+        INotificationService notificationService,
         int shipmentId,
         string? newStatus,
         string? rawStatus,
@@ -148,6 +152,7 @@ public class GhnShipmentSyncService : BackgroundService
             return;
         }
 
+        var previousStatus = shipment.Status;
         shipment.Status = newStatus;
         shipment.RawGhnStatus = rawStatus;
         shipment.ExpectedDeliveryTime = leadTime ?? shipment.ExpectedDeliveryTime;
@@ -194,6 +199,12 @@ public class GhnShipmentSyncService : BackgroundService
         }
 
         await context.SaveChangesAsync(cancellationToken);
+
+        await NotifyShipmentStatusChangeAsync(
+            notificationService,
+            shipment,
+            previousStatus,
+            shipment.Status ?? newStatus);
 
         if (shouldSendCodInvoice)
         {
@@ -251,5 +262,50 @@ public class GhnShipmentSyncService : BackgroundService
             "Delivered" => 5,
             _ => null
         };
+    }
+
+    private Task NotifyShipmentStatusChangeAsync(
+        INotificationService notificationService,
+        Shipment shipment,
+        string? previousStatus,
+        string newStatus)
+    {
+        if (string.Equals(previousStatus, newStatus, StringComparison.Ordinal))
+        {
+            return Task.CompletedTask;
+        }
+
+        var order = shipment.Order;
+        var orderCode = order.OrderCode;
+
+        if (newStatus is "Picking" or "Shipped" or "InTransit" or "OutForDelivery")
+        {
+            return NotificationDispatch.TryAsync(
+                notificationService,
+                _logger,
+                service => service.CreateForUserAsync(
+                    order.UserId,
+                    "Order is on the way",
+                    $"Your order {orderCode} is being shipped.",
+                    NotificationTypes.Shipping,
+                    relatedOrderId: order.OrderId,
+                    relatedShipmentId: shipment.ShipmentId));
+        }
+
+        if (newStatus == "Delivered")
+        {
+            return NotificationDispatch.TryAsync(
+                notificationService,
+                _logger,
+                service => service.CreateForUserAsync(
+                    order.UserId,
+                    "Order delivered",
+                    $"Your order {orderCode} has been delivered.",
+                    NotificationTypes.Delivered,
+                    relatedOrderId: order.OrderId,
+                    relatedShipmentId: shipment.ShipmentId));
+        }
+
+        return Task.CompletedTask;
     }
 }

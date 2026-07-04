@@ -56,6 +56,10 @@ public partial class AdidasShoesStoreContext : DbContext
 
     public virtual DbSet<Wishlist> Wishlists { get; set; }
 
+    public virtual DbSet<Notification> Notifications { get; set; }
+
+    public virtual DbSet<NotificationRecipient> NotificationRecipients { get; set; }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         if (!optionsBuilder.IsConfigured)
@@ -462,6 +466,8 @@ public partial class AdidasShoesStoreContext : DbContext
             entity.Property(e => e.Phone).HasMaxLength(20);
             entity.Property(e => e.ResetPasswordOtp).HasMaxLength(6);
             entity.Property(e => e.ResetPasswordOtpExpiredAt).HasColumnType("datetime");
+            entity.Property(e => e.ResetPasswordOtpLastSentAt).HasColumnType("datetime");
+            entity.Property(e => e.ResetPasswordOtpFailedAttempts).HasDefaultValue(0);
             entity.Property(e => e.ResetPasswordToken).HasMaxLength(255);
             entity.Property(e => e.ResetPasswordTokenExpires).HasColumnType("datetime");
 
@@ -511,6 +517,51 @@ public partial class AdidasShoesStoreContext : DbContext
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__Wishlists__UserI__04E4BC85");
+        });
+
+        modelBuilder.Entity<Notification>(entity =>
+        {
+            entity.HasKey(e => e.NotificationId);
+
+            entity.ToTable("Notifications");
+
+            entity.Property(e => e.Title).HasMaxLength(200);
+            entity.Property(e => e.Message).HasMaxLength(1000);
+            entity.Property(e => e.Type).HasMaxLength(100);
+            entity.Property(e => e.Role).HasMaxLength(50);
+            entity.Property(e => e.ActionUrl).HasMaxLength(500);
+            entity.Property(e => e.MetadataJson).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.IsRead).HasDefaultValue(false);
+            entity.Property(e => e.CreatedAt).HasColumnType("datetime2");
+            entity.Property(e => e.ReadAt).HasColumnType("datetime2");
+
+            entity.HasOne(d => d.User).WithMany()
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<NotificationRecipient>(entity =>
+        {
+            entity.HasKey(e => e.NotificationRecipientId);
+
+            entity.ToTable("NotificationRecipients");
+
+            entity.HasIndex(e => new { e.NotificationId, e.UserId }, "UX_NotificationRecipients_Notification_User")
+                .IsUnique();
+            entity.HasIndex(e => new { e.UserId, e.IsRead }, "IX_NotificationRecipients_UserId_IsRead");
+            entity.HasIndex(e => e.CreatedAt, "IX_NotificationRecipients_CreatedAt");
+
+            entity.Property(e => e.IsRead).HasDefaultValue(false);
+            entity.Property(e => e.CreatedAt).HasColumnType("datetime2");
+            entity.Property(e => e.ReadAt).HasColumnType("datetime2");
+
+            entity.HasOne(d => d.Notification).WithMany(p => p.Recipients)
+                .HasForeignKey(d => d.NotificationId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(d => d.User).WithMany(p => p.NotificationRecipients)
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         OnModelCreatingPartial(modelBuilder);

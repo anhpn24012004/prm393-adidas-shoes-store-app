@@ -1,6 +1,9 @@
 using AdidasShoesStore.Api.Data;
 using AdidasShoesStore.Api.DTOs.Products;
+using AdidasShoesStore.Api.Constants;
+using AdidasShoesStore.Api.Helpers;
 using AdidasShoesStore.Api.Models;
+using AdidasShoesStore.Api.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -16,10 +19,20 @@ namespace AdidasShoesStore.Api.Controllers;
 public class ProductVariantsController : ControllerBase
 {
     private readonly AdidasShoesStoreContext _context;
+    private readonly INotificationService _notificationService;
+    private readonly IInventoryRealtimeService _inventoryRealtimeService;
+    private readonly ILogger<ProductVariantsController> _logger;
 
-    public ProductVariantsController(AdidasShoesStoreContext context)
+    public ProductVariantsController(
+        AdidasShoesStoreContext context,
+        INotificationService notificationService,
+        IInventoryRealtimeService inventoryRealtimeService,
+        ILogger<ProductVariantsController> logger)
     {
         _context = context;
+        _notificationService = notificationService;
+        _inventoryRealtimeService = inventoryRealtimeService;
+        _logger = logger;
     }
 
     [HttpGet("products/{productId}/variants")]
@@ -109,6 +122,8 @@ public class ProductVariantsController : ControllerBase
             return BadRequest(new { message = "SKU already exists on another variant." });
         }
 
+        await _inventoryRealtimeService.NotifyStockChangedAsync(productId, variant.VariantId, "AdminUpdated");
+
         return Ok(new
         {
             message = "Product variant created successfully",
@@ -120,12 +135,16 @@ public class ProductVariantsController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> UpdateVariant(int variantId, UpdateProductVariantDto dto)
     {
-        var variant = await _context.ProductVariants.FindAsync(variantId);
+        var variant = await _context.ProductVariants
+            .Include(v => v.Product)
+            .FirstOrDefaultAsync(v => v.VariantId == variantId);
 
         if (variant == null)
         {
             return NotFound(new { message = "Product variant not found" });
         }
+
+        var oldPrice = variant.Price;
 
         var duplicateVariantExists = await _context.ProductVariants
             .AnyAsync(v =>
@@ -168,7 +187,66 @@ public class ProductVariantsController : ControllerBase
             return BadRequest(new { message = "SKU already exists on another variant." });
         }
 
+        if (dto.Price < oldPrice)
+        {
+            await NotifyPriceDropAsync(variant, dto.Price);
+        }
+
+        await _inventoryRealtimeService.NotifyStockChangedAsync(
+            variant.ProductId,
+            variant.VariantId,
+            "AdminUpdated");
+
         return Ok(new { message = "Product variant updated successfully" });
+    }
+
+    private async Task NotifyPriceDropAsync(ProductVariant variant, decimal newPrice)
+    {
+        var productId = variant.ProductId;
+        var productName = variant.Product?.ProductName ?? "Product";
+
+        var wishlistUserIds = await _context.Wishlists.AsNoTracking()
+            .Where(w => w.ProductId == productId)
+            .Select(w => w.UserId)
+            .Distinct()
+            .ToListAsync();
+
+        var cartUserIds = await _context.CartItems.AsNoTracking()
+            .Where(ci => ci.VariantId == variant.VariantId)
+            .Select(ci => ci.Cart.UserId)
+            .Distinct()
+            .ToListAsync();
+
+        var targetUserIds = wishlistUserIds
+            .Union(cartUserIds)
+            .Distinct()
+            .ToList();
+
+        if (targetUserIds.Count == 0)
+        {
+            return;
+        }
+
+        await NotificationDispatch.TryAsync(
+            _notificationService,
+            _logger,
+            async service =>
+            {
+                foreach (var userId in targetUserIds)
+                {
+                    var type = wishlistUserIds.Contains(userId)
+                        ? NotificationTypes.WishlistPriceDrop
+                        : NotificationTypes.CartPriceDrop;
+
+                    await service.CreateForUserAsync(
+                        userId,
+                        "Price drop alert",
+                        $"Price drop: {productName} is now {newPrice:N0} VND.",
+                        type,
+                        relatedProductId: productId,
+                        actionUrl: $"/products?productId={productId}");
+                }
+            });
     }
 
     [HttpDelete("productvariants/{variantId}")]
@@ -184,6 +262,11 @@ public class ProductVariantsController : ControllerBase
 
         variant.IsActive = false;
         await _context.SaveChangesAsync();
+
+        await _inventoryRealtimeService.NotifyStockChangedAsync(
+            variant.ProductId,
+            variant.VariantId,
+            "AdminUpdated");
 
         return Ok(new { message = "Product variant deleted successfully" });
     }
@@ -357,6 +440,10 @@ public class ProductVariantsController : ControllerBase
             await transaction.RollbackAsync();
             throw;
         }
+
+        await _inventoryRealtimeService.NotifyStockChangedAsync(
+            product.ProductVariants.Select(variant => (variant.ProductId, variant.VariantId)),
+            "AdminUpdated");
 
         return Ok(new { message = "Product classifications and variants saved successfully." });
     }

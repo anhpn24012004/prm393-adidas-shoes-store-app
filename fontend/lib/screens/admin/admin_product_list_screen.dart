@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../config/app_config.dart';
 import '../../localization/app_localization.dart';
 import '../../models/product_model.dart';
+import '../../services/inventory_realtime_service.dart';
 import '../../services/product_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/currency_formatter.dart';
@@ -32,15 +35,22 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
   final int _pageSize = 10;
   _ProductFilter _filter = _ProductFilter.all;
   String? _keyword;
+  StreamSubscription? _stockChangedSubscription;
+  Timer? _stockReloadDebounce;
 
   @override
   void initState() {
     super.initState();
     _loadProducts();
+    _stockChangedSubscription = InventoryRealtimeService
+        .instance.stockChangedStream
+        .listen((_) => _scheduleProductsReload());
   }
 
   @override
   void dispose() {
+    _stockReloadDebounce?.cancel();
+    _stockChangedSubscription?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -58,6 +68,14 @@ class _AdminProductListScreenState extends State<AdminProductListScreen> {
       keyword: _keyword,
       isActive: _statusFilter,
     );
+  }
+
+  void _scheduleProductsReload() {
+    _stockReloadDebounce?.cancel();
+    _stockReloadDebounce = Timer(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
+      setState(_loadProducts);
+    });
   }
 
   void _search() {

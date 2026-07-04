@@ -1,6 +1,8 @@
 using AdidasShoesStore.Api.Data;
 using AdidasShoesStore.Api.DTOs.Ghn;
 using AdidasShoesStore.Api.DTOs.Order;
+using AdidasShoesStore.Api.Constants;
+using AdidasShoesStore.Api.Helpers;
 using AdidasShoesStore.Api.Models;
 using AdidasShoesStore.Api.Services.Interfaces;
 using AdidasShoesStore.Api.Settings;
@@ -45,15 +47,24 @@ namespace AdidasShoesStore.Api.Services.Implementations
         private readonly AdidasShoesStoreContext _context;
         private readonly IGhnService _ghnService;
         private readonly GhnSettings _ghnSettings;
+        private readonly INotificationService _notificationService;
+        private readonly IInventoryRealtimeService _inventoryRealtimeService;
+        private readonly ILogger<OrderService> _logger;
 
         public OrderService(
             AdidasShoesStoreContext context,
             IGhnService ghnService,
-            IOptions<GhnSettings> ghnOptions)
+            IOptions<GhnSettings> ghnOptions,
+            INotificationService notificationService,
+            IInventoryRealtimeService inventoryRealtimeService,
+            ILogger<OrderService> logger)
         {
             _context = context;
             _ghnService = ghnService;
             _ghnSettings = ghnOptions.Value;
+            _notificationService = notificationService;
+            _inventoryRealtimeService = inventoryRealtimeService;
+            _logger = logger;
         }
 
         public async Task<OrderServiceResult<OrderDetailDto>> CreateOrderAsync(
@@ -247,6 +258,52 @@ namespace AdidasShoesStore.Api.Services.Implementations
 
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
+
+                await _inventoryRealtimeService.NotifyStockChangedAsync(
+                    orderItems.Select(item => (item.Variant.ProductId, item.Variant.VariantId)),
+                    "OrderPlaced");
+
+                await NotificationDispatch.TryAsync(
+                    _notificationService,
+                    _logger,
+                    async service =>
+                    {
+                        if (paymentMethod == "COD")
+                        {
+                            await service.CreateForUserAsync(
+                                userId,
+                                "Order placed",
+                                $"Your COD order {order.OrderCode} has been placed.",
+                                NotificationTypes.OrderPlaced,
+                                relatedOrderId: order.OrderId,
+                                relatedPaymentId: order.Payment?.PaymentId);
+
+                            await service.CreateForRoleAsync(
+                                "Admin",
+                                "New COD order",
+                                $"COD order {order.OrderCode} is waiting for shipment.",
+                                NotificationTypes.NewCODOrder,
+                                relatedOrderId: order.OrderId);
+                        }
+                        else
+                        {
+                            await service.CreateForUserAsync(
+                                userId,
+                                "Payment pending",
+                                $"Your order {order.OrderCode} has been created. Please complete payment within the time limit.",
+                                NotificationTypes.PaymentPending,
+                                relatedOrderId: order.OrderId,
+                                relatedPaymentId: order.Payment?.PaymentId);
+
+                            await service.CreateForRoleAsync(
+                                "Admin",
+                                "New pending payment order",
+                                $"Order {order.OrderCode} was created and is waiting for payment.",
+                                NotificationTypes.PendingPaymentOrder,
+                                relatedOrderId: order.OrderId,
+                                relatedPaymentId: order.Payment?.PaymentId);
+                        }
+                    });
 
                 var orderDetail = await GetOrderDetailAsync(userId, order.OrderId);
 
@@ -488,6 +545,10 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
+                await _inventoryRealtimeService.NotifyStockChangedAsync(
+                    order.OrderItems.Select(item => (item.Variant.ProductId, item.Variant.VariantId)),
+                    "OrderCancelled");
+
                 var detail = await GetOrderDetailAsync(userId, orderId);
 
                 return OrderServiceResult<OrderDetailDto>.Ok(detail!);
@@ -535,6 +596,16 @@ namespace AdidasShoesStore.Api.Services.Implementations
             order.Status = "Completed";
 
             await _context.SaveChangesAsync();
+
+            await NotificationDispatch.TryAsync(
+                _notificationService,
+                _logger,
+                service => service.CreateForUserAsync(
+                    userId,
+                    "Order completed",
+                    $"Your order {order.OrderCode} is completed.",
+                    NotificationTypes.Completed,
+                    relatedOrderId: order.OrderId));
 
             var detail = await GetOrderDetailAsync(userId, orderId);
 
@@ -686,9 +757,29 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 );
             }
 
+            var previousStatus = order.Status;
             order.Status = dto.Status;
 
             await _context.SaveChangesAsync();
+
+            if (previousStatus != dto.Status)
+            {
+                await NotificationDispatch.TryAsync(
+                    _notificationService,
+                    _logger,
+                    async service =>
+                    {
+                        if (dto.Status == "Processing")
+                        {
+                            await service.CreateForUserAsync(
+                                order.UserId,
+                                "Order confirmed",
+                                $"Shop confirmed your order {order.OrderCode}.",
+                                NotificationTypes.OrderConfirmed,
+                                relatedOrderId: order.OrderId);
+                        }
+                    });
+            }
 
             var detail = await GetAdminOrderDetailAsync(orderId);
 

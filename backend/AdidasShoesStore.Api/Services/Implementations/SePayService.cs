@@ -4,6 +4,8 @@ using System.Text;
 using System.Text.Json;
 using AdidasShoesStore.Api.Data;
 using AdidasShoesStore.Api.DTOs.Payment;
+using AdidasShoesStore.Api.Constants;
+using AdidasShoesStore.Api.Helpers;
 using AdidasShoesStore.Api.Services.Interfaces;
 using AdidasShoesStore.Api.Settings;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +19,7 @@ public class SePayService : ISePayService
     private readonly SePaySettings _settings;
     private readonly PaymentSettings _paymentSettings;
     private readonly IEmailService _emailService;
+    private readonly INotificationService _notificationService;
     private readonly ILogger<SePayService> _logger;
 
     public SePayService(
@@ -24,12 +27,14 @@ public class SePayService : ISePayService
         IOptions<SePaySettings> options,
         IOptions<PaymentSettings> paymentSettings,
         IEmailService emailService,
+        INotificationService notificationService,
         ILogger<SePayService> logger)
     {
         _context = context;
         _settings = options.Value;
         _paymentSettings = paymentSettings.Value;
         _emailService = emailService;
+        _notificationService = notificationService;
         _logger = logger;
     }
 
@@ -171,6 +176,18 @@ public class SePayService : ISePayService
             if (order.Payment.Status == "Success" || order.Status == "Paid")
                 return PaymentServiceResult<PaymentStatusDto?>.Ok(MapStatus(order));
 
+            if (!CanAcceptPaymentSuccess(order, out var guardMessage))
+            {
+                _logger.LogWarning(
+                    "Ignored late or invalid SePay success webhook for order {OrderCode}. OrderStatus={OrderStatus}, PaymentStatus={PaymentStatus}, Reason={Reason}",
+                    order.OrderCode,
+                    order.Status,
+                    order.Payment.Status,
+                    guardMessage);
+
+                return PaymentServiceResult<PaymentStatusDto?>.Ok(MapStatus(order));
+            }
+
             var expectedAmount = (long)Math.Ceiling(order.FinalAmount);
             if (payload.TransferAmount < expectedAmount)
             {
@@ -193,6 +210,28 @@ public class SePayService : ISePayService
             order.Status = "Paid";
             await ClearUserCartAsync(order.UserId);
             await _context.SaveChangesAsync();
+
+            await NotificationDispatch.TryAsync(
+                _notificationService,
+                _logger,
+                async service =>
+                {
+                    await service.CreateForUserAsync(
+                        order.UserId,
+                        "Payment successful",
+                        $"Your payment for order {order.OrderCode} has been confirmed.",
+                        NotificationTypes.PaymentSuccess,
+                        relatedOrderId: order.OrderId,
+                        relatedPaymentId: order.Payment.PaymentId);
+
+                    await service.CreateForRoleAsync(
+                        "Admin",
+                        "Payment confirmed",
+                        $"Order {order.OrderCode} has been paid successfully and is ready for processing.",
+                        NotificationTypes.PaymentSuccess,
+                        relatedOrderId: order.OrderId,
+                        relatedPaymentId: order.Payment.PaymentId);
+                });
 
             try
             {
@@ -314,6 +353,32 @@ public class SePayService : ISePayService
 
         var expireMinutes = Math.Max(1, _paymentSettings.PendingPaymentExpireMinutes);
         return order.CreatedAt.Value.ToUniversalTime().AddMinutes(expireMinutes);
+    }
+
+    private bool CanAcceptPaymentSuccess(Models.Order order, out string message)
+    {
+        if (order.Payment == null)
+        {
+            message = "Payment not found";
+            return false;
+        }
+
+        if (!string.Equals(order.Status, "PendingPayment", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(order.Payment.Status, "Pending", StringComparison.OrdinalIgnoreCase))
+        {
+            message = "Order is no longer awaiting payment";
+            return false;
+        }
+
+        var expiresAt = GetPaymentExpiresAt(order);
+        if (expiresAt.HasValue && DateTime.UtcNow > expiresAt.Value)
+        {
+            message = "Payment callback arrived after the payment window expired";
+            return false;
+        }
+
+        message = "Payment can be marked successful";
+        return true;
     }
 
     private PaymentStatusDto MapStatus(Models.Order order)

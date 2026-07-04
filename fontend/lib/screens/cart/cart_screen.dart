@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../config/app_config.dart';
@@ -7,6 +9,7 @@ import '../../localization/app_localization.dart';
 import '../../providers/badge_notifier.dart';
 import '../../services/auth_storage.dart';
 import '../../services/cart_service.dart';
+import '../../services/inventory_realtime_service.dart';
 import '../../utils/currency_formatter.dart';
 import '../../widgets/cart_wishlist_badges.dart';
 
@@ -24,11 +27,27 @@ class _CartScreenState extends State<CartScreen> {
   Future<CartModel>? _cartFuture;
   bool _isCheckingAuth = true;
   bool _isUpdating = false;
+  final Set<int> _cartVariantIds = {};
+  StreamSubscription? _stockChangedSubscription;
+  Timer? _stockReloadDebounce;
 
   @override
   void initState() {
     super.initState();
+    _stockChangedSubscription = InventoryRealtimeService
+        .instance.stockChangedStream
+        .listen((event) {
+      if (!_cartVariantIds.contains(event.variantId)) return;
+      _scheduleCartReload();
+    });
     _checkAuthAndLoadCart();
+  }
+
+  @override
+  void dispose() {
+    _stockReloadDebounce?.cancel();
+    _stockChangedSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _checkAuthAndLoadCart() async {
@@ -46,13 +65,29 @@ class _CartScreenState extends State<CartScreen> {
 
     setState(() {
       _isCheckingAuth = false;
-      _cartFuture = _cartService.getCart(userId);
+      _cartFuture = _fetchCartAndTrack(userId);
     });
   }
 
   void _loadCart() {
     setState(() {
-      _cartFuture = _cartService.getCart(AppConfig.currentUserId);
+      _cartFuture = _fetchCartAndTrack(AppConfig.currentUserId);
+    });
+  }
+
+  Future<CartModel> _fetchCartAndTrack(int userId) async {
+    final cart = await _cartService.getCart(userId);
+    _cartVariantIds
+      ..clear()
+      ..addAll(cart.cartItems.map((item) => item.variantId));
+    return cart;
+  }
+
+  void _scheduleCartReload() {
+    _stockReloadDebounce?.cancel();
+    _stockReloadDebounce = Timer(const Duration(milliseconds: 400), () {
+      if (!mounted || _isCheckingAuth || AppConfig.currentUserId <= 0) return;
+      _loadCart();
     });
   }
 

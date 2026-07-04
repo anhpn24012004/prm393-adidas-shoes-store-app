@@ -115,6 +115,13 @@ class _SePayPaymentScreenState extends State<SePayPaymentScreen> {
         await _navigateToResult(resultStatus);
         return;
       }
+
+      if (!silent) {
+        setState(
+          () => _networkMessage =
+              'Payment is still pending. Please complete the transfer.',
+        );
+      }
     } catch (error, stackTrace) {
       debugPrint('SePay status poll failed: $error\n$stackTrace');
       if (!mounted) return;

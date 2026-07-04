@@ -1,5 +1,7 @@
 using AdidasShoesStore.Api.Data;
 using AdidasShoesStore.Api.DTOs.RefundRequests;
+using AdidasShoesStore.Api.Constants;
+using AdidasShoesStore.Api.Helpers;
 using AdidasShoesStore.Api.Models;
 using AdidasShoesStore.Api.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -17,10 +19,20 @@ public class RefundRequestService : IRefundRequestService
     };
 
     private readonly AdidasShoesStoreContext _context;
+    private readonly INotificationService _notificationService;
+    private readonly IInventoryRealtimeService _inventoryRealtimeService;
+    private readonly ILogger<RefundRequestService> _logger;
 
-    public RefundRequestService(AdidasShoesStoreContext context)
+    public RefundRequestService(
+        AdidasShoesStoreContext context,
+        INotificationService notificationService,
+        IInventoryRealtimeService inventoryRealtimeService,
+        ILogger<RefundRequestService> logger)
     {
         _context = context;
+        _notificationService = notificationService;
+        _inventoryRealtimeService = inventoryRealtimeService;
+        _logger = logger;
     }
 
     public async Task<RefundRequestDto?> CreateAsync(int userId, CreateRefundRequestDto dto)
@@ -100,6 +112,17 @@ public class RefundRequestService : IRefundRequestService
         _context.RefundRequests.Add(request);
         await _context.SaveChangesAsync();
 
+        await NotificationDispatch.TryAsync(
+            _notificationService,
+            _logger,
+            service => service.CreateForRoleAsync(
+                "Admin",
+                "New refund request",
+                $"Refund request for order {order.OrderCode} was submitted.",
+                NotificationTypes.RefundRequestCreated,
+                relatedOrderId: order.OrderId,
+                relatedRefundRequestId: request.RefundRequestId));
+
         return await GetMyByIdAsync(userId, request.RefundRequestId);
     }
 
@@ -146,6 +169,7 @@ public class RefundRequestService : IRefundRequestService
         ReviewRefundRequestDto dto)
     {
         var request = await _context.RefundRequests
+            .Include(r => r.Order)
             .FirstOrDefaultAsync(r => r.RefundRequestId == refundRequestId);
 
         if (request == null)
@@ -165,6 +189,17 @@ public class RefundRequestService : IRefundRequestService
 
         await _context.SaveChangesAsync();
 
+        await NotificationDispatch.TryAsync(
+            _notificationService,
+            _logger,
+            service => service.CreateForUserAsync(
+                request.UserId,
+                "Refund request approved",
+                $"Your refund request for order {request.Order.OrderCode} was approved.",
+                NotificationTypes.RefundApproved,
+                relatedOrderId: request.OrderId,
+                relatedRefundRequestId: request.RefundRequestId));
+
         return await GetAdminByIdAsync(refundRequestId);
     }
 
@@ -174,6 +209,7 @@ public class RefundRequestService : IRefundRequestService
         ReviewRefundRequestDto dto)
     {
         var request = await _context.RefundRequests
+            .Include(r => r.Order)
             .FirstOrDefaultAsync(r => r.RefundRequestId == refundRequestId);
 
         if (request == null)
@@ -197,6 +233,17 @@ public class RefundRequestService : IRefundRequestService
         request.AdminNote = dto.AdminNote.Trim();
 
         await _context.SaveChangesAsync();
+
+        await NotificationDispatch.TryAsync(
+            _notificationService,
+            _logger,
+            service => service.CreateForUserAsync(
+                request.UserId,
+                "Refund request rejected",
+                $"Your refund request for order {request.Order.OrderCode} was rejected.",
+                NotificationTypes.RefundRejected,
+                relatedOrderId: request.OrderId,
+                relatedRefundRequestId: request.RefundRequestId));
 
         return await GetAdminByIdAsync(refundRequestId);
     }
@@ -252,6 +299,7 @@ public class RefundRequestService : IRefundRequestService
 
         request.Order.Payment.Status = "Refunded";
 
+        var restoredVariants = new List<(int ProductId, int VariantId)>();
         if (request.Order.Shipment == null)
         {
             foreach (var item in request.Order.OrderItems)
@@ -259,6 +307,7 @@ public class RefundRequestService : IRefundRequestService
                 if (item.Variant != null)
                 {
                     item.Variant.StockQuantity = (item.Variant.StockQuantity ?? 0) + item.Quantity;
+                    restoredVariants.Add((item.Variant.ProductId, item.Variant.VariantId));
                 }
             }
         }
@@ -266,6 +315,19 @@ public class RefundRequestService : IRefundRequestService
         request.Order.Status = "Cancelled";
 
         await _context.SaveChangesAsync();
+
+        await _inventoryRealtimeService.NotifyStockChangedAsync(restoredVariants, "RefundRestocked");
+
+        await NotificationDispatch.TryAsync(
+            _notificationService,
+            _logger,
+            service => service.CreateForUserAsync(
+                request.UserId,
+                "Refund completed",
+                $"Refund for order {request.Order.OrderCode} has been completed.",
+                NotificationTypes.RefundCompleted,
+                relatedOrderId: request.OrderId,
+                relatedRefundRequestId: request.RefundRequestId));
 
         return await GetAdminByIdAsync(refundRequestId);
     }

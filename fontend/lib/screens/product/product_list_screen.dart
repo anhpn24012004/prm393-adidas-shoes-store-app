@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../config/app_config.dart';
@@ -7,7 +9,9 @@ import '../../localization/app_localization.dart';
 import '../../providers/badge_notifier.dart';
 import '../../services/product_service.dart';
 import '../../services/category_service.dart';
+import '../../services/inventory_realtime_service.dart';
 import '../../widgets/cart_wishlist_badges.dart';
+import '../../widgets/notification_bell.dart';
 import '../../widgets/product_rating.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/currency_formatter.dart';
@@ -34,17 +38,25 @@ class _ProductListScreenState extends State<ProductListScreen> {
   int _totalPages = 0;
   String? _keyword;
   int? selectedCategoryId;
+  StreamSubscription? _stockChangedSubscription;
+  Timer? _stockReloadDebounce;
 
   @override
   void initState() {
     super.initState();
     _loadProducts();
     _categoriesFuture = _categoryService.getCategories();
+    _stockChangedSubscription = InventoryRealtimeService
+        .instance
+        .stockChangedStream
+        .listen((_) => _scheduleProductsReload());
     BadgeNotifier.instance.refreshCounts();
   }
 
   @override
   void dispose() {
+    _stockReloadDebounce?.cancel();
+    _stockChangedSubscription?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -83,6 +95,14 @@ class _ProductListScreenState extends State<ProductListScreen> {
     );
   }
 
+  void _scheduleProductsReload() {
+    _stockReloadDebounce?.cancel();
+    _stockReloadDebounce = Timer(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
+      setState(_loadProducts);
+    });
+  }
+
   void _changePage(int pageNumber) {
     setState(() {
       _currentPage = pageNumber;
@@ -114,7 +134,19 @@ class _ProductListScreenState extends State<ProductListScreen> {
           return const SizedBox.shrink();
         }
 
-        final categories = snapshot.data ?? [];
+        final categories = (snapshot.data ?? [])
+            .where((category) => category.productCount > 0)
+            .toList();
+
+        if (selectedCategoryId != null &&
+            !categories.any(
+              (category) => category.categoryId == selectedCategoryId,
+            )) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || selectedCategoryId == null) return;
+            _filterByCategory(null);
+          });
+        }
 
         return SizedBox(
           height: 48,
@@ -254,7 +286,17 @@ class _ProductListScreenState extends State<ProductListScreen> {
         _totalPages = pagedResult?.totalPages ?? 0;
 
         if (products.isEmpty) {
-          return Center(child: Text(context.tr('noProductsFound')));
+          final isDefaultAllView =
+              selectedCategoryId == null &&
+              (_keyword == null || _keyword!.trim().isEmpty);
+
+          return Center(
+            child: Text(
+              isDefaultAllView
+                  ? 'Hiện chưa có sản phẩm nào.'
+                  : context.tr('noProductsFound'),
+            ),
+          );
         }
 
         return Column(
@@ -331,7 +373,11 @@ class _ProductListScreenState extends State<ProductListScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const StoreBrand(size: 27),
-        actions: [const CartWishlistBadges(), const SizedBox(width: 4)],
+        actions: [
+          const NotificationBell(),
+          const CartWishlistBadges(),
+          const SizedBox(width: 4),
+        ],
       ),
       body: Column(
         children: [

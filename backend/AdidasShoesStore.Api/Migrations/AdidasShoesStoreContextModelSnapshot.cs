@@ -133,6 +133,116 @@ namespace AdidasShoesStore.Api.Migrations
                     b.ToTable("Categories");
                 });
 
+            modelBuilder.Entity("AdidasShoesStore.Api.Models.Notification", b =>
+                {
+                    b.Property<int>("NotificationId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("NotificationId"));
+
+                    b.Property<string>("ActionUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsRead")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("RelatedOrderId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RelatedPaymentId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RelatedProductId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RelatedRefundRequestId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RelatedReturnRequestId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RelatedShipmentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Role")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("NotificationId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("Notifications", (string)null);
+                });
+
+            modelBuilder.Entity("AdidasShoesStore.Api.Models.NotificationRecipient", b =>
+                {
+                    b.Property<int>("NotificationRecipientId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("NotificationRecipientId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsRead")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("NotificationId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("NotificationRecipientId");
+
+                    b.HasIndex(new[] { "CreatedAt" }, "IX_NotificationRecipients_CreatedAt");
+
+                    b.HasIndex(new[] { "UserId", "IsRead" }, "IX_NotificationRecipients_UserId_IsRead");
+
+                    b.HasIndex(new[] { "NotificationId", "UserId" }, "UX_NotificationRecipients_Notification_User")
+                        .IsUnique();
+
+                    b.ToTable("NotificationRecipients", (string)null);
+                });
+
             modelBuilder.Entity("AdidasShoesStore.Api.Models.Order", b =>
                 {
                     b.Property<int>("OrderId")
@@ -1085,6 +1195,35 @@ namespace AdidasShoesStore.Api.Migrations
                     b.Navigation("Variant");
                 });
 
+            modelBuilder.Entity("AdidasShoesStore.Api.Models.Notification", b =>
+                {
+                    b.HasOne("AdidasShoesStore.Api.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("AdidasShoesStore.Api.Models.NotificationRecipient", b =>
+                {
+                    b.HasOne("AdidasShoesStore.Api.Models.Notification", "Notification")
+                        .WithMany("Recipients")
+                        .HasForeignKey("NotificationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("AdidasShoesStore.Api.Models.User", "User")
+                        .WithMany("NotificationRecipients")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Notification");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("AdidasShoesStore.Api.Models.Order", b =>
                 {
                     b.HasOne("AdidasShoesStore.Api.Models.User", "User")
@@ -1339,6 +1478,11 @@ namespace AdidasShoesStore.Api.Migrations
                     b.Navigation("Products");
                 });
 
+            modelBuilder.Entity("AdidasShoesStore.Api.Models.Notification", b =>
+                {
+                    b.Navigation("Recipients");
+                });
+
             modelBuilder.Entity("AdidasShoesStore.Api.Models.Order", b =>
                 {
                     b.Navigation("OrderItems");
@@ -1396,6 +1540,8 @@ namespace AdidasShoesStore.Api.Migrations
                     b.Navigation("AirecommendationLogs");
 
                     b.Navigation("Cart");
+
+                    b.Navigation("NotificationRecipients");
 
                     b.Navigation("Orders");
 

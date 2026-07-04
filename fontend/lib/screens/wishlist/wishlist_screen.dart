@@ -46,13 +46,13 @@ class _WishlistScreenState extends State<WishlistScreen> {
 
     setState(() {
       _isCheckingAuth = false;
-      _wishlistFuture = _wishlistService.getWishlist(userId);
+      _wishlistFuture = _wishlistService.getWishlist();
     });
   }
 
   void _loadWishlist() {
     setState(() {
-      _wishlistFuture = _wishlistService.getWishlist(AppConfig.currentUserId);
+      _wishlistFuture = _wishlistService.getWishlist();
     });
   }
 
@@ -95,9 +95,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
     if (confirmed != true) return;
 
     try {
-      final totalItems = await _wishlistService.clearWishlist(
-        AppConfig.currentUserId,
-      );
+      final totalItems = await _wishlistService.clearWishlist();
       BadgeNotifier.instance.setWishlistCount(totalItems);
       _loadWishlist();
     } catch (e) {

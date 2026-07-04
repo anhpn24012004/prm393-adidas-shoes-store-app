@@ -81,7 +81,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       await _authService.updateProfile(
         fullName: _fullNameController.text.trim(),
-        email: _profile!.email,
         phone: _phoneController.text.trim().isEmpty
             ? null
             : _phoneController.text.trim(),

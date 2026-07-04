@@ -130,16 +130,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       if (!mounted) return;
 
       if (_paymentMethod == 'VNPAY') {
+        _showPaymentPendingMessage();
         await _handleVnPay(order);
         return;
       }
 
       if (_paymentMethod == 'PAYPAL') {
+        _showPaymentPendingMessage();
         await _handlePayPal(order);
         return;
       }
 
       if (_paymentMethod == 'SEPAY') {
+        _showPaymentPendingMessage();
         await _handleSePay(order);
         return;
       }
@@ -1018,6 +1021,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (cleanMessage == 'Login required') {
       Navigator.pushNamed(context, '/login');
     }
+  }
+
+  void _showPaymentPendingMessage() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Order created. Please complete your payment to confirm the order.',
+        ),
+      ),
+    );
   }
 
   Widget _buildPaymentMethod() {

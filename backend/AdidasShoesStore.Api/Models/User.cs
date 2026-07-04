@@ -35,6 +35,10 @@ public partial class User
 
     public DateTime? ResetPasswordOtpExpiredAt { get; set; }
 
+    public DateTime? ResetPasswordOtpLastSentAt { get; set; }
+
+    public int ResetPasswordOtpFailedAttempts { get; set; }
+
     public virtual ICollection<AirecommendationLog> AirecommendationLogs { get; set; } = new List<AirecommendationLog>();
 
     public virtual Cart? Cart { get; set; }
@@ -56,4 +60,6 @@ public partial class User
     public virtual ICollection<UserAddress> UserAddresses { get; set; } = new List<UserAddress>();
 
     public virtual ICollection<Wishlist> Wishlists { get; set; } = new List<Wishlist>();
+
+    public virtual ICollection<NotificationRecipient> NotificationRecipients { get; set; } = new List<NotificationRecipient>();
 }
