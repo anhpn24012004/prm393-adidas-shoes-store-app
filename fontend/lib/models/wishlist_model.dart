@@ -21,16 +21,22 @@ class WishlistModel {
 
   factory WishlistModel.fromJson(Map<String, dynamic> json) {
     return WishlistModel(
-      wishlistId: json['wishlistId'],
-      productId: json['productId'],
-      productName: json['productName'] ?? '',
+      wishlistId: _parseInt(json['wishlistId']),
+      productId: _parseInt(json['productId']),
+      productName: json['productName']?.toString() ?? '',
       basePrice: (json['basePrice'] as num?)?.toDouble() ?? 0,
-      imageUrl: json['imageUrl'],
+      imageUrl: json['imageUrl']?.toString(),
       averageRating: (json['averageRating'] as num? ?? 0).toDouble(),
       reviewCount: json['reviewCount'] ?? 0,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString())
           : null,
     );
+  }
+
+  static int _parseInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 }

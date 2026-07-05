@@ -7,6 +7,7 @@ import '../../providers/badge_notifier.dart';
 import '../../services/ai_assistant_service.dart';
 import '../../services/auth_storage.dart';
 import '../../services/cart_service.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/currency_formatter.dart';
 import '../product/product_detail_screen.dart';
 
@@ -60,7 +61,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
 
   Future<void> _submitRecommendation() async {
     FocusScope.of(context).unfocus();
-    if (!_formKey.currentState!.validate()) return;
+    if (!(_formKey.currentState?.validate() ?? false)) return;
 
     setState(() {
       _isLoading = true;
@@ -186,21 +187,21 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
       labelText: label,
       hintText: hint,
       suffixText: suffix,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      border: const OutlineInputBorder(borderRadius: AppRadius.mdBorder),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: Colors.grey.shade300),
+        borderRadius: AppRadius.mdBorder,
+        borderSide: const BorderSide(color: AppColors.line),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Colors.black, width: 1.5),
+        borderRadius: AppRadius.mdBorder,
+        borderSide: const BorderSide(color: AppColors.black, width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppRadius.mdBorder,
         borderSide: const BorderSide(color: Colors.redAccent),
       ),
       filled: true,
-      fillColor: Colors.white,
+      fillColor: AppColors.surface,
     );
   }
 
@@ -218,8 +219,8 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.black,
-        borderRadius: BorderRadius.circular(8),
+        color: AppColors.black,
+        borderRadius: AppRadius.lgBorder,
       ),
       child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -246,16 +247,10 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        color: AppColors.surface,
+        borderRadius: AppRadius.lgBorder,
+        border: Border.all(color: AppColors.line),
+        boxShadow: AppShadows.card,
       ),
       child: Form(
         key: _formKey,
@@ -334,7 +329,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                   onSelected: (_) {
                     setState(() => _favoriteColor = color.value);
                   },
-                  selectedColor: Colors.black,
+                  selectedColor: AppColors.black,
                   labelStyle: TextStyle(
                     color: selected ? Colors.white : Colors.black,
                     fontWeight: FontWeight.w700,
@@ -395,7 +390,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
       return _InfoStateCard(
         icon: Icons.error_outline,
         title: 'Không thể tư vấn lúc này',
-        message: _errorMessage!,
+        message: _errorMessage ?? '',
       );
     }
 
@@ -437,10 +432,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
               ),
               const SizedBox(height: 10),
               Text(result.sizeAdvice, style: const TextStyle(height: 1.45)),
-              if (result.fitWarning != null &&
-                  result.fitWarning!.trim().isNotEmpty) ...[
+              if (result.fitWarning?.trim().isNotEmpty == true) ...[
                 const SizedBox(height: 12),
-                _WarningBox(message: result.fitWarning!),
+                _WarningBox(message: result.fitWarning ?? ''),
               ],
             ],
           ),
@@ -589,9 +583,9 @@ class _SectionCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade200),
+        color: AppColors.surface,
+        borderRadius: AppRadius.lgBorder,
+        border: Border.all(color: AppColors.line),
       ),
       child: child,
     );
@@ -632,8 +626,8 @@ class _Badge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: dark ? Colors.black : Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(999),
+        color: dark ? AppColors.black : AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
       child: Text(
         label,
@@ -659,7 +653,7 @@ class _WarningBox extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xFFFFF7E6),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppRadius.mdBorder,
         border: Border.all(color: const Color(0xFFFFD88A)),
       ),
       child: Row(
@@ -686,7 +680,7 @@ class _WarningsPanel extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xFFFFF7E6),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppRadius.mdBorder,
         border: Border.all(color: const Color(0xFFFFD88A)),
       ),
       child: Column(
@@ -754,8 +748,8 @@ class _EmptyProducts extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(8),
+        color: AppColors.surfaceAlt,
+        borderRadius: AppRadius.mdBorder,
       ),
       child: const Text(
         "Chưa tìm thấy sản phẩm phù hợp với tiêu chí của bạn. Hãy thử tăng ngân sách hoặc chọn màu 'Không quan trọng'.",
@@ -782,7 +776,7 @@ class _RecommendedProductCard extends StatelessWidget {
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 620;
         final image = ClipRRect(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: AppRadius.mdBorder,
           child: _ProductImage(imageUrl: product.imageUrl),
         );
 
@@ -795,9 +789,9 @@ class _RecommendedProductCard extends StatelessWidget {
         return Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey.shade200),
+            color: AppColors.surface,
+            borderRadius: AppRadius.lgBorder,
+            border: Border.all(color: AppColors.line),
           ),
           child: compact
               ? Column(
@@ -829,19 +823,20 @@ class _ProductImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (imageUrl == null || imageUrl!.trim().isEmpty) {
+    final resolvedUrl = imageUrl?.trim();
+    if (resolvedUrl == null || resolvedUrl.isEmpty) {
       return Container(
-        color: Colors.grey.shade200,
+        color: AppColors.surfaceAlt,
         child: const Center(child: Icon(Icons.image_outlined, size: 42)),
       );
     }
 
     return Image.network(
-      AppConfig.resolveImageUrl(imageUrl!),
+      AppConfig.resolveImageUrl(resolvedUrl),
       fit: BoxFit.cover,
       errorBuilder: (context, error, stackTrace) {
         return Container(
-          color: Colors.grey.shade200,
+          color: AppColors.surfaceAlt,
           child: const Center(
             child: Icon(Icons.broken_image_outlined, size: 42),
           ),
@@ -888,7 +883,8 @@ class _ProductDetails extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           [
-            if (product.categoryName != null) product.categoryName!,
+            if (product.categoryName?.trim().isNotEmpty == true)
+              product.categoryName ?? '',
             'EU ${product.size}',
             product.color,
           ].join(' • '),

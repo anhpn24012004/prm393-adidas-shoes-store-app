@@ -19,14 +19,21 @@ class CartModel {
 
   factory CartModel.fromJson(Map<String, dynamic> json) {
     final items = (json['cartItems'] as List? ?? [])
-        .map((item) => CartItemModel.fromJson(item))
+        .whereType<Map<String, dynamic>>()
+        .map(CartItemModel.fromJson)
         .toList();
 
     return CartModel(
-      cartId: json['cartId'] ?? 0,
-      userId: json['userId'] ?? 0,
-      totalItems: json['totalItems'] ?? 0,
+      cartId: _parseInt(json['cartId']),
+      userId: _parseInt(json['userId']),
+      totalItems: _parseInt(json['totalItems']),
       cartItems: items,
     );
+  }
+
+  static int _parseInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 }

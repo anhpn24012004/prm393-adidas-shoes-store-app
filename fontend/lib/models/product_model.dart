@@ -37,23 +37,34 @@ class ProductModel {
 
   factory ProductModel.fromJson(Map<String, dynamic> json) {
     return ProductModel(
-      productId: json['productId'],
+      productId: _parseInt(json['productId']),
       productName: json['productName'] ?? '',
       description: json['description'],
-      basePrice: (json['basePrice'] as num).toDouble(),
-      categoryId: json['categoryId'],
+      basePrice: _parseDouble(json['basePrice']),
+      categoryId: _parseInt(json['categoryId']),
       categoryName: json['categoryName'],
       brand: json['brand'],
       gender: json['gender'],
       material: json['material'],
       mainImageUrl: json['mainImageUrl'],
       averageRating: (json['averageRating'] as num? ?? 0).toDouble(),
-      reviewCount: json['reviewCount'] ?? 0,
+      reviewCount: _parseInt(json['reviewCount']),
       isActive: json['isActive'] ?? false,
-      imageCount: json['imageCount'] ?? 0,
-      activeVariantCount: json['activeVariantCount'] ?? 0,
-      totalStock: json['totalStock'] ?? 0,
+      imageCount: _parseInt(json['imageCount']),
+      activeVariantCount: _parseInt(json['activeVariantCount']),
+      totalStock: _parseInt(json['totalStock']),
     );
+  }
+
+  static int _parseInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  static double _parseDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
   }
 }
 
@@ -88,7 +99,8 @@ class PagedProductResponse {
 
     return PagedProductResponse(
       items: items
-          .map((item) => ProductModel.fromJson(item as Map<String, dynamic>))
+          .whereType<Map<String, dynamic>>()
+          .map(ProductModel.fromJson)
           .toList(),
       pageNumber: json['pageNumber'] ?? 1,
       pageSize: json['pageSize'] ?? 8,

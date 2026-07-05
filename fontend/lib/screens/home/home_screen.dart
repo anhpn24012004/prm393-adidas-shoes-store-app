@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../config/app_config.dart';
 import '../../models/category_model.dart';
 import '../../models/product_model.dart';
 import '../../localization/app_localization.dart';
@@ -11,10 +10,9 @@ import '../../services/category_service.dart';
 import '../../services/inventory_realtime_service.dart';
 import '../../services/product_service.dart';
 import '../../theme/app_theme.dart';
-import '../../utils/currency_formatter.dart';
 import '../../widgets/cart_wishlist_badges.dart';
+import '../../widgets/common_widgets.dart';
 import '../../widgets/notification_bell.dart';
-import '../../widgets/product_rating.dart';
 import '../../widgets/store_brand.dart';
 import '../product/product_detail_screen.dart';
 
@@ -39,7 +37,8 @@ class _HomeScreenState extends State<HomeScreen> {
     _products = _productService.getProductList();
     _categories = _categoryService.getCategories();
     _stockChangedSubscription = InventoryRealtimeService
-        .instance.stockChangedStream
+        .instance
+        .stockChangedStream
         .listen((_) => _scheduleProductsReload());
     BadgeNotifier.instance.refreshCounts();
   }
@@ -81,14 +80,19 @@ class _HomeScreenState extends State<HomeScreen> {
           SizedBox(width: 4),
         ],
       ),
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(child: _buildHero()),
-          SliverToBoxAdapter(child: _buildCategories()),
-          SliverToBoxAdapter(child: _buildTrending()),
-          const SliverToBoxAdapter(child: _MemberBanner()),
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
-        ],
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1220),
+          child: CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(child: _buildHero()),
+              SliverToBoxAdapter(child: _buildCategories()),
+              SliverToBoxAdapter(child: _buildTrending()),
+              const SliverToBoxAdapter(child: _MemberBanner()),
+              const SliverToBoxAdapter(child: SizedBox(height: 24)),
+            ],
+          ),
+        ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: 0,
@@ -121,73 +125,28 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildHero() {
-    return Container(
-      height: 390,
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 28),
-      padding: const EdgeInsets.all(24),
-      decoration: const BoxDecoration(color: AppColors.black),
-      child: Stack(
-        children: [
-          Positioned(
-            right: -45,
-            top: 20,
-            child: Transform.rotate(
-              angle: -.22,
-              child: Icon(
-                Icons.sports_soccer,
-                size: 245,
-                color: Colors.white.withValues(alpha: .07),
-              ),
-            ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 720;
+        return Container(
+          margin: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+          padding: EdgeInsets.all(compact ? 22 : 30),
+          decoration: BoxDecoration(
+            color: AppColors.black,
+            borderRadius: AppRadius.lgBorder,
+            boxShadow: AppShadows.floating,
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                context.tr('newSeason').toUpperCase(),
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.6,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                context.tr('heroTitle').toUpperCase(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 54,
-                  height: .88,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -2.4,
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                context.tr('heroSubtitle'),
-                style: const TextStyle(color: Colors.white70, height: 1.45),
-              ),
-              const SizedBox(height: 22),
-              ElevatedButton(
-                onPressed: () => Navigator.pushNamed(context, '/products'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: AppColors.black,
-                  padding: const EdgeInsets.symmetric(horizontal: 22),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+          child: compact
+              ? const _HeroCopy(compact: true)
+              : const Row(
                   children: [
-                    Text(context.tr('shopNow').toUpperCase()),
-                    const SizedBox(width: 18),
-                    const Icon(Icons.arrow_forward, size: 20),
+                    Expanded(child: _HeroCopy(compact: false)),
+                    SizedBox(width: 24),
+                    Expanded(child: _HeroVisual()),
                   ],
                 ),
-              ),
-            ],
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -198,7 +157,7 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.only(right: 16),
-            child: StoreSectionTitle(
+            child: AppSectionTitle(
               title: context.tr('shopBySport'),
               actionLabel: context.tr('viewAll'),
               onAction: () => Navigator.pushNamed(context, '/categories'),
@@ -206,13 +165,25 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 14),
           SizedBox(
-            height: 102,
+            height: 106,
             child: FutureBuilder<List<CategoryModel>>(
               future: _categories,
               builder: (context, snapshot) {
                 final categories = snapshot.data ?? [];
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const AppLoadingState(compact: true);
+                }
+                if (snapshot.hasError) {
+                  return const AppErrorState(
+                    message: 'Đã có lỗi xảy ra. Vui lòng thử lại.',
+                  );
+                }
+                if (categories.isEmpty) {
+                  return const AppEmptyState(
+                    icon: Icons.category_outlined,
+                    title: 'Chưa có danh mục',
+                    message: 'Danh mục sản phẩm sẽ hiển thị tại đây.',
+                  );
                 }
                 return ListView.separated(
                   scrollDirection: Axis.horizontal,
@@ -227,24 +198,35 @@ class _HomeScreenState extends State<HomeScreen> {
                       Icons.hiking,
                     ];
                     return InkWell(
+                      borderRadius: AppRadius.mdBorder,
                       onTap: () => Navigator.pushNamed(context, '/products'),
                       child: Container(
-                        width: 118,
+                        width: 132,
                         padding: const EdgeInsets.all(14),
-                        color: AppColors.surface,
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: AppRadius.mdBorder,
+                          border: Border.all(color: AppColors.line),
+                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Icon(icons[index % icons.length], size: 28),
                             const Spacer(),
                             Text(
-                              item.categoryName.toUpperCase(),
+                              item.categoryName,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 fontWeight: FontWeight.w900,
-                                fontSize: 12,
+                                fontSize: 13,
                               ),
+                            ),
+                            Text(
+                              '${item.productCount} sản phẩm',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.caption,
                             ),
                           ],
                         ),
@@ -267,7 +249,7 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.only(right: 16),
-            child: StoreSectionTitle(
+            child: AppSectionTitle(
               title: context.tr('trendingNow'),
               actionLabel: context.tr('shopAll'),
               onAction: () => Navigator.pushNamed(context, '/products'),
@@ -275,26 +257,40 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 14),
           SizedBox(
-            height: 300,
+            height: 334,
             child: FutureBuilder<List<ProductModel>>(
               future: _products,
               builder: (context, snapshot) {
                 final products = snapshot.data ?? [];
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const AppLoadingState(compact: true);
+                }
+                if (snapshot.hasError) {
+                  return AppErrorState(
+                    message: 'Đã có lỗi xảy ra. Vui lòng thử lại.',
+                    onRetry: _scheduleProductsReload,
+                  );
                 }
                 if (products.isEmpty) {
-                  return Center(child: Text(context.tr('noProducts')));
+                  return const AppEmptyState(
+                    icon: Icons.inventory_2_outlined,
+                    title: 'Không tìm thấy sản phẩm phù hợp.',
+                    message: 'Hãy quay lại sau khi cửa hàng cập nhật sản phẩm.',
+                  );
                 }
+                final visibleProducts = products.take(8).toList();
                 return ListView.separated(
                   scrollDirection: Axis.horizontal,
-                  itemCount: products.take(8).length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 12),
+                  itemCount: visibleProducts.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 14),
                   itemBuilder: (_, index) {
-                    final product = products[index];
-                    return _HomeProductCard(
-                      product: product,
-                      onTap: () => _openProduct(product),
+                    final product = visibleProducts[index];
+                    return SizedBox(
+                      width: 220,
+                      child: AppProductCard(
+                        product: product,
+                        onTap: () => _openProduct(product),
+                      ),
                     );
                   },
                 );
@@ -307,57 +303,80 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _HomeProductCard extends StatelessWidget {
-  final ProductModel product;
-  final VoidCallback onTap;
+class _HeroCopy extends StatelessWidget {
+  final bool compact;
 
-  const _HomeProductCard({required this.product, required this.onTap});
+  const _HeroCopy({required this.compact});
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 210,
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Container(
-                color: AppColors.surface,
-                child: product.mainImageUrl?.isNotEmpty == true
-                    ? Image.network(
-                        AppConfig.resolveImageUrl(product.mainImageUrl!),
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) =>
-                            const Center(child: Icon(Icons.image, size: 52)),
-                      )
-                    : const Center(child: Icon(Icons.image, size: 52)),
-              ),
+    return ConstrainedBox(
+      constraints: BoxConstraints(minHeight: compact ? 300 : 340),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const StoreBrand(color: Colors.white, size: 34),
+          SizedBox(height: compact ? 48 : 84),
+          Text(
+            context.tr('newSeason'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontWeight: FontWeight.w800,
             ),
-            const SizedBox(height: 10),
-            Text(
-              product.productName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            context.tr('heroTitle'),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: compact ? 38 : 50,
+              height: 1,
+              fontWeight: FontWeight.w900,
             ),
-            Text(
-              product.categoryName ?? 'Originals',
-              style: const TextStyle(color: AppColors.muted, fontSize: 12),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            context.tr('heroSubtitle'),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white70, height: 1.45),
+          ),
+          const SizedBox(height: 22),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pushNamed(context, '/products'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: AppColors.black,
             ),
-            const SizedBox(height: 4),
-            ProductRating(
-              averageRating: product.averageRating,
-              reviewCount: product.reviewCount,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              formatVnd(product.basePrice),
-              style: const TextStyle(fontWeight: FontWeight.w800),
-            ),
-          ],
+            icon: const Icon(Icons.arrow_forward),
+            label: Text(context.tr('shopNow')),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroVisual extends StatelessWidget {
+  const _HeroVisual();
+
+  @override
+  Widget build(BuildContext context) {
+    return AspectRatio(
+      aspectRatio: 4 / 3,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.08),
+          borderRadius: AppRadius.lgBorder,
+        ),
+        child: Icon(
+          Icons.directions_run,
+          size: 150,
+          color: Colors.white.withValues(alpha: 0.86),
         ),
       ),
     );
@@ -372,7 +391,11 @@ class _MemberBanner extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(24),
-      color: const Color(0xFFE9FF48),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: AppRadius.lgBorder,
+        border: Border.all(color: AppColors.line),
+      ),
       child: Row(
         children: [
           Expanded(
@@ -380,17 +403,22 @@ class _MemberBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  context.tr('joinTheClub').toUpperCase(),
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                  ),
+                  context.tr('joinTheClub'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.sectionTitle,
                 ),
                 const SizedBox(height: 6),
-                Text(context.tr('memberBenefits')),
+                Text(
+                  context.tr('memberBenefits'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.muted),
+                ),
               ],
             ),
           ),
+          const SizedBox(width: 14),
           IconButton.filled(
             onPressed: () => Navigator.pushNamed(context, '/register'),
             style: IconButton.styleFrom(backgroundColor: AppColors.black),
