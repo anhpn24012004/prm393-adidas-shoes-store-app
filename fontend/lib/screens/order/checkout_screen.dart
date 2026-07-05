@@ -1080,8 +1080,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         paymentOption('COD', 'COD'),
-        paymentOption('VNPAY', 'VNPAY'),
-        paymentOption('PAYPAL', 'PayPal'),
         paymentOption('SEPAY', 'SePay'),
       ],
     );
