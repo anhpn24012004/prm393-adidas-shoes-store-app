@@ -18,6 +18,7 @@ import '../../models/review_model.dart';
 import '../../services/review_service.dart';
 import '../../services/inventory_realtime_service.dart';
 import '../../utils/currency_formatter.dart';
+import '../../widgets/common_widgets.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final int productId;
@@ -271,10 +272,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       return variant.isActive &&
           _normalizeImageUrl(variant.imageUrl).isNotEmpty;
     })) {
+      final variantImageUrl = variant.imageUrl?.trim();
+      if (variantImageUrl == null || variantImageUrl.isEmpty) continue;
       addImage(
         ProductImageModel(
           imageId: -variant.variantId,
-          imageUrl: variant.imageUrl!.trim(),
+          imageUrl: variantImageUrl,
           isMain: false,
         ),
       );
@@ -351,28 +354,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Widget _buildImage(String? imageUrl) {
-    if (imageUrl == null || imageUrl.isEmpty) {
-      return Container(
-        height: 390,
-        width: double.infinity,
-        color: Colors.grey.shade200,
-        child: const Center(child: Icon(Icons.image, size: 64)),
-      );
-    }
-
-    return Image.network(
-      AppConfig.resolveImageUrl(imageUrl),
+    return SizedBox(
+      height: 430,
       width: double.infinity,
-      height: 390,
-      fit: BoxFit.contain,
-      errorBuilder: (context, error, stackTrace) {
-        return Container(
-          height: 390,
-          width: double.infinity,
-          color: Colors.grey.shade200,
-          child: const Center(child: Icon(Icons.broken_image, size: 64)),
-        );
-      },
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: AppProductImage(imageUrl: imageUrl, fit: BoxFit.contain),
+      ),
     );
   }
 
@@ -382,7 +370,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final normalizedSelectedImageUrl = _normalizeImageUrl(selectedImageUrl);
 
     return Container(
-      color: AppColors.surface,
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: AppRadius.lgBorder,
+      ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
           _buildImage(selectedImageUrl),
@@ -426,22 +419,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     child: Container(
                       width: 68,
                       decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: AppRadius.smBorder,
                         border: Border.all(
-                          color: isSelected
-                              ? AppColors.black
-                              : Colors.transparent,
+                          color: isSelected ? AppColors.black : AppColors.line,
                           width: 2,
                         ),
                       ),
-                      child: Image.network(
-                        AppConfig.resolveImageUrl(image.imageUrl),
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            color: Colors.grey.shade200,
-                            child: const Icon(Icons.broken_image, size: 24),
-                          );
-                        },
+                      clipBehavior: Clip.antiAlias,
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: AppProductImage(
+                          imageUrl: image.imageUrl,
+                          fit: BoxFit.contain,
+                        ),
                       ),
                     ),
                   );
@@ -605,10 +596,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   Widget _buildSectionTitle(String title) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Text(
-        title.toUpperCase(),
-        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
-      ),
+      child: AppSectionTitle(title: title),
     );
   }
 
@@ -628,7 +616,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
         return ChoiceChip(
           selected: isSelected,
-          label: Text(color.toUpperCase()),
+          label: Text(color),
           onSelected: (_) => _selectColor(product, color),
         );
       }).toList(),
@@ -981,32 +969,45 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       future: _productFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
+          return const Scaffold(body: AppLoadingState());
         }
 
         if (snapshot.hasError) {
           return Scaffold(
             appBar: AppBar(),
             body: Center(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('${context.tr('error')}: ${snapshot.error}'),
+              child: AppErrorState(
+                message: 'Đã có lỗi xảy ra. Vui lòng thử lại.',
+                onRetry: () => setState(() {
+                  _productFuture = _productService.getProductById(
+                    widget.productId,
+                  );
+                }),
               ),
             ),
           );
         }
 
-        final product = snapshot.data!;
+        final product = snapshot.data;
+        if (product == null) {
+          return Scaffold(
+            appBar: AppBar(),
+            body: const AppEmptyState(
+              icon: Icons.inventory_2_outlined,
+              title: 'Không tìm thấy sản phẩm phù hợp.',
+              message: 'Sản phẩm không còn tồn tại hoặc chưa sẵn sàng.',
+            ),
+          );
+        }
         _ensureInitialSelection(product);
         final displayPrice = selectedVariant?.price ?? product.basePrice;
+        final currentVariant = selectedVariant;
         final canPurchase =
-            selectedVariant != null && selectedVariant!.stockQuantity > 0;
+            currentVariant != null && currentVariant.stockQuantity > 0;
 
         return Scaffold(
           appBar: AppBar(
-            title: Text(context.tr('productDetails').toUpperCase()),
+            title: Text(context.tr('productDetails')),
             actions: const [CartWishlistBadges()],
           ),
           body: SingleChildScrollView(
@@ -1038,10 +1039,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
                   child: Text(
                     formatPrice(displayPrice),
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                    ),
+                    style: AppTextStyles.price.copyWith(fontSize: 22),
                   ),
                 ),
 
@@ -1088,16 +1086,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   const Padding(
                     padding: EdgeInsets.fromLTRB(20, 12, 20, 0),
                     child: Text(
-                      'Out of stock',
-                      style: TextStyle(fontWeight: FontWeight.w700),
+                      'Hết hàng',
+                      style: TextStyle(fontWeight: FontWeight.w800),
                     ),
                   ),
 
-                if (selectedVariant != null)
+                if (currentVariant != null)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
                     child: Text(
-                      '${context.tr('stock')}: ${selectedVariant!.stockQuantity}',
+                      '${context.tr('stock')}: ${currentVariant.stockQuantity}',
                       style: const TextStyle(fontWeight: FontWeight.w500),
                     ),
                   ),
@@ -1112,27 +1110,25 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: OutlinedButton.icon(
+                        child: AppOutlinedButton(
+                          text: context.tr('addToBag'),
+                          icon: Icons.shopping_bag_outlined,
                           onPressed: _isLoading || !canPurchase
                               ? null
                               : () => _addToCart(product),
-                          icon: const Icon(Icons.shopping_bag_outlined),
-                          label: Text(context.tr('addToBag').toUpperCase()),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: ElevatedButton.icon(
+                        child: AppPrimaryButton(
+                          text: _isLoading
+                              ? context.tr('adding')
+                              : context.tr('buyNow'),
+                          icon: Icons.flash_on_outlined,
+                          isLoading: _isLoading,
                           onPressed: _isLoading || !canPurchase
                               ? null
                               : () => _buyNow(product),
-                          icon: const Icon(Icons.flash_on_outlined),
-                          label: Text(
-                            (_isLoading
-                                    ? context.tr('adding')
-                                    : context.tr('buyNow'))
-                                .toUpperCase(),
-                          ),
                         ),
                       ),
                     ],

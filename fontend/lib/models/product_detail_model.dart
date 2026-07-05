@@ -35,28 +35,42 @@ class ProductDetailModel {
 
   factory ProductDetailModel.fromJson(Map<String, dynamic> json) {
     return ProductDetailModel(
-      productId: json['productId'],
-      productName: json['productName'] ?? '',
+      productId: _parseInt(json['productId']),
+      productName: json['productName']?.toString() ?? '',
       description: json['description'],
-      basePrice: (json['basePrice'] as num).toDouble(),
-      categoryId: json['categoryId'],
-      categoryName: json['categoryName'],
-      brand: json['brand'],
-      gender: json['gender'],
-      material: json['material'],
+      basePrice: _parseDouble(json['basePrice']),
+      categoryId: _parseInt(json['categoryId']),
+      categoryName: json['categoryName']?.toString(),
+      brand: json['brand']?.toString(),
+      gender: json['gender']?.toString(),
+      material: json['material']?.toString(),
       averageRating: (json['averageRating'] as num? ?? 0).toDouble(),
       reviewCount: json['reviewCount'] ?? 0,
       isActive: json['isActive'] ?? false,
       classificationGroups: (json['classificationGroups'] as List? ?? [])
-          .map((e) => ProductClassificationGroupModel.fromJson(e))
+          .whereType<Map<String, dynamic>>()
+          .map(ProductClassificationGroupModel.fromJson)
           .toList(),
       images: (json['images'] as List? ?? [])
-          .map((e) => ProductImageModel.fromJson(e))
+          .whereType<Map<String, dynamic>>()
+          .map(ProductImageModel.fromJson)
           .toList(),
       variants: (json['variants'] as List? ?? [])
-          .map((e) => ProductVariantModel.fromJson(e))
+          .whereType<Map<String, dynamic>>()
+          .map(ProductVariantModel.fromJson)
           .toList(),
     );
+  }
+
+  static int _parseInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  static double _parseDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
   }
 }
 
@@ -73,10 +87,11 @@ class ProductClassificationGroupModel {
 
   factory ProductClassificationGroupModel.fromJson(Map<String, dynamic> json) {
     return ProductClassificationGroupModel(
-      name: json['name'] ?? '',
-      sortOrder: json['sortOrder'] ?? 0,
+      name: json['name']?.toString() ?? '',
+      sortOrder: ProductDetailModel._parseInt(json['sortOrder']),
       options: (json['options'] as List? ?? [])
-          .map((item) => ProductClassificationOptionModel.fromJson(item))
+          .whereType<Map<String, dynamic>>()
+          .map(ProductClassificationOptionModel.fromJson)
           .toList(),
     );
   }
@@ -97,10 +112,10 @@ class ProductClassificationOptionModel {
 
   factory ProductClassificationOptionModel.fromJson(Map<String, dynamic> json) {
     return ProductClassificationOptionModel(
-      name: json['name'] ?? '',
-      description: json['description'],
-      imageUrl: json['imageUrl'],
-      sortOrder: json['sortOrder'] ?? 0,
+      name: json['name']?.toString() ?? '',
+      description: json['description']?.toString(),
+      imageUrl: json['imageUrl']?.toString(),
+      sortOrder: ProductDetailModel._parseInt(json['sortOrder']),
     );
   }
 }
@@ -139,8 +154,8 @@ class ProductImageModel {
 
   factory ProductImageModel.fromJson(Map<String, dynamic> json) {
     return ProductImageModel(
-      imageId: json['imageId'],
-      imageUrl: json['imageUrl'] ?? '',
+      imageId: ProductDetailModel._parseInt(json['imageId']),
+      imageUrl: json['imageUrl']?.toString() ?? '',
       isMain: json['isMain'] ?? false,
     );
   }
@@ -171,16 +186,16 @@ class ProductVariantModel {
 
   factory ProductVariantModel.fromJson(Map<String, dynamic> json) {
     return ProductVariantModel(
-      variantId: json['variantId'],
-      size: json['size'] ?? '',
-      color: json['color'] ?? '',
-      imageUrl: json['imageUrl'],
+      variantId: ProductDetailModel._parseInt(json['variantId']),
+      size: json['size']?.toString() ?? '',
+      color: json['color']?.toString() ?? '',
+      imageUrl: json['imageUrl']?.toString(),
       optionValues: (json['optionValues'] as List? ?? [])
           .map((value) => value.toString())
           .toList(),
-      price: (json['price'] as num).toDouble(),
-      stockQuantity: json['stockQuantity'] ?? 0,
-      sku: json['sku'],
+      price: ProductDetailModel._parseDouble(json['price']),
+      stockQuantity: ProductDetailModel._parseInt(json['stockQuantity']),
+      sku: json['sku']?.toString(),
       isActive: json['isActive'] ?? false,
     );
   }

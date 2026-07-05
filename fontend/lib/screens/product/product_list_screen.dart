@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../config/app_config.dart';
 import '../../models/product_model.dart';
 import '../../models/category_model.dart';
 import '../../localization/app_localization.dart';
@@ -10,11 +9,10 @@ import '../../providers/badge_notifier.dart';
 import '../../services/product_service.dart';
 import '../../services/category_service.dart';
 import '../../services/inventory_realtime_service.dart';
-import '../../widgets/cart_wishlist_badges.dart';
-import '../../widgets/notification_bell.dart';
-import '../../widgets/product_rating.dart';
 import '../../theme/app_theme.dart';
-import '../../utils/currency_formatter.dart';
+import '../../widgets/cart_wishlist_badges.dart';
+import '../../widgets/common_widgets.dart';
+import '../../widgets/notification_bell.dart';
 import '../../widgets/store_brand.dart';
 import 'product_detail_screen.dart';
 
@@ -61,13 +59,8 @@ class _ProductListScreenState extends State<ProductListScreen> {
     super.dispose();
   }
 
-  String formatPrice(double price) {
-    return formatVnd(price);
-  }
-
   void _searchProduct() {
     final keyword = _searchController.text.trim();
-
     setState(() {
       _currentPage = 1;
       _keyword = keyword.isEmpty ? null : keyword;
@@ -125,14 +118,12 @@ class _ProductListScreenState extends State<ProductListScreen> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const SizedBox(
-            height: 48,
-            child: Center(child: CircularProgressIndicator()),
+            height: 54,
+            child: AppLoadingState(compact: true),
           );
         }
 
-        if (snapshot.hasError) {
-          return const SizedBox.shrink();
-        }
+        if (snapshot.hasError) return const SizedBox.shrink();
 
         final categories = (snapshot.data ?? [])
             .where((category) => category.productCount > 0)
@@ -149,10 +140,10 @@ class _ProductListScreenState extends State<ProductListScreen> {
         }
 
         return SizedBox(
-          height: 48,
+          height: 54,
           child: ListView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             children: [
               Padding(
                 padding: const EdgeInsets.only(right: 8),
@@ -166,9 +157,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: ChoiceChip(
-                    label: Text(
-                      '${category.categoryName} (${category.productCount})',
-                    ),
+                    label: Text(category.categoryName),
                     selected: selectedCategoryId == category.categoryId,
                     onSelected: (_) => _filterByCategory(category.categoryId),
                   ),
@@ -181,87 +170,10 @@ class _ProductListScreenState extends State<ProductListScreen> {
     );
   }
 
-  Widget _buildProductImage(String? imageUrl) {
-    if (imageUrl == null || imageUrl.isEmpty) {
-      return Container(
-        color: Colors.grey.shade200,
-        child: const Center(child: Icon(Icons.image, size: 48)),
-      );
-    }
-
-    return Image.network(
-      AppConfig.resolveImageUrl(imageUrl),
-      width: double.infinity,
-      fit: BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) {
-        return Container(
-          color: Colors.grey.shade200,
-          child: const Center(child: Icon(Icons.broken_image, size: 48)),
-        );
-      },
-    );
-  }
-
-  Widget _buildProductCard(ProductModel product) {
-    return InkWell(
-      onTap: () => _goToDetail(product),
-      child: Container(
-        color: Colors.white,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  ColoredBox(
-                    color: AppColors.surface,
-                    child: _buildProductImage(product.mainImageUrl),
-                  ),
-                  const Positioned(
-                    right: 8,
-                    top: 8,
-                    child: CircleAvatar(
-                      radius: 17,
-                      backgroundColor: Colors.white,
-                      child: Icon(Icons.favorite_border, size: 19),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: Text(
-                product.productName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-            ),
-            Text(
-              product.categoryName ?? 'Originals',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: AppColors.muted, fontSize: 12),
-            ),
-            const SizedBox(height: 4),
-            ProductRating(
-              averageRating: product.averageRating,
-              reviewCount: product.reviewCount,
-            ),
-            const SizedBox(height: 5),
-            Text(
-              formatPrice(product.basePrice),
-              style: const TextStyle(
-                fontWeight: FontWeight.w800,
-                color: AppColors.black,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  int _gridCountForWidth(double width) {
+    if (width >= 1100) return 4;
+    if (width >= 760) return 3;
+    return 2;
   }
 
   Widget _buildBody() {
@@ -269,15 +181,13 @@ class _ProductListScreenState extends State<ProductListScreen> {
       future: _productsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const AppLoadingState();
         }
 
         if (snapshot.hasError) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text('${context.tr('error')}: ${snapshot.error}'),
-            ),
+          return AppErrorState(
+            message: 'Đã có lỗi xảy ra. Vui lòng thử lại.',
+            onRetry: () => setState(_loadProducts),
           );
         }
 
@@ -290,11 +200,19 @@ class _ProductListScreenState extends State<ProductListScreen> {
               selectedCategoryId == null &&
               (_keyword == null || _keyword!.trim().isEmpty);
 
-          return Center(
-            child: Text(
-              isDefaultAllView
-                  ? 'Hiện chưa có sản phẩm nào.'
-                  : context.tr('noProductsFound'),
+          return AppEmptyState(
+            icon: Icons.search_off_outlined,
+            title: isDefaultAllView
+                ? 'Chưa có sản phẩm'
+                : 'Không tìm thấy sản phẩm phù hợp.',
+            message: isDefaultAllView
+                ? 'Sản phẩm sẽ hiển thị tại đây khi cửa hàng cập nhật.'
+                : 'Hãy thử từ khóa khác hoặc chọn lại danh mục.',
+            action: AppOutlinedButton(
+              text: context.tr('all'),
+              icon: Icons.refresh,
+              fullWidth: false,
+              onPressed: () => _filterByCategory(null),
             ),
           );
         }
@@ -302,19 +220,26 @@ class _ProductListScreenState extends State<ProductListScreen> {
         return Column(
           children: [
             Expanded(
-              child: GridView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                itemCount: products.length,
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: MediaQuery.sizeOf(context).width > 700
-                      ? 4
-                      : 2,
-                  mainAxisSpacing: 24,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 0.64,
-                ),
-                itemBuilder: (context, index) {
-                  return _buildProductCard(products[index]);
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return GridView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                    itemCount: products.length,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: _gridCountForWidth(constraints.maxWidth),
+                      mainAxisSpacing: 16,
+                      crossAxisSpacing: 14,
+                      childAspectRatio: constraints.maxWidth < 430
+                          ? 0.56
+                          : 0.62,
+                    ),
+                    itemBuilder: (context, index) {
+                      return AppProductCard(
+                        product: products[index],
+                        onTap: () => _goToDetail(products[index]),
+                      );
+                    },
+                  );
                 },
               ),
             ),
@@ -336,31 +261,31 @@ class _ProductListScreenState extends State<ProductListScreen> {
       top: false,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: Colors.grey.shade200)),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          border: Border(top: BorderSide(color: AppColors.line)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            OutlinedButton(
+            IconButton.outlined(
               onPressed: hasPreviousPage
                   ? () => _changePage(_currentPage - 1)
                   : null,
-              child: const Text('Previous'),
+              icon: const Icon(Icons.chevron_left),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
-                'Page $_currentPage / ${totalPages == 0 ? 1 : totalPages}',
-                style: const TextStyle(fontWeight: FontWeight.w700),
+                'Trang $_currentPage / ${totalPages == 0 ? 1 : totalPages}',
+                style: const TextStyle(fontWeight: FontWeight.w800),
               ),
             ),
-            OutlinedButton(
+            IconButton.filled(
               onPressed: hasNextPage
                   ? () => _changePage(_currentPage + 1)
                   : null,
-              child: const Text('Next'),
+              icon: const Icon(Icons.chevron_right, color: Colors.white),
             ),
           ],
         ),
@@ -373,35 +298,37 @@ class _ProductListScreenState extends State<ProductListScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const StoreBrand(size: 27),
-        actions: [
-          const NotificationBell(),
-          const CartWishlistBadges(),
-          const SizedBox(width: 4),
+        actions: const [
+          NotificationBell(),
+          CartWishlistBadges(),
+          SizedBox(width: 4),
         ],
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: TextField(
-              controller: _searchController,
-              onSubmitted: (_) => _searchProduct(),
-              decoration: InputDecoration(
-                hintText: context.tr('searchHint'),
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: IconButton(
-                  onPressed: _searchProduct,
-                  icon: const Icon(Icons.arrow_forward),
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(2),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1220),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                child: TextField(
+                  controller: _searchController,
+                  onSubmitted: (_) => _searchProduct(),
+                  decoration: InputDecoration(
+                    hintText: context.tr('searchHint'),
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: IconButton(
+                      onPressed: _searchProduct,
+                      icon: const Icon(Icons.arrow_forward),
+                    ),
+                  ),
                 ),
               ),
-            ),
+              _buildCategoryFilter(),
+              Expanded(child: _buildBody()),
+            ],
           ),
-          _buildCategoryFilter(),
-          Expanded(child: _buildBody()),
-        ],
+        ),
       ),
     );
   }

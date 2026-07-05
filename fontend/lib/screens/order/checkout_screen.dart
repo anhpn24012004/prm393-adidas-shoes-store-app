@@ -98,7 +98,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
 
-    if (!_hasValidGhnShipping) {
+    final addressId = _selectedAddressId;
+    final district = _selectedDistrict;
+    final ward = _selectedWard;
+    final shippingFee = _calculatedShippingFee;
+
+    if (addressId == null ||
+        district == null ||
+        ward == null ||
+        shippingFee == null ||
+        shippingFee <= 0) {
       _showError(
         _ghnError ??
             'Vui lòng chọn đầy đủ tỉnh, quận/huyện và phường/xã để tính phí vận chuyển.',
@@ -112,19 +121,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     try {
       final order = await _orderService.createOrder(
-        addressId: _selectedAddressId!,
+        addressId: addressId,
         paymentMethod: _paymentMethod,
         note: _noteController.text.trim().isEmpty
             ? null
             : _noteController.text.trim(),
         buyNowVariantId: _buyNowVariantId,
         buyNowQuantity: _buyNowQuantity,
-        toDistrictId: _selectedDistrict!.districtId,
-        toWardCode: _selectedWard!.wardCode,
+        toDistrictId: district.districtId,
+        toWardCode: ward.wardCode,
         toProvinceName: _selectedProvince?.provinceName,
-        toDistrictName: _selectedDistrict!.districtName,
-        toWardName: _selectedWard!.wardName,
-        shippingFee: _calculatedShippingFee!,
+        toDistrictName: district.districtName,
+        toWardName: ward.wardName,
+        shippingFee: shippingFee,
       );
 
       if (!mounted) return;
@@ -439,7 +448,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         imageUrl: _buyNowImageUrl,
         variantLabel: [
           if (_buyNowSize?.isNotEmpty == true) 'Size $_buyNowSize',
-          if (_buyNowColor?.isNotEmpty == true) _buyNowColor!,
+          if (_buyNowColor?.isNotEmpty == true) _buyNowColor ?? '',
         ].join(' / '),
       );
     }
@@ -488,7 +497,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           );
         }
 
-        final summary = snapshot.data!;
+        final summary = snapshot.data;
+        if (summary == null) {
+          return const Text('Không thể tải tóm tắt đơn hàng.');
+        }
+
+        final summaryImageUrl = summary.imageUrl?.trim();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -499,13 +513,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ),
             const SizedBox(height: 10),
             if (!compact) ...[
-              if (summary.imageUrl?.isNotEmpty == true) ...[
+              if (summaryImageUrl != null && summaryImageUrl.isNotEmpty) ...[
                 Row(
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(8),
                       child: Image.network(
-                        AppConfig.resolveImageUrl(summary.imageUrl!),
+                        AppConfig.resolveImageUrl(summaryImageUrl),
                         width: 64,
                         height: 64,
                         fit: BoxFit.cover,
@@ -520,7 +534,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           Text(summary.title),
                           if (summary.variantLabel?.isNotEmpty == true)
                             Text(
-                              summary.variantLabel!,
+                              summary.variantLabel ?? '',
                               style: const TextStyle(color: Colors.black54),
                             ),
                         ],
@@ -592,40 +606,45 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   bool get _hasValidGhnShipping {
+    final shippingFee = _calculatedShippingFee;
     return _selectedDistrict != null &&
         _selectedWard != null &&
-        _calculatedShippingFee != null &&
-        _calculatedShippingFee! > 0;
+        shippingFee != null &&
+        shippingFee > 0;
   }
 
   Future<void> _applySavedAddress(UserAddress address) async {
+    final provinceId = address.provinceId;
+    final districtId = address.districtId;
+    final wardCode = address.wardCode?.trim();
     final hasGhnCodes =
-        address.provinceId != null &&
-        address.provinceId! > 0 &&
-        address.districtId != null &&
-        address.districtId! > 0 &&
-        address.wardCode?.trim().isNotEmpty == true;
+        provinceId != null &&
+        provinceId > 0 &&
+        districtId != null &&
+        districtId > 0 &&
+        wardCode != null &&
+        wardCode.isNotEmpty;
 
     setState(() {
       _selectedAddressId = address.addressId;
       _selectedAddress = address;
-      _selectedProvince = hasGhnCodes && address.provinceId != null
+      _selectedProvince = hasGhnCodes
           ? GhnProvince(
-              provinceId: address.provinceId!,
+              provinceId: provinceId,
               provinceName: address.city ?? '',
             )
           : null;
       _selectedDistrict = hasGhnCodes
           ? GhnDistrict(
-              districtId: address.districtId!,
-              provinceId: address.provinceId ?? 0,
+              districtId: districtId,
+              provinceId: provinceId,
               districtName: address.district ?? '',
             )
           : null;
       _selectedWard = hasGhnCodes
           ? GhnWard(
-              wardCode: address.wardCode!,
-              districtId: address.districtId!,
+              wardCode: wardCode,
+              districtId: districtId,
               wardName: address.ward ?? '',
             )
           : null;
@@ -638,8 +657,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     if (hasGhnCodes) {
       await _calculateShippingFee(
-        districtId: address.districtId!,
-        wardCode: address.wardCode!,
+        districtId: districtId,
+        wardCode: wardCode,
       );
     }
   }
@@ -710,10 +729,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       _summaryFuture = _loadCheckoutSummary();
     });
 
-    if (ward == null || _selectedDistrict == null) return;
+    final district = _selectedDistrict;
+    if (ward == null || district == null) return;
 
     await _calculateShippingFee(
-      districtId: _selectedDistrict!.districtId,
+      districtId: district.districtId,
       wardCode: ward.wardCode,
     );
 
@@ -822,10 +842,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Widget _buildGhnShippingSelector() {
     final address = _selectedAddress;
     final hasGhnCodes =
-        address?.provinceId != null &&
-        address!.provinceId! > 0 &&
-        address.districtId != null &&
-        address.districtId! > 0 &&
+        address != null &&
+        (address.provinceId ?? 0) > 0 &&
+        (address.districtId ?? 0) > 0 &&
         address.wardCode?.trim().isNotEmpty == true;
 
     return FutureBuilder<List<GhnProvince>>(
@@ -946,9 +965,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             if (_isCalculatingShippingFee)
               const LinearProgressIndicator()
             else if (_ghnError != null)
-              Text(_ghnError!, style: const TextStyle(color: Colors.red))
+              Text(_ghnError ?? '', style: const TextStyle(color: Colors.red))
             else if (_calculatedShippingFee != null)
-              Text('Shipping fee: ${formatVnd(_calculatedShippingFee!)}')
+              Text('Shipping fee: ${formatVnd(_calculatedShippingFee ?? 0)}')
             else if (hasGhnCodes)
               const Text('Calculating GHN shipping fee...'),
           ],
@@ -1070,10 +1089,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   String get _paymentButtonLabel {
     return switch (_paymentMethod) {
-      'VNPAY' => 'Pay with VNPAY',
-      'PAYPAL' => 'Pay with PayPal',
-      'SEPAY' => 'Pay with SePay',
-      _ => 'Place order',
+      'VNPAY' => 'Thanh toán VNPAY',
+      'PAYPAL' => 'Thanh toán PayPal',
+      'SEPAY' => 'Thanh toán SePay',
+      _ => 'Đặt hàng',
     };
   }
 
@@ -1122,7 +1141,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     width: double.infinity,
                     child: TextButton(
                       onPressed: _isSubmitting ? null : _backToReview,
-                      child: const Text('Back to review'),
+                      child: const Text('Quay lại kiểm tra'),
                     ),
                   ),
                 ],
@@ -1159,7 +1178,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     height: 48,
                     child: ElevatedButton(
                       onPressed: _isSubmitting ? null : _continueToPayment,
-                      child: const Text('Continue to payment'),
+                      child: const Text('Tiếp tục thanh toán'),
                     ),
                   ),
                 ],

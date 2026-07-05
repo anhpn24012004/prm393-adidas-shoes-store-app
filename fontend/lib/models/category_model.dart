@@ -13,10 +13,16 @@ class CategoryModel {
 
   factory CategoryModel.fromJson(Map<String, dynamic> json) {
     return CategoryModel(
-      categoryId: json['categoryId'],
-      categoryName: json['categoryName'] ?? '',
+      categoryId: _parseInt(json['categoryId']),
+      categoryName: json['categoryName']?.toString() ?? '',
       description: json['description'],
-      productCount: json['productCount'] ?? 0,
+      productCount: _parseInt(json['productCount']),
     );
+  }
+
+  static int _parseInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 }
