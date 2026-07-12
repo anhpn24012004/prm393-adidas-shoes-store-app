@@ -54,15 +54,54 @@ import 'widgets/admin_route_guard.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  runApp(const AdidasShoesStoreApp());
+}
+
+Future<void> _initializeApp() async {
   AppConfig.currentUserId = await AuthStorage().getUserId() ?? 0;
   await AppLocaleController.instance.load();
   await InventoryRealtimeService.instance.initialize();
   await NotificationRealtimeService.instance.initialize();
-  runApp(const AdidasShoesStoreApp());
 }
 
-class AdidasShoesStoreApp extends StatelessWidget {
+class AdidasShoesStoreApp extends StatefulWidget {
   const AdidasShoesStoreApp({super.key});
+
+  @override
+  State<AdidasShoesStoreApp> createState() => _AdidasShoesStoreAppState();
+}
+
+class _AdidasShoesStoreAppState extends State<AdidasShoesStoreApp> {
+  late final Future<void> _initialization = _initializeApp();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<void>(
+      future: _initialization,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const MaterialApp(
+            debugShowCheckedModeBanner: false,
+            home: BrandingSplashScreen(),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            home: StartupErrorScreen(error: snapshot.error),
+          );
+        }
+
+        return const AppRoutes();
+      },
+    );
+  }
+}
+
+class AppRoutes extends StatelessWidget {
+  const AppRoutes({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -128,45 +167,52 @@ class AdidasShoesStoreApp extends StatelessWidget {
           '/address-form': (context) => const AddressFormScreen(),
           '/settings': (context) => const SettingsScreen(),
           '/notifications': (context) => const NotificationsScreen(),
-          '/admin/products': (context) => AdminRouteGuard(
-                builder: (_) => AdminProductListScreen(),
-              ),
-          '/admin/dashboard': (context) => AdminRouteGuard(
-                builder: (_) => AdminDashboardScreen(),
-              ),
-          '/admin/products/create': (context) =>
-              AdminRouteGuard(
-                builder: (_) => AdminProductFormScreen(createMode: true),
-              ),
+          '/admin/products': (context) =>
+              AdminRouteGuard(builder: (_) => AdminProductListScreen()),
+          '/admin/dashboard': (context) =>
+              AdminRouteGuard(builder: (_) => AdminDashboardScreen()),
+          '/admin/products/create': (context) => AdminRouteGuard(
+            builder: (_) => AdminProductFormScreen(createMode: true),
+          ),
           '/admin/products/edit': (context) {
             return AdminRouteGuard(
               builder: (guardContext) {
-                final argument = ModalRoute.of(guardContext)?.settings.arguments;
+                final argument = ModalRoute.of(
+                  guardContext,
+                )?.settings.arguments;
                 if (argument is ProductRouteArgs) {
                   return AdminProductFormScreen(product: argument.product);
                 }
-                throw ArgumentError('ProductRouteArgs required for edit product');
+                throw ArgumentError(
+                  'ProductRouteArgs required for edit product',
+                );
               },
             );
           },
           '/admin/products/images': (context) {
             return AdminRouteGuard(
               builder: (guardContext) {
-                final argument = ModalRoute.of(guardContext)?.settings.arguments;
+                final argument = ModalRoute.of(
+                  guardContext,
+                )?.settings.arguments;
                 if (argument is ProductRouteArgs) {
                   return AdminProductImageListScreen(
                     product: argument.product,
                     fromCreateFlow: argument.fromCreateFlow,
                   );
                 }
-                throw ArgumentError('ProductRouteArgs required for product images');
+                throw ArgumentError(
+                  'ProductRouteArgs required for product images',
+                );
               },
             );
           },
           '/admin/products/variants': (context) {
             return AdminRouteGuard(
               builder: (guardContext) {
-                final argument = ModalRoute.of(guardContext)?.settings.arguments;
+                final argument = ModalRoute.of(
+                  guardContext,
+                )?.settings.arguments;
                 if (argument is ProductRouteArgs) {
                   return AdminProductFormScreen(product: argument.product);
                 }
@@ -176,40 +222,112 @@ class AdidasShoesStoreApp extends StatelessWidget {
               },
             );
           },
-          '/admin/users': (context) => AdminRouteGuard(
-                builder: (_) => AdminUserListScreen(),
-              ),
-          '/admin/orders': (context) => AdminRouteGuard(
-                builder: (_) => AdminOrderListScreen(),
-              ),
+          '/admin/users': (context) =>
+              AdminRouteGuard(builder: (_) => AdminUserListScreen()),
+          '/admin/orders': (context) =>
+              AdminRouteGuard(builder: (_) => AdminOrderListScreen()),
           '/admin/refund-requests': (context) =>
-              AdminRouteGuard(
-                builder: (_) => AdminRefundRequestsScreen(),
-              ),
+              AdminRouteGuard(builder: (_) => AdminRefundRequestsScreen()),
           '/admin/returns-refunds': (context) =>
-              AdminRouteGuard(
-                builder: (_) => AdminReturnsRefundsScreen(),
-              ),
-          '/admin/categories': (context) => AdminRouteGuard(
-                builder: (_) => AdminCategoryListScreen(),
-              ),
+              AdminRouteGuard(builder: (_) => AdminReturnsRefundsScreen()),
+          '/admin/categories': (context) =>
+              AdminRouteGuard(builder: (_) => AdminCategoryListScreen()),
           '/create-review': (context) => const CreateReviewScreen(),
-          '/admin/shipments': (context) => AdminRouteGuard(
-                builder: (_) => AdminShipmentListScreen(),
-              ),
+          '/admin/shipments': (context) =>
+              AdminRouteGuard(builder: (_) => AdminShipmentListScreen()),
           '/admin/shipments/detail': (context) =>
-              AdminRouteGuard(
-                builder: (_) => AdminShipmentDetailScreen(),
-              ),
-          '/admin/shipments/create': (context) =>
-              AdminRouteGuard(
-                builder: (_) => AdminShipmentFormScreen(createMode: true),
-              ),
-          '/admin/marketing-notifications': (context) =>
-              AdminRouteGuard(
-                builder: (_) => AdminMarketingNotificationScreen(),
-              ),
+              AdminRouteGuard(builder: (_) => AdminShipmentDetailScreen()),
+          '/admin/shipments/create': (context) => AdminRouteGuard(
+            builder: (_) => AdminShipmentFormScreen(createMode: true),
+          ),
+          '/admin/marketing-notifications': (context) => AdminRouteGuard(
+            builder: (_) => AdminMarketingNotificationScreen(),
+          ),
         },
+      ),
+    );
+  }
+}
+
+class BrandingSplashScreen extends StatelessWidget {
+  const BrandingSplashScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/branding/splash_bg.png'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset(
+                'assets/branding/splash_logo.png',
+                width: 160,
+                fit: BoxFit.contain,
+              ),
+              const SizedBox(height: 28),
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.black87),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class StartupErrorScreen extends StatelessWidget {
+  const StartupErrorScreen({super.key, required this.error});
+
+  final Object? error;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/branding/splash_bg.png'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Image.asset(
+                  'assets/branding/splash_logo.png',
+                  width: 140,
+                  fit: BoxFit.contain,
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'Unable to start the app. Please try again.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.black87,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

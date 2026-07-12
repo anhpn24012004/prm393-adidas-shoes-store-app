@@ -195,9 +195,11 @@ namespace AdidasShoesStore.Api.Controllers
 
                 _logger.LogInformation("SePay webhook controller rawBody: {RawBody}", rawBody);
 
+                var authorization = Request.Headers["Authorization"].FirstOrDefault();
+
                 var result = await _sePayService.ProcessWebhookAsync(
                     rawBody,
-                    Request.Headers.Authorization.FirstOrDefault(),
+                    authorization,
                     Request.Headers["X-SePay-Signature"].FirstOrDefault(),
                     Request.Headers["X-SePay-Timestamp"].FirstOrDefault()
                 );

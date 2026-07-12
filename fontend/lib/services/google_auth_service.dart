@@ -13,25 +13,25 @@ class GoogleAuthService {
 
   static final instance = GoogleAuthService._();
 
-  static const _iosClientId = String.fromEnvironment('GOOGLE_IOS_CLIENT_ID');
+  static const _productionWebClientId =
+      '460139502851-fkhhmn6sie91ms831lenmf3o31ju5u7k.apps.googleusercontent.com';
+  static const _androidClientId =
+      '460139502851-hbv6pbmrbp9gdek6u4g3sje82ee78qcq.apps.googleusercontent.com';
 
-  final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
   final AuthService _authService = AuthService();
+
+  GoogleSignIn? _googleSignIn;
   Future<void>? _initialization;
 
-  Stream<GoogleSignInAuthenticationEvent> get authenticationEvents =>
-      _googleSignIn.authenticationEvents;
-
-  bool get supportsAuthenticate => _googleSignIn.supportsAuthenticate();
-
   Future<void> initialize() {
-    final initialization = _initialization;
-    if (initialization != null) {
-      return initialization;
+    final existing = _initialization;
+    if (existing != null) {
+      return existing;
     }
 
     final pending = _initialize();
     _initialization = pending;
+
     return pending.catchError((Object error) {
       _initialization = null;
       throw error;
@@ -50,35 +50,65 @@ class GoogleAuthService {
     }
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final clientId = data['clientId']?.toString() ?? '';
-    if (data['configured'] != true || clientId.isEmpty) {
+    final webClientId = _resolveWebClientId(data);
+
+    if (data['configured'] != true || webClientId.isEmpty) {
       throw StateError(
         'Google Sign-In has not been configured on the backend.',
       );
     }
 
-    if (kIsWeb) {
-      await _googleSignIn.initialize(clientId: clientId);
-      return;
-    }
-
-    await _googleSignIn.initialize(
-      clientId: _iosClientId.isEmpty ? null : _iosClientId,
-      serverClientId: clientId,
+    _googleSignIn = GoogleSignIn(
+      scopes: const ['email', 'profile'],
+      clientId: kIsWeb ? webClientId : null,
+      serverClientId: kIsWeb ? null : webClientId,
     );
   }
 
-  Future<void> authenticate() async {
-    await initialize();
-    await _googleSignIn.authenticate();
+  String _resolveWebClientId(Map<String, dynamic> data) {
+    final clientId = data['clientId']?.toString().trim() ?? '';
+
+    if (clientId == _androidClientId) {
+      throw StateError(
+        'Backend returned the Android OAuth client ID. Android Google Sign-In '
+        'must use the Web Client ID as serverClientId.',
+      );
+    }
+
+    if (clientId.isNotEmpty && clientId != _productionWebClientId) {
+      throw StateError(
+        'Backend returned an unexpected Google OAuth client ID.',
+      );
+    }
+
+    return clientId;
   }
 
-  Future<AuthSession> exchangeAccount(GoogleSignInAccount account) async {
-    final idToken = account.authentication.idToken;
+  Future<AuthSession> signIn() async {
+    await initialize();
+
+    final googleSignIn = _googleSignIn;
+    if (googleSignIn == null) {
+      throw StateError('Google Sign-In has not been initialized.');
+    }
+
+    final account = await googleSignIn.signIn();
+
+    if (account == null) {
+      throw StateError('Google sign-in was canceled.');
+    }
+
+    final auth = await account.authentication;
+    final idToken = auth.idToken;
+
     if (idToken == null || idToken.isEmpty) {
       throw StateError('Google did not return an ID token.');
     }
 
     return _authService.googleLogin(idToken);
+  }
+
+  Future<void> signOut() async {
+    await _googleSignIn?.signOut();
   }
 }

@@ -1,4 +1,4 @@
-package com.example.adidas_shoes_store_app
+package com.lan.adidasshoesstore
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -102,7 +102,10 @@ public class SePayService : ISePayService
                 !string.IsNullOrWhiteSpace(timestamp));
 
             if (!VerifyWebhook(rawBody, authorization, signature, timestamp))
+            {
+                LogWebhookAuthFailure(authorization);
                 return PaymentServiceResult<PaymentStatusDto?>.Fail("Invalid SePay webhook authentication", "Unauthorized");
+            }
 
             SePayWebhookDto? payload;
             try
@@ -325,11 +328,70 @@ public class SePayService : ISePayService
             return CheckSignature(rawBody);
         }
 
+        return VerifyApiKey(authorization);
+    }
+
+    private bool VerifyApiKey(string? authorization)
+    {
         if (string.IsNullOrWhiteSpace(_settings.ApiKey))
             return false;
 
-        var expectedAuthorization = $"Apikey {_settings.ApiKey}";
-        return string.Equals(authorization, expectedAuthorization, StringComparison.Ordinal);
+        var expectedApiKey = _settings.ApiKey.Trim();
+
+        var auth = authorization?.Trim();
+        if (string.IsNullOrWhiteSpace(auth))
+            return false;
+
+        if (string.Equals(auth, expectedApiKey, StringComparison.Ordinal))
+            return true;
+
+        var parts = auth.Split(
+            new[] { ' ', '\t', '\r', '\n' },
+            StringSplitOptions.RemoveEmptyEntries);
+
+        if (parts.Length >= 2)
+        {
+            var scheme = parts[0].Trim();
+            var providedKey = string.Join("", parts.Skip(1)).Trim();
+
+            if (scheme.Equals("Apikey", StringComparison.OrdinalIgnoreCase) ||
+                scheme.Equals("ApiKey", StringComparison.OrdinalIgnoreCase) ||
+                scheme.Equals("Bearer", StringComparison.OrdinalIgnoreCase))
+            {
+                return string.Equals(providedKey, expectedApiKey, StringComparison.Ordinal);
+            }
+        }
+
+        return false;
+    }
+
+    private void LogWebhookAuthFailure(string? authorization)
+    {
+        var auth = authorization?.Trim();
+        var apiKey = _settings.ApiKey?.Trim();
+        var webhookSecret = _settings.WebhookSecret?.Trim();
+
+        _logger.LogWarning(
+            "SePay webhook auth failed. AuthPresent={AuthPresent}, Scheme={Scheme}, AuthLength={AuthLength}, ApiKeyConfigured={ApiKeyConfigured}, ApiKeyLength={ApiKeyLength}, WebhookSecretConfigured={WebhookSecretConfigured}, WebhookSecretLength={WebhookSecretLength}",
+            !string.IsNullOrWhiteSpace(auth),
+            GetAuthorizationScheme(auth),
+            auth?.Length ?? 0,
+            !string.IsNullOrWhiteSpace(apiKey),
+            apiKey?.Length ?? 0,
+            !string.IsNullOrWhiteSpace(webhookSecret),
+            webhookSecret?.Length ?? 0);
+    }
+
+    private static string GetAuthorizationScheme(string? authorization)
+    {
+        if (string.IsNullOrWhiteSpace(authorization))
+            return "none";
+
+        var parts = authorization.Split(
+            new[] { ' ', '\t', '\r', '\n' },
+            StringSplitOptions.RemoveEmptyEntries);
+
+        return parts.Length >= 2 ? parts[0] : "raw";
     }
 
     private async Task ClearUserCartAsync(int userId)
