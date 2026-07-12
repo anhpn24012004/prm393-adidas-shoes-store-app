@@ -117,7 +117,7 @@ namespace AdidasShoesStore.Api.Controllers
 
             var result = await _paymentService.ProcessPayPalReturnAsync(queryParameters);
 
-            return Redirect(BuildPaymentResultUrl(result.OrderId, result.Success));
+            return Redirect(BuildPaymentResultUrl(result.OrderId, result.Success, queryParameters));
         }
 
         [AllowAnonymous]
@@ -131,7 +131,7 @@ namespace AdidasShoesStore.Api.Controllers
 
             var result = await _paymentService.ProcessPayPalCancelAsync(queryParameters);
 
-            return Redirect(BuildPaymentResultUrl(result.OrderId, false));
+            return Redirect(BuildPaymentResultUrl(result.OrderId, false, queryParameters));
         }
 
         [Authorize]
@@ -257,9 +257,17 @@ namespace AdidasShoesStore.Api.Controllers
             return int.TryParse(value, out userId);
         }
 
-        private string BuildPaymentResultUrl(int? orderId, bool success)
+        private string BuildPaymentResultUrl(
+            int? orderId,
+            bool success,
+            IReadOnlyDictionary<string, string>? queryParameters = null)
         {
-            var baseUrl = _configuration["Frontend:PaymentResultUrl"];
+            var baseUrl = GetFrontendReturnUrl(queryParameters);
+            if (string.IsNullOrWhiteSpace(baseUrl))
+            {
+                baseUrl = _configuration["Frontend:PaymentResultUrl"];
+            }
+
             if (string.IsNullOrWhiteSpace(baseUrl))
             {
                 baseUrl = "/payment-result";
@@ -270,6 +278,22 @@ namespace AdidasShoesStore.Api.Controllers
             var orderIdValue = orderId?.ToString(CultureInfo.InvariantCulture) ?? "0";
 
             return $"{baseUrl}{separator}orderId={Uri.EscapeDataString(orderIdValue)}&status={status}";
+        }
+
+        private static string? GetFrontendReturnUrl(
+            IReadOnlyDictionary<string, string>? queryParameters)
+        {
+            if (queryParameters == null ||
+                !queryParameters.TryGetValue("frontendReturnUrl", out var value) ||
+                string.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+
+            return Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+                (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+                    ? uri.ToString()
+                    : null;
         }
     }
 }

@@ -65,7 +65,7 @@ public partial class AdidasShoesStoreContext : DbContext
         if (!optionsBuilder.IsConfigured)
         {
             optionsBuilder.UseSqlServer(
-                "Server=localhost;Database=AdidasShoesStore;Trusted_Connection=True;TrustServerCertificate=True;"
+                "Server=localhost;Database=AdidasShoesStore;Trusted_Connection=True;TrustServerCertificate=True;Encrypt=False;"
             );
         }
     }

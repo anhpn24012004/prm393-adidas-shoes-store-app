@@ -80,7 +80,7 @@ namespace AdidasShoesStore.Api.Migrations
                     b.HasIndex(new[] { "UserId" }, "UQ__Carts__1788CC4DD084CB69")
                         .IsUnique();
 
-                    b.ToTable("Carts");
+                    b.ToTable("Carts", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.CartItem", b =>
@@ -107,7 +107,7 @@ namespace AdidasShoesStore.Api.Migrations
 
                     b.HasIndex("VariantId");
 
-                    b.ToTable("CartItems");
+                    b.ToTable("CartItems", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.Category", b =>
@@ -130,7 +130,7 @@ namespace AdidasShoesStore.Api.Migrations
                     b.HasKey("CategoryId")
                         .HasName("PK__Categori__19093A0BC5FCE180");
 
-                    b.ToTable("Categories");
+                    b.ToTable("Categories", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.Notification", b =>
@@ -331,7 +331,7 @@ namespace AdidasShoesStore.Api.Migrations
                     b.HasIndex(new[] { "OrderCode" }, "UQ__Orders__999B5229F20410BF")
                         .IsUnique();
 
-                    b.ToTable("Orders");
+                    b.ToTable("Orders", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.OrderItem", b =>
@@ -376,7 +376,7 @@ namespace AdidasShoesStore.Api.Migrations
 
                     b.HasIndex("VariantId");
 
-                    b.ToTable("OrderItems");
+                    b.ToTable("OrderItems", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.Payment", b =>
@@ -438,7 +438,7 @@ namespace AdidasShoesStore.Api.Migrations
                     b.HasIndex(new[] { "OrderId" }, "UQ__Payments__C3905BCE48FC4ECF")
                         .IsUnique();
 
-                    b.ToTable("Payments");
+                    b.ToTable("Payments", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.Product", b =>
@@ -495,7 +495,7 @@ namespace AdidasShoesStore.Api.Migrations
 
                     b.HasIndex("CategoryId");
 
-                    b.ToTable("Products");
+                    b.ToTable("Products", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.ProductImage", b =>
@@ -524,7 +524,7 @@ namespace AdidasShoesStore.Api.Migrations
 
                     b.HasIndex("ProductId");
 
-                    b.ToTable("ProductImages");
+                    b.ToTable("ProductImages", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.ProductVariant", b =>
@@ -582,7 +582,7 @@ namespace AdidasShoesStore.Api.Migrations
                         .IsUnique()
                         .HasFilter("[SKU] IS NOT NULL");
 
-                    b.ToTable("ProductVariants");
+                    b.ToTable("ProductVariants", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.Refund", b =>
@@ -626,7 +626,7 @@ namespace AdidasShoesStore.Api.Migrations
                     b.HasIndex(new[] { "ReturnRequestId" }, "UQ__Refunds__0CCD2598112CDBB9")
                         .IsUnique();
 
-                    b.ToTable("Refunds");
+                    b.ToTable("Refunds", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.RefundRequest", b =>
@@ -717,7 +717,7 @@ namespace AdidasShoesStore.Api.Migrations
                     b.HasIndex(new[] { "RequestCode" }, "UQ_RefundRequests_RequestCode")
                         .IsUnique();
 
-                    b.ToTable("RefundRequests");
+                    b.ToTable("RefundRequests", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.ReturnItem", b =>
@@ -754,7 +754,7 @@ namespace AdidasShoesStore.Api.Migrations
 
                     b.HasIndex("ReturnRequestId");
 
-                    b.ToTable("ReturnItems");
+                    b.ToTable("ReturnItems", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.ReturnRequest", b =>
@@ -867,7 +867,7 @@ namespace AdidasShoesStore.Api.Migrations
                     b.HasIndex(new[] { "RequestCode" }, "UQ_ReturnRequests_RequestCode")
                         .IsUnique();
 
-                    b.ToTable("ReturnRequests");
+                    b.ToTable("ReturnRequests", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.Review", b =>
@@ -907,7 +907,7 @@ namespace AdidasShoesStore.Api.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Reviews");
+                    b.ToTable("Reviews", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.Role", b =>
@@ -929,7 +929,7 @@ namespace AdidasShoesStore.Api.Migrations
                     b.HasIndex(new[] { "RoleName" }, "UQ__Roles__8A2B616015CC2BBD")
                         .IsUnique();
 
-                    b.ToTable("Roles");
+                    b.ToTable("Roles", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.Shipment", b =>
@@ -981,7 +981,7 @@ namespace AdidasShoesStore.Api.Migrations
                     b.HasIndex(new[] { "OrderId" }, "UQ__Shipment__C3905BCEA0118E11")
                         .IsUnique();
 
-                    b.ToTable("Shipments");
+                    b.ToTable("Shipments", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.User", b =>
@@ -1057,7 +1057,7 @@ namespace AdidasShoesStore.Api.Migrations
                     b.HasIndex(new[] { "Email" }, "UQ__Users__A9D10534CD838107")
                         .IsUnique();
 
-                    b.ToTable("Users");
+                    b.ToTable("Users", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.UserAddress", b =>
@@ -1118,7 +1118,7 @@ namespace AdidasShoesStore.Api.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("UserAddresses");
+                    b.ToTable("UserAddresses", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.Wishlist", b =>
@@ -1152,7 +1152,7 @@ namespace AdidasShoesStore.Api.Migrations
 
                     b.HasIndex("VariantId");
 
-                    b.ToTable("Wishlists");
+                    b.ToTable("Wishlists", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.AirecommendationLog", b =>

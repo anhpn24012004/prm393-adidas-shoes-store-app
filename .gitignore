@@ -53,6 +53,8 @@ app.*.map.json
 
 **/bin/
 **/obj/.vs/
+**/.msbuild-tmp/
+**/VBCSCompiler/
 bin/
 obj/
 
