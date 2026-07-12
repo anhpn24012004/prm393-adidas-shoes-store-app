@@ -12,6 +12,9 @@ using Microsoft.OpenApi.Models;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
 
 // Add services to the container
 builder.Services.AddControllers();
@@ -22,22 +25,23 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("FrontendOnly", policy =>
     {
+        if (builder.Environment.IsDevelopment())
+        {
+            policy.SetIsOriginAllowed(origin =>
+                Uri.TryCreate(origin, UriKind.Absolute, out var uri) &&
+                (uri.Host == "localhost" ||
+                 uri.Host == "127.0.0.1" ||
+                 uri.Host == "10.0.2.2"))
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+
+            return;
+        }
+
         var origins = builder.Configuration
             .GetSection("AllowedOrigins")
             .Get<string[]>() ?? Array.Empty<string>();
-
-        if (origins.Length == 0 && builder.Environment.IsDevelopment())
-        {
-            origins =
-            [
-                "http://localhost:1859",
-                "http://localhost:3000",
-                "http://localhost:5209",
-                "http://127.0.0.1:1859",
-                "http://127.0.0.1:3000",
-                "http://127.0.0.1:5209"
-            ];
-        }
 
         policy.WithOrigins(origins)
               .AllowAnyHeader()
@@ -185,49 +189,59 @@ app.MapHub<InventoryHub>("/hubs/inventory");
 // Seed admin in Development
 if (app.Environment.IsDevelopment())
 {
-    using var scope = app.Services.CreateScope();
-    var context = scope.ServiceProvider.GetRequiredService<AdidasShoesStoreContext>();
-
-    var adminRole = await context.Roles
-        .FirstOrDefaultAsync(role => role.RoleName == "Admin");
-
-    if (adminRole == null)
+    try
     {
-        adminRole = new Role
+        using var scope = app.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AdidasShoesStoreContext>();
+
+        var adminRole = await context.Roles
+            .FirstOrDefaultAsync(role => role.RoleName == "Admin");
+
+        if (adminRole == null)
         {
-            RoleName = "Admin"
-        };
+            adminRole = new Role
+            {
+                RoleName = "Admin"
+            };
 
-        context.Roles.Add(adminRole);
-        await context.SaveChangesAsync();
-    }
+            context.Roles.Add(adminRole);
+            await context.SaveChangesAsync();
+        }
 
-    var adminEmail = "admin@adidas.com";
+        var adminEmail = "admin@adidas.com";
 
-    var admin = await context.Users
-        .FirstOrDefaultAsync(user => user.Email == adminEmail);
+        var admin = await context.Users
+            .FirstOrDefaultAsync(user => user.Email == adminEmail);
 
-    if (admin == null)
-    {
-        context.Users.Add(new User
+        if (admin == null)
         {
-            FullName = "Admin User",
-            Email = adminEmail,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword("123456"),
-            Phone = "0900000000",
-            RoleId = adminRole.RoleId,
-            IsActive = true,
-            CreatedAt = DateTime.Now
-        });
+            context.Users.Add(new User
+            {
+                FullName = "Admin User",
+                Email = adminEmail,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("123456"),
+                Phone = "0900000000",
+                RoleId = adminRole.RoleId,
+                IsActive = true,
+                CreatedAt = DateTime.Now
+            });
 
-        await context.SaveChangesAsync();
+            await context.SaveChangesAsync();
+        }
+        else
+        {
+            admin.RoleId = adminRole.RoleId;
+            admin.IsActive = true;
+
+            await context.SaveChangesAsync();
+        }
     }
-    else
+    catch (Exception ex)
     {
-        admin.RoleId = adminRole.RoleId;
-        admin.IsActive = true;
-
-        await context.SaveChangesAsync();
+        app.Logger.LogWarning(
+            ex,
+            "Could not seed development admin account. The API will still start, but database-backed endpoints may fail until the connection string is fixed."
+        );
     }
 }
 

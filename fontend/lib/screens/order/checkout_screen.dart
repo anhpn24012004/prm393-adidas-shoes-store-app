@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../config/app_config.dart';
@@ -992,7 +993,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         return;
       }
 
-      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      final opened = await launchUrl(
+        uri,
+        mode: kIsWeb
+            ? LaunchMode.platformDefault
+            : LaunchMode.externalApplication,
+        webOnlyWindowName: kIsWeb ? '_self' : null,
+      );
 
       if (!mounted) return;
 
@@ -1000,12 +1007,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         _showError('Could not open PayPal payment page');
         return;
       }
-
-      Navigator.pushReplacementNamed(
-        context,
-        '/payment-result',
-        arguments: order.orderId,
-      );
     } catch (e) {
       if (!mounted) return;
 
@@ -1081,6 +1082,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         ),
         paymentOption('COD', 'COD'),
         paymentOption('SEPAY', 'SePay'),
+        paymentOption('PAYPAL', 'PayPal'),
       ],
     );
   }

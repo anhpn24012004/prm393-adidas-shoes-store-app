@@ -1,5 +1,4 @@
-using System;
-using Microsoft.EntityFrameworkCore.Migrations;
+﻿using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -9,29 +8,13 @@ namespace AdidasShoesStore.Api.Migrations
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "ResetPasswordOtp",
-                table: "Users",
-                type: "nvarchar(6)",
-                maxLength: 6,
-                nullable: true);
-
-            migrationBuilder.AddColumn<DateTime>(
-                name: "ResetPasswordOtpExpiredAt",
-                table: "Users",
-                type: "datetime",
-                nullable: true);
+            // Hai cột ResetPasswordOtp và ResetPasswordOtpExpiredAt
+            // đã tồn tại trong database nên không tạo lại.
         }
 
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(
-                name: "ResetPasswordOtp",
-                table: "Users");
-
-            migrationBuilder.DropColumn(
-                name: "ResetPasswordOtpExpiredAt",
-                table: "Users");
+            // Không xóa vì các cột đã tồn tại trước migration này.
         }
     }
 }

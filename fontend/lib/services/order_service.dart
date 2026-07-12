@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/order_model.dart';
@@ -119,13 +120,21 @@ class OrderService {
   }
 
   Future<CreatePayPalPaymentResponse> createPayPalPayment(int orderId) async {
+    final frontendResultUrl = _frontendPaymentResultUrl();
+    final returnUrl = Uri.parse(
+      '${ApiClient.staticBaseUrl}/api/payments/paypal-return',
+    ).replace(queryParameters: {'frontendReturnUrl': frontendResultUrl});
+    final cancelUrl = Uri.parse(
+      '${ApiClient.staticBaseUrl}/api/payments/paypal-cancel',
+    ).replace(queryParameters: {'frontendReturnUrl': frontendResultUrl});
+
     final response = await http.post(
       Uri.parse('${ApiClient.baseUrl}/payments/paypal/create'),
       headers: await _headers(),
       body: jsonEncode({
         'orderId': orderId,
-        'returnUrl': '${ApiClient.staticBaseUrl}/api/payments/paypal-return',
-        'cancelUrl': '${ApiClient.staticBaseUrl}/api/payments/paypal-cancel',
+        'returnUrl': returnUrl.toString(),
+        'cancelUrl': cancelUrl.toString(),
       }),
     );
 
@@ -134,6 +143,19 @@ class OrderService {
     }
 
     throw Exception(_errorMessage(response));
+  }
+
+  String _frontendPaymentResultUrl() {
+    if (kIsWeb && Uri.base.hasScheme && Uri.base.host.isNotEmpty) {
+      return Uri(
+        scheme: Uri.base.scheme,
+        host: Uri.base.host,
+        port: Uri.base.hasPort ? Uri.base.port : null,
+        path: '/payment-result',
+      ).toString();
+    }
+
+    return 'http://localhost:52095/payment-result';
   }
 
   Future<SePayPaymentResponse> createSePayPayment(int orderId) async {
