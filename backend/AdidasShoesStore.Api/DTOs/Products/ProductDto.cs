@@ -12,5 +12,10 @@ public class ProductDto
     public string? Gender { get; set; }
     public string? Material { get; set; }
     public string? MainImageUrl { get; set; }
+    public double AverageRating { get; set; }
+    public int ReviewCount { get; set; }
     public bool IsActive { get; set; }
+    public int ImageCount { get; set; }
+    public int ActiveVariantCount { get; set; }
+    public int TotalStock { get; set; }
 }

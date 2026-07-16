@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../localization/app_localization.dart';
 import '../../models/shipment_model.dart';
 import '../../services/shipment_service.dart';
 
@@ -55,7 +56,7 @@ class _UserShipmentTrackingScreenState
   }
 
   String _formatDate(DateTime? date) {
-    if (date == null) return 'N/A';
+    if (date == null) return context.tr('notAvailable');
 
     return '${date.year.toString().padLeft(4, '0')}-'
         '${date.month.toString().padLeft(2, '0')}-'
@@ -66,10 +67,26 @@ class _UserShipmentTrackingScreenState
 
   String _label(String status) {
     switch (status) {
+      case 'ReadyToPick':
+        return 'Ready to pick';
+      case 'Picking':
+        return 'Picking';
+      case 'Pending':
+        return context.tr('statusPending');
+      case 'Preparing':
+        return context.tr('statusPreparing');
+      case 'Shipped':
+        return context.tr('statusShipped');
       case 'InTransit':
-        return 'In Transit';
+        return context.tr('statusInTransit');
       case 'OutForDelivery':
-        return 'Out for Delivery';
+        return context.tr('statusOutForDelivery');
+      case 'Delivered':
+        return context.tr('statusDelivered');
+      case 'Failed':
+        return context.tr('statusFailed');
+      case 'Returned':
+        return context.tr('statusReturned');
       default:
         return status;
     }
@@ -149,31 +166,39 @@ class _UserShipmentTrackingScreenState
         padding: const EdgeInsets.all(16),
         children: [
           Text(
-            tracking.orderCode ?? 'Shipment Tracking',
+            tracking.orderCode ?? context.tr('trackShipment'),
             style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 4),
-          Text('Order status: ${tracking.orderStatus ?? 'N/A'}'),
+          Text(
+            '${context.tr('orderStatus')}: '
+            '${tracking.orderStatus ?? context.tr('notAvailable')}',
+          ),
           const SizedBox(height: 16),
-          const Text(
-            'Tracking Progress',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          Text(
+            context.tr('trackingProgress'),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
           _buildTimeline(tracking.shipmentStatus),
           const SizedBox(height: 16),
-          _infoRow('Shipment status', tracking.shipmentStatus ?? 'N/A'),
-          _infoRow('Carrier', tracking.carrier ?? 'N/A'),
-          _infoRow('Tracking number', tracking.trackingNumber ?? 'N/A'),
           _infoRow(
-            'Estimated delivery',
+            context.tr('shipmentStatus'),
+            tracking.shipmentStatus == null
+                ? context.tr('notAvailable')
+                : _label(tracking.shipmentStatus!),
+          ),
+          _infoRow(context.tr('carrier'), tracking.carrier ?? context.tr('notAvailable')),
+          _infoRow(context.tr('trackingNumber'), tracking.trackingNumber ?? context.tr('notAvailable')),
+          _infoRow(
+            context.tr('estimatedDelivery'),
             _formatDate(tracking.estimatedDeliveryDate),
           ),
-          _infoRow('Shipped at', _formatDate(tracking.shippedAt)),
-          _infoRow('Delivered at', _formatDate(tracking.deliveredAt)),
-          _infoRow('Receiver', tracking.receiverName ?? 'N/A'),
-          _infoRow('Receiver phone', tracking.receiverPhone ?? 'N/A'),
-          _infoRow('Shipping address', tracking.shippingAddress ?? 'N/A'),
+          _infoRow(context.tr('shippedAt'), _formatDate(tracking.shippedAt)),
+          _infoRow(context.tr('deliveredAt'), _formatDate(tracking.deliveredAt)),
+          _infoRow(context.tr('receiver'), tracking.receiverName ?? context.tr('notAvailable')),
+          _infoRow(context.tr('receiverPhone'), tracking.receiverPhone ?? context.tr('notAvailable')),
+          _infoRow(context.tr('shippingAddress'), tracking.shippingAddress ?? context.tr('notAvailable')),
         ],
       ),
     );
@@ -182,9 +207,9 @@ class _UserShipmentTrackingScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Track Shipment')),
+      appBar: AppBar(title: Text(context.tr('trackShipment'))),
       body: _orderId == null
-          ? const Center(child: Text('Order ID is missing'))
+          ? Center(child: Text(context.tr('orderIdMissing')))
           : FutureBuilder<ShipmentTracking?>(
               future: _trackingFuture,
               builder: (context, snapshot) {
@@ -204,11 +229,11 @@ class _UserShipmentTrackingScreenState
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('Error: $message'),
+                          Text('${context.tr('error')}: $message'),
                           const SizedBox(height: 12),
                           ElevatedButton(
                             onPressed: _refresh,
-                            child: const Text('Retry'),
+                            child: Text(context.tr('retry')),
                           ),
                         ],
                       ),
@@ -219,8 +244,8 @@ class _UserShipmentTrackingScreenState
                 final tracking = snapshot.data;
 
                 if (tracking == null) {
-                  return const Center(
-                    child: Text('Shipment information is not available yet'),
+                  return Center(
+                    child: Text(context.tr('shipmentUnavailable')),
                   );
                 }
 

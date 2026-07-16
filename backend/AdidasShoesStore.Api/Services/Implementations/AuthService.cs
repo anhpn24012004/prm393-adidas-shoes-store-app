@@ -222,6 +222,42 @@ namespace AdidasShoesStore.Api.Services.Implementations
             };
         }
 
+        public async Task<UserProfileDto?> GetProfileAsync(int userId)
+        {
+            var user = await _context.Users
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.UserId == userId);
+
+            return user == null ? null : ToProfileDto(user);
+        }
+
+        public async Task<UserProfileDto?> UpdateProfileAsync(
+            int userId,
+            UpdateProfileDto request)
+        {
+            var user = await _context.Users
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.UserId == userId);
+
+            if (user == null)
+            {
+                return null;
+            }
+
+            user.FullName = request.FullName.Trim();
+            user.Phone = string.IsNullOrWhiteSpace(request.Phone)
+                ? null
+                : request.Phone.Trim();
+            user.Gender = string.IsNullOrWhiteSpace(request.Gender)
+                ? null
+                : request.Gender.Trim();
+            user.DateOfBirth = request.DateOfBirth;
+
+            await _context.SaveChangesAsync();
+
+            return ToProfileDto(user);
+        }
+
         public async Task<bool> ChangePasswordAsync(int userId, ChangePasswordDto request)
         {
             var user = await _context.Users
@@ -265,14 +301,23 @@ namespace AdidasShoesStore.Api.Services.Implementations
 
             if (user == null)
             {
-                return false;
+                return true;
+            }
+
+            var now = DateTime.UtcNow;
+            if (user.ResetPasswordOtpLastSentAt.HasValue &&
+                now - user.ResetPasswordOtpLastSentAt.Value.ToUniversalTime() < TimeSpan.FromSeconds(60))
+            {
+                return true;
             }
 
             var otp = RandomNumberGenerator.GetInt32(100000, 1000000)
                 .ToString();
 
             user.ResetPasswordOtp = otp;
-            user.ResetPasswordOtpExpiredAt = DateTime.Now.AddMinutes(5);
+            user.ResetPasswordOtpExpiredAt = now.AddMinutes(5);
+            user.ResetPasswordOtpLastSentAt = now;
+            user.ResetPasswordOtpFailedAttempts = 0;
 
             await _context.SaveChangesAsync();
             await _emailService.SendOtpEmailAsync(user.Email, otp);
@@ -295,11 +340,21 @@ namespace AdidasShoesStore.Api.Services.Implementations
             if (string.IsNullOrWhiteSpace(user.ResetPasswordOtp) ||
                 user.ResetPasswordOtp != request.Token.Trim())
             {
+                user.ResetPasswordOtpFailedAttempts += 1;
+
+                if (user.ResetPasswordOtpFailedAttempts >= 5)
+                {
+                    user.ResetPasswordOtp = null;
+                    user.ResetPasswordOtpExpiredAt = null;
+                }
+
+                await _context.SaveChangesAsync();
                 return false;
             }
 
             if (user.ResetPasswordOtpExpiredAt == null ||
-                user.ResetPasswordOtpExpiredAt < DateTime.Now)
+                user.ResetPasswordOtpExpiredAt.Value.ToUniversalTime() < DateTime.UtcNow ||
+                user.ResetPasswordOtpFailedAttempts >= 5)
             {
                 return false;
             }
@@ -307,10 +362,26 @@ namespace AdidasShoesStore.Api.Services.Implementations
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
             user.ResetPasswordOtp = null;
             user.ResetPasswordOtpExpiredAt = null;
+            user.ResetPasswordOtpLastSentAt = null;
+            user.ResetPasswordOtpFailedAttempts = 0;
 
             await _context.SaveChangesAsync();
 
             return true;
+        }
+
+        private static UserProfileDto ToProfileDto(User user)
+        {
+            return new UserProfileDto
+            {
+                UserId = user.UserId,
+                FullName = user.FullName,
+                Email = user.Email,
+                Phone = user.Phone,
+                Gender = user.Gender,
+                DateOfBirth = user.DateOfBirth,
+                Role = user.Role.RoleName
+            };
         }
 
     }

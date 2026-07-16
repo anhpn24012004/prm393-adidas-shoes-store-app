@@ -1,15 +1,25 @@
 using AdidasShoesStore.Api.Data;
+using AdidasShoesStore.Api.DTOs.Ghn;
 using AdidasShoesStore.Api.DTOs.Shipments;
+using AdidasShoesStore.Api.Constants;
+using AdidasShoesStore.Api.Helpers;
 using AdidasShoesStore.Api.Models;
 using AdidasShoesStore.Api.Services.Interfaces;
+using AdidasShoesStore.Api.Settings;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using System.Text.RegularExpressions;
 
 namespace AdidasShoesStore.Api.Services.Implementations
 {
     public class ShipmentService : IShipmentService
     {
+        private static readonly string[] FinalStatuses = { "Delivered", "Returned", "Cancelled" };
+
         private static readonly Dictionary<string, string[]> AllowedTransitions = new(StringComparer.Ordinal)
         {
+            ["ReadyToPick"] = new[] { "Picking", "Shipped", "Failed" },
+            ["Picking"] = new[] { "Shipped", "Failed" },
             ["Pending"] = new[] { "Preparing" },
             ["Preparing"] = new[] { "Shipped" },
             ["Shipped"] = new[] { "InTransit" },
@@ -19,10 +29,29 @@ namespace AdidasShoesStore.Api.Services.Implementations
         };
 
         private readonly AdidasShoesStoreContext _context;
+        private readonly IEmailService _emailService;
+        private readonly INotificationService _notificationService;
+        private readonly IGhnService _ghnService;
+        private readonly ILogger<ShipmentService> _logger;
+        private readonly GhnSettings _ghnSettings;
+        private readonly ShipmentSettings _shipmentSettings;
 
-        public ShipmentService(AdidasShoesStoreContext context)
+        public ShipmentService(
+            AdidasShoesStoreContext context,
+            IEmailService emailService,
+            INotificationService notificationService,
+            IGhnService ghnService,
+            ILogger<ShipmentService> logger,
+            IOptions<GhnSettings> ghnOptions,
+            IOptions<ShipmentSettings> shipmentOptions)
         {
             _context = context;
+            _emailService = emailService;
+            _notificationService = notificationService;
+            _ghnService = ghnService;
+            _logger = logger;
+            _ghnSettings = ghnOptions.Value;
+            _shipmentSettings = shipmentOptions.Value;
         }
 
         public async Task<ShipmentDetailDto?> GetUserShipmentAsync(
@@ -42,7 +71,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
             int userId,
             int orderId)
         {
-            return await _context.Shipments
+            var tracking = await _context.Shipments
                 .AsNoTracking()
                 .Where(s =>
                     s.OrderId == orderId &&
@@ -56,7 +85,9 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     ShipmentStatus = s.Status,
                     Carrier = s.ShippingProvider,
                     TrackingNumber = s.TrackingCode,
-                    EstimatedDeliveryDate = null,
+                    GhnOrderCode = s.GhnOrderCode,
+                    RawGhnStatus = s.RawGhnStatus,
+                    EstimatedDeliveryDate = s.ExpectedDeliveryTime,
                     ShippedAt = s.ShippedAt,
                     DeliveredAt = s.DeliveredAt,
                     ReceiverName = s.Order.ReceiverName,
@@ -64,6 +95,52 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     ShippingAddress = s.Order.ShippingAddress
                 })
                 .FirstOrDefaultAsync();
+
+            if (tracking != null)
+            {
+                if (!string.IsNullOrWhiteSpace(tracking.GhnOrderCode))
+                {
+                    var ghnTracking = await _ghnService.GetTrackingAsync(tracking.GhnOrderCode);
+
+                    if (ghnTracking.Success && ghnTracking.Data != null)
+                    {
+                        tracking.RawGhnStatus = ghnTracking.Data.RawStatus;
+                        tracking.ShipmentStatus = ghnTracking.Data.Status ?? tracking.ShipmentStatus;
+                        tracking.EstimatedDeliveryDate = ghnTracking.Data.LeadTime ?? tracking.EstimatedDeliveryDate;
+                    }
+                }
+
+                return tracking;
+            }
+
+            var order = await _context.Orders
+                .AsNoTracking()
+                .Where(o =>
+                    o.OrderId == orderId &&
+                    o.UserId == userId)
+                .FirstOrDefaultAsync();
+
+            if (order == null)
+            {
+                return null;
+            }
+
+            return new ShipmentTrackingDto
+            {
+                OrderId = order.OrderId,
+                OrderCode = order.OrderCode,
+                OrderStatus = order.Status,
+                ShipmentId = 0,
+                ShipmentStatus = MapOrderStatusToShipmentStatus(order.Status),
+                Carrier = null,
+                TrackingNumber = null,
+                EstimatedDeliveryDate = null,
+                ShippedAt = null,
+                DeliveredAt = null,
+                ReceiverName = order.ReceiverName,
+                ReceiverPhone = order.ReceiverPhone,
+                ShippingAddress = order.ShippingAddress
+            };
         }
 
         public async Task<List<AdminShipmentListDto>> GetAdminShipmentsAsync()
@@ -81,6 +158,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     CustomerName = s.Order.User.FullName,
                     ShippingProvider = s.ShippingProvider,
                     TrackingCode = s.TrackingCode,
+                    GhnOrderCode = s.GhnOrderCode,
                     ShipmentStatus = s.Status,
                     OrderStatus = s.Order.Status,
                     ShippedAt = s.ShippedAt,
@@ -110,8 +188,9 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     ShippingAddress = s.Order.ShippingAddress,
                     Carrier = s.ShippingProvider,
                     TrackingNumber = s.TrackingCode,
+                    GhnOrderCode = s.GhnOrderCode,
                     ShipmentStatus = s.Status,
-                    EstimatedDeliveryDate = null,
+                    EstimatedDeliveryDate = s.ExpectedDeliveryTime,
                     Note = null,
                     ShippedAt = s.ShippedAt,
                     DeliveredAt = s.DeliveredAt,
@@ -123,6 +202,7 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     ShippingFee = s.Order.ShippingFee ?? 0m,
                     DiscountAmount = s.Order.DiscountAmount ?? 0m,
                     FinalAmount = s.Order.FinalAmount,
+                    ManualOverrideEnabled = _shipmentSettings.ManualOverrideEnabled,
                     OrderItems = s.Order.OrderItems.Select(i => new AdminShipmentOrderItemDto
                     {
                         OrderItemId = i.OrderItemId,
@@ -143,6 +223,8 @@ namespace AdidasShoesStore.Api.Services.Implementations
             var order = await _context.Orders
                 .Include(o => o.Shipment)
                 .Include(o => o.Payment)
+                .Include(o => o.RefundRequests)
+                .Include(o => o.OrderItems)
                 .FirstOrDefaultAsync(o => o.OrderId == dto.OrderId);
 
             if (order == null)
@@ -155,22 +237,57 @@ namespace AdidasShoesStore.Api.Services.Implementations
 
             if (order.Shipment != null)
             {
-                return ShipmentServiceResult<AdminShipmentDetailDto>.Fail("Shipment already exists for this order");
+                return ShipmentServiceResult<AdminShipmentDetailDto>.Fail("Shipment already exists.");
             }
 
-            if (order.Status != "Processing" && order.Status != "Paid")
+            var activeRefundRequest = order.RefundRequests
+                .OrderByDescending(r => r.CreatedAt)
+                .FirstOrDefault(r => r.Status == "Pending" || r.Status == "Approved");
+
+            if (activeRefundRequest != null)
             {
                 return ShipmentServiceResult<AdminShipmentDetailDto>.Fail(
-                    "Shipment can only be created for orders with status Processing or Paid"
+                    "Order has a pending refund request. Resolve it before creating shipment."
+                );
+            }
+
+            if (!CanCreateShipment(order, out var shipmentError))
+            {
+                return ShipmentServiceResult<AdminShipmentDetailDto>.Fail(
+                    shipmentError
+                );
+            }
+
+            if (!IsValidPhone(order.ReceiverPhone) ||
+                string.IsNullOrWhiteSpace(order.ShippingAddress) ||
+                order.ToDistrictId == null ||
+                string.IsNullOrWhiteSpace(order.ToWardCode))
+            {
+                return ShipmentServiceResult<AdminShipmentDetailDto>.Fail(
+                    "Order delivery information is not valid for GHN shipment"
+                );
+            }
+
+            var ghnRequest = BuildGhnCreateOrderRequest(order);
+            var ghnResult = await _ghnService.CreateOrderAsync(ghnRequest);
+
+            if (!ghnResult.Success || ghnResult.Data == null)
+            {
+                return ShipmentServiceResult<AdminShipmentDetailDto>.Fail(
+                    "Cannot create GHN shipment. Please try again later."
                 );
             }
 
             var shipment = new Shipment
             {
                 OrderId = order.OrderId,
-                ShippingProvider = dto.Carrier,
-                TrackingCode = dto.TrackingNumber,
-                Status = "Shipped",
+                ShippingProvider = "GHN",
+                TrackingCode = ghnResult.Data.GhnOrderCode,
+                GhnOrderCode = ghnResult.Data.GhnOrderCode,
+                ShippingFee = ghnResult.Data.TotalFee > 0 ? ghnResult.Data.TotalFee : order.ShippingFee,
+                ExpectedDeliveryTime = ghnResult.Data.ExpectedDeliveryTime,
+                RawGhnStatus = ghnResult.Data.Status,
+                Status = "ReadyToPick",
                 ShippedAt = DateTime.Now
             };
 
@@ -178,6 +295,17 @@ namespace AdidasShoesStore.Api.Services.Implementations
 
             _context.Shipments.Add(shipment);
             await _context.SaveChangesAsync();
+
+            await NotificationDispatch.TryAsync(
+                _notificationService,
+                _logger,
+                service => service.CreateForUserAsync(
+                    order.UserId,
+                    "Shipment created",
+                    $"Your order {order.OrderCode} has been handed to GHN.",
+                    NotificationTypes.ShipmentCreated,
+                    relatedOrderId: order.OrderId,
+                    relatedShipmentId: shipment.ShipmentId));
 
             var detail = await GetAdminShipmentAsync(shipment.ShipmentId);
 
@@ -191,6 +319,10 @@ namespace AdidasShoesStore.Api.Services.Implementations
             var shipment = await _context.Shipments
                 .Include(s => s.Order)
                     .ThenInclude(o => o.Payment)
+                .Include(s => s.Order)
+                    .ThenInclude(o => o.User)
+                .Include(s => s.Order)
+                    .ThenInclude(o => o.OrderItems)
                 .FirstOrDefaultAsync(s => s.ShipmentId == shipmentId);
 
             if (shipment == null)
@@ -218,11 +350,13 @@ namespace AdidasShoesStore.Api.Services.Implementations
             }
 
             shipment.Status = newStatus;
+            var shouldSendCodInvoice = false;
 
             if (newStatus == "Delivered")
             {
                 shipment.DeliveredAt = DateTime.Now;
                 shipment.Order.Status = "Delivered";
+                shipment.RawGhnStatus = newStatus;
 
                 if (shipment.Order.Payment != null &&
                     string.Equals(shipment.Order.Payment.PaymentMethod, "COD", StringComparison.OrdinalIgnoreCase))
@@ -230,14 +364,30 @@ namespace AdidasShoesStore.Api.Services.Implementations
                     shipment.Order.Payment.Status = "Success";
                     shipment.Order.Payment.PaidAt = DateTime.Now;
                     shipment.Order.Payment.TransactionCode = $"COD-{shipment.Order.OrderCode}";
+                    shouldSendCodInvoice = true;
                 }
             }
             else if (newStatus == "Returned")
             {
                 shipment.Order.Status = "Cancelled";
+                shipment.RawGhnStatus = newStatus;
             }
 
             await _context.SaveChangesAsync();
+
+            await NotifyShipmentStatusChangeAsync(shipment, currentStatus, newStatus);
+
+            if (shouldSendCodInvoice)
+            {
+                try
+                {
+                    await _emailService.SendInvoiceEmailAsync(shipment.Order);
+                }
+                catch
+                {
+                    // Delivery status is already saved; email failure should not rollback it.
+                }
+            }
 
             var detail = await GetAdminShipmentAsync(shipmentId);
 
@@ -273,6 +423,72 @@ namespace AdidasShoesStore.Api.Services.Implementations
             return ShipmentServiceResult<AdminShipmentDetailDto>.Ok(detail!);
         }
 
+        public async Task<ShipmentServiceResult<AdminShipmentDetailDto>> SyncGhnStatusAsync(
+            int shipmentId)
+        {
+            var shipment = await _context.Shipments
+                .Include(s => s.Order)
+                    .ThenInclude(o => o.Payment)
+                .Include(s => s.Order)
+                    .ThenInclude(o => o.User)
+                .FirstOrDefaultAsync(s => s.ShipmentId == shipmentId);
+
+            if (shipment == null)
+            {
+                return ShipmentServiceResult<AdminShipmentDetailDto>.Fail(
+                    "Shipment not found",
+                    "NotFound"
+                );
+            }
+
+            if (string.IsNullOrWhiteSpace(shipment.GhnOrderCode))
+            {
+                return ShipmentServiceResult<AdminShipmentDetailDto>.Fail(
+                    "Shipment does not have a GHN order code"
+                );
+            }
+
+            var tracking = await _ghnService.GetTrackingAsync(shipment.GhnOrderCode);
+
+            if (!tracking.Success || tracking.Data == null)
+            {
+                return ShipmentServiceResult<AdminShipmentDetailDto>.Fail(
+                    tracking.Message ?? "Cannot sync GHN shipment status"
+                );
+            }
+
+            var previousStatus = shipment.Status;
+            var shouldSendCodInvoice = ApplyGhnTracking(
+                shipment,
+                tracking.Data.Status,
+                tracking.Data.RawStatus,
+                tracking.Data.LeadTime
+            );
+
+            await _context.SaveChangesAsync();
+
+            await NotifyShipmentStatusChangeAsync(
+                shipment,
+                previousStatus,
+                shipment.Status ?? tracking.Data.Status);
+
+            if (shouldSendCodInvoice)
+            {
+                try
+                {
+                    await _emailService.SendInvoiceEmailAsync(shipment.Order);
+                }
+                catch
+                {
+                    // Delivery status is already saved; email failure should not rollback it.
+                }
+            }
+
+            var detail = await GetAdminShipmentAsync(shipmentId);
+
+            return ShipmentServiceResult<AdminShipmentDetailDto>.Ok(detail!);
+        }
+
         private static bool IsValidTransition(
             string? currentStatus,
             string newStatus)
@@ -291,6 +507,114 @@ namespace AdidasShoesStore.Api.Services.Implementations
                    nextStatuses.Contains(newStatus, StringComparer.Ordinal);
         }
 
+        private static bool CanCreateShipment(Order order, out string error)
+        {
+            if (order.Status == "Cancelled" ||
+                order.Status == "Failed" ||
+                order.Status == "Shipping" ||
+                order.Status == "Delivered" ||
+                order.Status == "Completed" ||
+                order.Status == "Refunded" ||
+                order.Payment == null)
+            {
+                error = "Order status is not eligible for shipment.";
+                return false;
+            }
+
+            var method = order.Payment.PaymentMethod;
+            var paymentStatus = order.Payment.Status;
+            var isCod = string.Equals(method, "COD", StringComparison.OrdinalIgnoreCase);
+            var isOnline = string.Equals(method, "SEPAY", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(method, "VNPAY", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(method, "PAYPAL", StringComparison.OrdinalIgnoreCase);
+
+            if (isCod)
+            {
+                if (order.Status == "Processing" &&
+                    string.Equals(paymentStatus, "Pending", StringComparison.OrdinalIgnoreCase))
+                {
+                    error = string.Empty;
+                    return true;
+                }
+
+                error = "Order status is not eligible for shipment.";
+                return false;
+            }
+
+            if (isOnline)
+            {
+                if (!string.Equals(paymentStatus, "Success", StringComparison.OrdinalIgnoreCase))
+                {
+                    error = "Online payment has not been completed.";
+                    return false;
+                }
+
+                if (order.Status == "Paid" || order.Status == "Processing")
+                {
+                    error = string.Empty;
+                    return true;
+                }
+
+                error = "Order status is not eligible for shipment.";
+                return false;
+            }
+
+            error = "Order status is not eligible for shipment.";
+            return false;
+        }
+
+        private GhnCreateOrderRequestDto BuildGhnCreateOrderRequest(Order order)
+        {
+            var quantity = Math.Max(1, order.OrderItems.Sum(i => i.Quantity));
+            var weight = Math.Max(_ghnSettings.DefaultWeight, quantity * _ghnSettings.DefaultWeight);
+            var isCod = string.Equals(order.Payment?.PaymentMethod, "COD", StringComparison.OrdinalIgnoreCase);
+
+            return new GhnCreateOrderRequestDto
+            {
+                ClientOrderCode = order.OrderCode,
+                ToName = order.ReceiverName,
+                ToPhone = order.ReceiverPhone,
+                ToAddress = order.ShippingAddress,
+                ToWardCode = order.ToWardCode!,
+                ToDistrictId = order.ToDistrictId!.Value,
+                CodAmount = isCod ? (int)Math.Round(order.FinalAmount, 0, MidpointRounding.AwayFromZero) : 0,
+                Content = $"Adidas shoes order {order.OrderCode}",
+                Weight = weight,
+                Length = _ghnSettings.DefaultLength,
+                Width = _ghnSettings.DefaultWidth,
+                Height = Math.Max(_ghnSettings.DefaultHeight, _ghnSettings.DefaultHeight * Math.Min(quantity, 4)),
+                InsuranceValue = Math.Max(_ghnSettings.InsuranceValueDefault, (int)Math.Round(order.FinalAmount, 0, MidpointRounding.AwayFromZero)),
+                ServiceTypeId = _ghnSettings.ServiceTypeId,
+                PaymentTypeId = isCod ? _ghnSettings.PaymentTypeIdCod : _ghnSettings.PaymentTypeIdOnline,
+                RequiredNote = _ghnSettings.RequiredNote,
+                Items = order.OrderItems.Select(item => new GhnCreateOrderItemDto
+                {
+                    Name = item.ProductName,
+                    Quantity = item.Quantity,
+                    Price = (int)Math.Round(item.UnitPrice, 0, MidpointRounding.AwayFromZero),
+                    Weight = _ghnSettings.DefaultWeight
+                }).ToList()
+            };
+        }
+
+        private static bool IsValidPhone(string? phone)
+        {
+            return !string.IsNullOrWhiteSpace(phone) &&
+                   Regex.IsMatch(phone.Trim(), @"^(0|\+84)[0-9]{8,10}$");
+        }
+
+        private static string? MapOrderStatusToShipmentStatus(string? orderStatus)
+        {
+            return orderStatus switch
+            {
+                "Paid" or "Processing" => "Preparing",
+                "Shipping" => "Shipped",
+                "Delivered" or "Completed" => "Delivered",
+                "Cancelled" => "Returned",
+                _ => "Pending"
+            };
+        }
+
         private static System.Linq.Expressions.Expression<Func<Shipment, ShipmentDetailDto>> MapShipmentDetail()
         {
             return s => new ShipmentDetailDto
@@ -301,17 +625,153 @@ namespace AdidasShoesStore.Api.Services.Implementations
                 OrderStatus = s.Order.Status,
                 Carrier = s.ShippingProvider,
                 TrackingNumber = s.TrackingCode,
+                GhnOrderCode = s.GhnOrderCode,
                 ShipmentStatus = s.Status,
-                EstimatedDeliveryDate = null,
+                EstimatedDeliveryDate = s.ExpectedDeliveryTime,
                 Note = null,
                 ShippedAt = s.ShippedAt,
                 DeliveredAt = s.DeliveredAt,
                 ReceiverName = s.Order.ReceiverName,
                 ReceiverPhone = s.Order.ReceiverPhone,
                 ShippingAddress = s.Order.ShippingAddress,
+                ShippingFee = s.ShippingFee,
                 PaymentMethod = s.Order.Payment == null ? null : s.Order.Payment.PaymentMethod,
                 PaymentStatus = s.Order.Payment == null ? null : s.Order.Payment.Status
             };
+        }
+
+        private bool ApplyGhnTracking(
+            Shipment shipment,
+            string? newStatus,
+            string? rawStatus,
+            DateTime? leadTime)
+        {
+            if (string.IsNullOrWhiteSpace(newStatus) ||
+                FinalStatuses.Contains(shipment.Status ?? string.Empty))
+            {
+                return false;
+            }
+
+            if (IsBackwardTransition(shipment.Status, newStatus))
+            {
+                return false;
+            }
+
+            shipment.Status = newStatus;
+            shipment.RawGhnStatus = rawStatus;
+            shipment.ExpectedDeliveryTime = leadTime ?? shipment.ExpectedDeliveryTime;
+
+            if (newStatus is "ReadyToPick" or "Picking" or "Shipped" or "InTransit" or "OutForDelivery")
+            {
+                shipment.Order.Status = "Shipping";
+                return false;
+            }
+
+            if (newStatus == "Delivered")
+            {
+                shipment.DeliveredAt ??= DateTime.Now;
+                shipment.Order.Status = "Delivered";
+
+                if (shipment.Order.Payment != null &&
+                    string.Equals(shipment.Order.Payment.PaymentMethod, "COD", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(shipment.Order.Payment.Status, "Success", StringComparison.OrdinalIgnoreCase))
+                {
+                    shipment.Order.Payment.Status = "Success";
+                    shipment.Order.Payment.PaidAt = DateTime.Now;
+                    shipment.Order.Payment.TransactionCode = $"COD-{shipment.Order.OrderCode}";
+                    return true;
+                }
+            }
+            else if (newStatus == "Returned")
+            {
+                shipment.Order.Status = "Cancelled";
+            }
+
+            return false;
+        }
+
+        private bool IsBackwardTransition(string? currentStatus, string newStatus)
+        {
+            if (newStatus is "Failed" or "Returned")
+            {
+                return false;
+            }
+
+            var currentRank = GetShipmentStatusRank(currentStatus);
+            var newRank = GetShipmentStatusRank(newStatus);
+
+            if (currentRank.HasValue &&
+                newRank.HasValue &&
+                newRank.Value < currentRank.Value)
+            {
+                _logger.LogWarning(
+                    "Ignored backward GHN shipment status update for shipment status {CurrentStatus} -> {NewStatus}",
+                    currentStatus,
+                    newStatus
+                );
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private static int? GetShipmentStatusRank(string? status)
+        {
+            return status switch
+            {
+                "ReadyToPick" => 0,
+                "Picking" => 1,
+                "Shipped" => 2,
+                "InTransit" => 3,
+                "OutForDelivery" => 4,
+                "Delivered" => 5,
+                _ => null
+            };
+        }
+
+        private Task NotifyShipmentStatusChangeAsync(
+            Shipment shipment,
+            string? previousStatus,
+            string newStatus)
+        {
+            if (string.Equals(previousStatus, newStatus, StringComparison.Ordinal))
+            {
+                return Task.CompletedTask;
+            }
+
+            var order = shipment.Order;
+            var orderCode = order.OrderCode;
+
+            if (newStatus is "Picking" or "Shipped" or "InTransit" or "OutForDelivery")
+            {
+                return NotificationDispatch.TryAsync(
+                    _notificationService,
+                    _logger,
+                    service => service.CreateForUserAsync(
+                        order.UserId,
+                        "Order is on the way",
+                        $"Your order {orderCode} is being shipped.",
+                        NotificationTypes.Shipping,
+                        relatedOrderId: order.OrderId,
+                        relatedShipmentId: shipment.ShipmentId));
+            }
+
+            if (newStatus == "Delivered")
+            {
+                return NotificationDispatch.TryAsync(
+                    _notificationService,
+                    _logger,
+                    service => service.CreateForUserAsync(
+                        order.UserId,
+                        "Order delivered",
+                        $"Your order {orderCode} has been delivered.",
+                        NotificationTypes.Delivered,
+                        relatedOrderId: order.OrderId,
+                        relatedShipmentId: shipment.ShipmentId));
+            }
+
+            return Task.CompletedTask;
         }
     }
 }

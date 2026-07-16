@@ -27,6 +27,7 @@ try {
     dotnet user-secrets set "Email:Username" $email --project $project
     dotnet user-secrets set "Email:Password" $appPassword --project $project
     dotnet user-secrets set "Email:From" $email --project $project
+    dotnet user-secrets set "Email:FromName" "Adidas Shoes Store" --project $project
 
     Write-Host ""
     Write-Host "SMTP configuration saved to .NET User Secrets."

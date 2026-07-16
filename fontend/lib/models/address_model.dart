@@ -6,6 +6,9 @@ class UserAddress {
   final String? ward;
   final String? district;
   final String? city;
+  final int? provinceId;
+  final int? districtId;
+  final String? wardCode;
   final bool isDefault;
 
   const UserAddress({
@@ -16,6 +19,9 @@ class UserAddress {
     this.ward,
     this.district,
     this.city,
+    this.provinceId,
+    this.districtId,
+    this.wardCode,
     required this.isDefault,
   });
 
@@ -28,14 +34,20 @@ class UserAddress {
       ward: json['ward'],
       district: json['district'],
       city: json['city'],
+      provinceId: (json['provinceId'] as num?)?.toInt(),
+      districtId: (json['districtId'] as num?)?.toInt(),
+      wardCode: json['wardCode']?.toString(),
       isDefault: json['isDefault'] == true,
     );
   }
 
   String get formattedAddress {
-    return [addressLine, ward, district, city]
-        .where((part) => part != null && part!.trim().isNotEmpty)
-        .join(', ');
+    return [
+      addressLine,
+      ward,
+      district,
+      city,
+    ].where((part) => part?.trim().isNotEmpty == true).join(', ');
   }
 }
 
@@ -46,6 +58,9 @@ class SaveAddressRequest {
   final String? ward;
   final String? district;
   final String? city;
+  final int? provinceId;
+  final int? districtId;
+  final String? wardCode;
   final bool isDefault;
 
   const SaveAddressRequest({
@@ -55,6 +70,9 @@ class SaveAddressRequest {
     this.ward,
     this.district,
     this.city,
+    this.provinceId,
+    this.districtId,
+    this.wardCode,
     required this.isDefault,
   });
 
@@ -66,6 +84,9 @@ class SaveAddressRequest {
       'ward': ward,
       'district': district,
       'city': city,
+      'provinceId': provinceId,
+      'districtId': districtId,
+      'wardCode': wardCode,
       'isDefault': isDefault,
     };
   }

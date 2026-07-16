@@ -20,6 +20,16 @@ namespace AdidasShoesStore.Api.DTOs.Order
 
         public string ShippingAddress { get; set; } = null!;
 
+        public int? ToDistrictId { get; set; }
+
+        public string? ToWardCode { get; set; }
+
+        public string? ToProvinceName { get; set; }
+
+        public string? ToDistrictName { get; set; }
+
+        public string? ToWardName { get; set; }
+
         public decimal TotalAmount { get; set; }
 
         public decimal ShippingFee { get; set; }
@@ -45,6 +55,34 @@ namespace AdidasShoesStore.Api.DTOs.Order
         public string? TransactionCode { get; set; }
 
         public DateTime? PaidAt { get; set; }
+
+        public int? LatestRefundRequestId { get; set; }
+
+        public string? LatestRefundRequestCode { get; set; }
+
+        public string? LatestRefundRequestStatus { get; set; }
+
+        public decimal? LatestRefundRequestAmount { get; set; }
+
+        public string? LatestRefundRequestReason { get; set; }
+
+        public string? LatestRefundRequestCustomerNote { get; set; }
+
+        public int? ShipmentId { get; set; }
+
+        public string? ShipmentStatus { get; set; }
+
+        public string? ShippingProvider { get; set; }
+
+        public string? TrackingCode { get; set; }
+
+        public string? GhnOrderCode { get; set; }
+
+        public DateTime? ExpectedDeliveryTime { get; set; }
+
+        public DateTime? ShippedAt { get; set; }
+
+        public DateTime? DeliveredAt { get; set; }
 
         public List<OrderItemDto> Items { get; set; } = new();
     }

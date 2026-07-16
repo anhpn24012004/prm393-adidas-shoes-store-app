@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../localization/app_localization.dart';
 import '../../models/category_model.dart';
 import '../../services/category_service.dart';
 import 'admin_category_form_screen.dart';
@@ -60,18 +61,18 @@ class _AdminCategoryListScreenState extends State<AdminCategoryListScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Delete category'),
+          title: Text(context.tr('deleteCategory')),
           content: Text(
-            'Are you sure you want to delete "${category.categoryName}"?',
+            '${context.tr('deleteCategoryQuestion')} "${category.categoryName}"?',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
+              child: Text(context.tr('cancel')),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Delete'),
+              child: Text(context.tr('delete')),
             ),
           ],
         );
@@ -85,9 +86,9 @@ class _AdminCategoryListScreenState extends State<AdminCategoryListScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Category deleted successfully')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.tr('categoryDeleted'))));
 
       setState(() {
         _loadCategories();
@@ -97,7 +98,7 @@ class _AdminCategoryListScreenState extends State<AdminCategoryListScreen> {
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      ).showSnackBar(SnackBar(content: Text('${context.tr('error')}: $e')));
     }
   }
 
@@ -109,7 +110,7 @@ class _AdminCategoryListScreenState extends State<AdminCategoryListScreen> {
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         subtitle: Text(
-          '${category.description ?? 'No description'}\nProducts: ${category.productCount}',
+          '${category.description ?? context.tr('noDescription')}\n${context.tr('metricProducts')}: ${category.productCount}',
         ),
         isThreeLine: true,
         trailing: Wrap(
@@ -141,7 +142,7 @@ class _AdminCategoryListScreenState extends State<AdminCategoryListScreen> {
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Text('Error: ${snapshot.error}'),
+              child: Text('${context.tr('error')}: ${snapshot.error}'),
             ),
           );
         }
@@ -149,7 +150,7 @@ class _AdminCategoryListScreenState extends State<AdminCategoryListScreen> {
         final categories = snapshot.data ?? [];
 
         if (categories.isEmpty) {
-          return const Center(child: Text('No categories found'));
+          return Center(child: Text(context.tr('noCategories')));
         }
 
         return ListView.builder(
@@ -166,7 +167,7 @@ class _AdminCategoryListScreenState extends State<AdminCategoryListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Admin Category Management')),
+      appBar: AppBar(title: Text(context.tr('categoryManagement'))),
       body: _buildBody(),
       floatingActionButton: FloatingActionButton(
         onPressed: _goToCreate,

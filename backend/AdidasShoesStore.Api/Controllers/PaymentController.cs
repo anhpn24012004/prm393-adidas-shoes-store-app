@@ -3,6 +3,7 @@ using AdidasShoesStore.Api.DTOs.Payment;
 using AdidasShoesStore.Api.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Globalization;
 
 namespace AdidasShoesStore.Api.Controllers
 {
@@ -11,10 +12,20 @@ namespace AdidasShoesStore.Api.Controllers
     public class PaymentController : ControllerBase
     {
         private readonly IPaymentService _paymentService;
+        private readonly ISePayService _sePayService;
+        private readonly IConfiguration _configuration;
+        private readonly ILogger<PaymentController> _logger;
 
-        public PaymentController(IPaymentService paymentService)
+        public PaymentController(
+            IPaymentService paymentService,
+            ISePayService sePayService,
+            IConfiguration configuration,
+            ILogger<PaymentController> logger)
         {
             _paymentService = paymentService;
+            _sePayService = sePayService;
+            _configuration = configuration;
+            _logger = logger;
         }
 
         [Authorize]
@@ -61,12 +72,160 @@ namespace AdidasShoesStore.Api.Controllers
 
             var result = await _paymentService.ProcessVnPayReturnAsync(queryParameters);
 
+            return Redirect(BuildPaymentResultUrl(result.OrderId, result.Success));
+        }
+
+        [Authorize]
+        [HttpPost("paypal/create")]
+        public async Task<IActionResult> CreatePayPalPayment(CreatePayPalPaymentDto dto)
+        {
+            if (!TryGetUserId(out var userId))
+            {
+                return Unauthorized(new { message = "Invalid token" });
+            }
+
+            var result = await _paymentService.CreatePayPalPaymentUrlAsync(
+                userId,
+                dto
+            );
+
+            if (!result.Success)
+            {
+                if (result.ErrorType == "NotFound")
+                {
+                    return NotFound(new { message = result.Error });
+                }
+
+                return BadRequest(new { message = result.Error });
+            }
+
             return Ok(new
             {
-                success = result.Success,
-                orderCode = result.OrderCode,
-                message = result.Message
+                approvalUrl = result.Data!.ApprovalUrl,
+                paypalOrderId = result.Data.PayPalOrderId
             });
+        }
+
+        [AllowAnonymous]
+        [HttpGet("paypal-return")]
+        public async Task<IActionResult> PayPalReturn()
+        {
+            var queryParameters = Request.Query.ToDictionary(
+                p => p.Key,
+                p => p.Value.ToString()
+            );
+
+            var result = await _paymentService.ProcessPayPalReturnAsync(queryParameters);
+
+            return Redirect(BuildPaymentResultUrl(result.OrderId, result.Success, queryParameters));
+        }
+
+        [AllowAnonymous]
+        [HttpGet("paypal-cancel")]
+        public async Task<IActionResult> PayPalCancel()
+        {
+            var queryParameters = Request.Query.ToDictionary(
+                p => p.Key,
+                p => p.Value.ToString()
+            );
+
+            var result = await _paymentService.ProcessPayPalCancelAsync(queryParameters);
+
+            return Redirect(BuildPaymentResultUrl(result.OrderId, false, queryParameters));
+        }
+
+        [Authorize]
+        [HttpPost("qr/create")]
+        public IActionResult CreateQrPayment()
+        {
+            return BadRequest(new
+            {
+                message = "QR payment is no longer supported. Please use SePay."
+            });
+        }
+
+        [Authorize]
+        [HttpPost("qr/confirm")]
+        public IActionResult ConfirmQrPayment()
+        {
+            return BadRequest(new
+            {
+                message = "QR payment is no longer supported. Please use SePay."
+            });
+        }
+
+        [Authorize(Roles = "Admin")]
+        [HttpPost("admin/qr/confirm")]
+        public IActionResult AdminConfirmQrPayment()
+        {
+            return BadRequest(new
+            {
+                message = "QR payment is no longer supported. Please use SePay."
+            });
+        }
+
+        [Authorize]
+        [HttpPost("sepay/create")]
+        public async Task<IActionResult> CreateSePayPayment(CreateSePayPaymentDto dto)
+        {
+            if (!TryGetUserId(out var userId))
+            {
+                return Unauthorized(new { message = "Invalid token" });
+            }
+
+            var result = await _sePayService.CreatePaymentAsync(userId, dto);
+            if (!result.Success)
+                return result.ErrorType == "NotFound"
+                    ? NotFound(new { message = result.Error })
+                    : BadRequest(new { message = result.Error });
+
+            return Ok(result.Data);
+        }
+
+        [AllowAnonymous]
+        [HttpPost("sepay/webhook")]
+        public async Task<IActionResult> SePayWebhook()
+        {
+            try
+            {
+                _logger.LogInformation("===== SEPAY WEBHOOK CONTROLLER HIT =====");
+
+                using var reader = new StreamReader(Request.Body);
+                var rawBody = await reader.ReadToEndAsync();
+
+                _logger.LogInformation("SePay webhook controller rawBody: {RawBody}", rawBody);
+
+                var authorization = Request.Headers["Authorization"].FirstOrDefault();
+
+                var result = await _sePayService.ProcessWebhookAsync(
+                    rawBody,
+                    authorization,
+                    Request.Headers["X-SePay-Signature"].FirstOrDefault(),
+                    Request.Headers["X-SePay-Timestamp"].FirstOrDefault()
+                );
+
+                if (!result.Success)
+                {
+                    _logger.LogWarning("SePay webhook failed: {Error}", result.Error);
+
+                    return result.ErrorType == "Unauthorized"
+                        ? Unauthorized(new { success = false, message = result.Error })
+                        : BadRequest(new { success = false, message = result.Error });
+                }
+
+                return Ok(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "SePay webhook endpoint crashed");
+
+                return StatusCode(500, new
+                {
+                    success = false,
+                    message = ex.Message,
+                    detail = ex.ToString()
+                });
+            }
         }
 
         [Authorize]
@@ -96,6 +255,45 @@ namespace AdidasShoesStore.Api.Controllers
             var value = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
             return int.TryParse(value, out userId);
+        }
+
+        private string BuildPaymentResultUrl(
+            int? orderId,
+            bool success,
+            IReadOnlyDictionary<string, string>? queryParameters = null)
+        {
+            var baseUrl = GetFrontendReturnUrl(queryParameters);
+            if (string.IsNullOrWhiteSpace(baseUrl))
+            {
+                baseUrl = _configuration["Frontend:PaymentResultUrl"];
+            }
+
+            if (string.IsNullOrWhiteSpace(baseUrl))
+            {
+                baseUrl = "/payment-result";
+            }
+
+            var separator = baseUrl.Contains('?', StringComparison.Ordinal) ? "&" : "?";
+            var status = success ? "success" : "failed";
+            var orderIdValue = orderId?.ToString(CultureInfo.InvariantCulture) ?? "0";
+
+            return $"{baseUrl}{separator}orderId={Uri.EscapeDataString(orderIdValue)}&status={status}";
+        }
+
+        private static string? GetFrontendReturnUrl(
+            IReadOnlyDictionary<string, string>? queryParameters)
+        {
+            if (queryParameters == null ||
+                !queryParameters.TryGetValue("frontendReturnUrl", out var value) ||
+                string.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+
+            return Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+                (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+                    ? uri.ToString()
+                    : null;
         }
     }
 }

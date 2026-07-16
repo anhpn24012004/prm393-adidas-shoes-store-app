@@ -1,27 +1,66 @@
-import 'package:flutter/foundation.dart';
-
 class AppConfig {
-  /// Set your PC LAN IP when testing on a physical phone, e.g. '192.168.1.10'.
-  static const String? deviceHostOverride = null;
+  static const String _productionBackendBaseUrl =
+      'https://api-adidas.teaviafarm.io.vn';
+  static const String _apiBaseUrlOverride = String.fromEnvironment(
+    'API_BASE_URL',
+  );
+  static const String _signalRBaseUrlOverride = String.fromEnvironment(
+    'SIGNALR_BASE_URL',
+  );
 
-  static String get apiHost {
-    if (deviceHostOverride != null && deviceHostOverride!.isNotEmpty) {
-      return deviceHostOverride!;
+  static String get apiBaseUrl {
+    if (_apiBaseUrlOverride.isNotEmpty) {
+      return _withApiPath(_apiBaseUrlOverride);
     }
 
-    if (kIsWeb) {
-      return 'localhost';
-    }
-
-    switch (defaultTargetPlatform) {
-      case TargetPlatform.android:
-        return '10.0.2.2';
-      default:
-        return 'localhost';
-    }
+    return '$_productionBackendBaseUrl/api';
   }
 
-  static String get apiBaseUrl => 'http://$apiHost:5209/api';
+  static String get signalRBaseUrl {
+    if (_signalRBaseUrlOverride.isNotEmpty) {
+      return _trimTrailingSlash(_signalRBaseUrlOverride);
+    }
+
+    return _productionBackendBaseUrl;
+  }
+
+  static String get staticBaseUrl {
+    if (apiBaseUrl.endsWith('/api')) {
+      return apiBaseUrl.substring(0, apiBaseUrl.length - 4);
+    }
+
+    return signalRBaseUrl;
+  }
+
+  static String _withApiPath(String baseUrl) {
+    final trimmed = _trimTrailingSlash(baseUrl);
+
+    if (trimmed.endsWith('/api')) {
+      return trimmed;
+    }
+
+    return '$trimmed/api';
+  }
+
+  static String _trimTrailingSlash(String value) {
+    return value.trim().replaceFirst(RegExp(r'/+$'), '');
+  }
+
+  static String resolveImageUrl(String imageUrl) {
+    final trimmed = imageUrl.trim();
+
+    if (trimmed.isEmpty ||
+        trimmed.startsWith('http://') ||
+        trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+
+    if (trimmed.startsWith('/')) {
+      return '$staticBaseUrl$trimmed';
+    }
+
+    return '$staticBaseUrl/$trimmed';
+  }
 
   static int currentUserId = 0;
 }

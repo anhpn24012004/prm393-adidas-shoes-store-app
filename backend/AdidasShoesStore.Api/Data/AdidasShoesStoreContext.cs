@@ -38,6 +38,8 @@ public partial class AdidasShoesStoreContext : DbContext
 
     public virtual DbSet<Refund> Refunds { get; set; }
 
+    public virtual DbSet<RefundRequest> RefundRequests { get; set; }
+
     public virtual DbSet<ReturnItem> ReturnItems { get; set; }
 
     public virtual DbSet<ReturnRequest> ReturnRequests { get; set; }
@@ -54,12 +56,16 @@ public partial class AdidasShoesStoreContext : DbContext
 
     public virtual DbSet<Wishlist> Wishlists { get; set; }
 
+    public virtual DbSet<Notification> Notifications { get; set; }
+
+    public virtual DbSet<NotificationRecipient> NotificationRecipients { get; set; }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         if (!optionsBuilder.IsConfigured)
         {
             optionsBuilder.UseSqlServer(
-                "Server=localhost;Database=AdidasShoesStore;Trusted_Connection=True;TrustServerCertificate=True;"
+                "Server=localhost;Database=AdidasShoesStore;Trusted_Connection=True;TrustServerCertificate=True;Encrypt=False;"
             );
         }
     }
@@ -144,6 +150,10 @@ public partial class AdidasShoesStoreContext : DbContext
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
             entity.Property(e => e.Status).HasMaxLength(50);
+            entity.Property(e => e.ToDistrictName).HasMaxLength(100);
+            entity.Property(e => e.ToProvinceName).HasMaxLength(100);
+            entity.Property(e => e.ToWardCode).HasMaxLength(20);
+            entity.Property(e => e.ToWardName).HasMaxLength(100);
             entity.Property(e => e.TotalAmount).HasColumnType("decimal(18, 2)");
 
             entity.HasOne(d => d.User).WithMany(p => p.Orders)
@@ -177,12 +187,20 @@ public partial class AdidasShoesStoreContext : DbContext
             entity.HasKey(e => e.PaymentId).HasName("PK__Payments__9B556A38D879DA3F");
 
             entity.HasIndex(e => e.OrderId, "UQ__Payments__C3905BCE48FC4ECF").IsUnique();
+            entity.HasIndex(e => e.ProviderTransactionId)
+                .IsUnique()
+                .HasFilter("[ProviderTransactionId] IS NOT NULL");
 
             entity.Property(e => e.Amount).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.PaidAmount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.PaidAt).HasColumnType("datetime");
             entity.Property(e => e.PaymentMethod).HasMaxLength(50);
+            entity.Property(e => e.PaymentProvider).HasMaxLength(50);
+            entity.Property(e => e.ProviderTransactionId).HasMaxLength(100);
+            entity.Property(e => e.RawWebhookData).HasColumnType("nvarchar(max)");
             entity.Property(e => e.Status).HasMaxLength(50);
             entity.Property(e => e.TransactionCode).HasMaxLength(100);
+            entity.Property(e => e.TransferContent).HasMaxLength(255);
 
             entity.HasOne(d => d.Order).WithOne(p => p.Payment)
                 .HasForeignKey<Payment>(d => d.OrderId)
@@ -198,6 +216,7 @@ public partial class AdidasShoesStoreContext : DbContext
             entity.Property(e => e.Brand)
                 .HasMaxLength(100)
                 .HasDefaultValue("Adidas");
+            entity.Property(e => e.ClassificationGroupsJson).HasColumnType("nvarchar(max)");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
@@ -229,9 +248,13 @@ public partial class AdidasShoesStoreContext : DbContext
         {
             entity.HasKey(e => e.VariantId).HasName("PK__ProductV__0EA2338405E10B3D");
 
-            entity.HasIndex(e => e.Sku, "UQ__ProductV__CA1ECF0D8EE27279").IsUnique();
+            entity.HasIndex(e => e.Sku, "UX_ProductVariants_SKU_NotNull")
+                .IsUnique()
+                .HasFilter("[SKU] IS NOT NULL");
 
             entity.Property(e => e.Color).HasMaxLength(50);
+            entity.Property(e => e.ImageUrl).HasMaxLength(500);
+            entity.Property(e => e.OptionValuesJson).HasColumnType("nvarchar(max)");
             entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.Price).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.Size).HasMaxLength(20);
@@ -269,11 +292,51 @@ public partial class AdidasShoesStoreContext : DbContext
                 .HasConstraintName("FK__Refunds__ReturnR__7A672E12");
         });
 
+        modelBuilder.Entity<RefundRequest>(entity =>
+        {
+            entity.HasKey(e => e.RefundRequestId).HasName("PK__RefundReq__0CCD259900000001");
+
+            entity.HasIndex(e => e.RequestCode, "UQ_RefundRequests_RequestCode").IsUnique();
+            entity.HasIndex(e => new { e.OrderId, e.Status }, "IX_RefundRequests_OrderId_Status");
+
+            entity.Property(e => e.AdminNote).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.BankAccountName).HasMaxLength(100);
+            entity.Property(e => e.BankAccountNumber).HasMaxLength(50);
+            entity.Property(e => e.BankName).HasMaxLength(100);
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.ProofImageUrl).HasMaxLength(255);
+            entity.Property(e => e.ProcessedByAdminId);
+            entity.Property(e => e.Reason).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.RefundTransactionNote).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.RequestCode).HasMaxLength(50);
+            entity.Property(e => e.RequestedAmount).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.Status).HasMaxLength(50);
+
+            entity.HasOne(d => d.Order).WithMany(p => p.RefundRequests)
+                .HasForeignKey(d => d.OrderId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RefundRequests_Orders");
+
+            entity.HasOne(d => d.ProcessedByAdmin).WithMany(p => p.ProcessedRefundRequests)
+                .HasForeignKey(d => d.ProcessedByAdminId)
+                .OnDelete(DeleteBehavior.NoAction)
+                .HasConstraintName("FK_RefundRequests_ProcessedByAdmin");
+
+            entity.HasOne(d => d.User).WithMany(p => p.RefundRequests)
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RefundRequests_Users");
+        });
+
         modelBuilder.Entity<ReturnItem>(entity =>
         {
             entity.HasKey(e => e.ReturnItemId).HasName("PK__ReturnIt__8D87CD3A9E325E86");
 
             entity.Property(e => e.Reason).HasMaxLength(255);
+            entity.Property(e => e.UnitPrice).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.RefundAmount).HasColumnType("decimal(18, 2)");
 
             entity.HasOne(d => d.OrderItem).WithMany(p => p.ReturnItems)
                 .HasForeignKey(d => d.OrderItemId)
@@ -290,15 +353,41 @@ public partial class AdidasShoesStoreContext : DbContext
         {
             entity.HasKey(e => e.ReturnRequestId).HasName("PK__ReturnRe__0CCD2599808D7145");
 
+            entity.HasIndex(e => e.RequestCode, "UQ_ReturnRequests_RequestCode").IsUnique();
+            entity.HasIndex(e => new { e.OrderId, e.Status }, "IX_ReturnRequests_OrderId_Status");
+
+            entity.Property(e => e.AdminNote).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.BankAccountName).HasMaxLength(100);
+            entity.Property(e => e.BankAccountNumber).HasMaxLength(50);
+            entity.Property(e => e.BankName).HasMaxLength(100);
+            entity.Property(e => e.CustomerNote).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.InspectionNote).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.Reason).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.RefundTransactionNote).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.RequestCode).HasMaxLength(50);
+            entity.Property(e => e.RequestedAmount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.RequestedAt)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
+            entity.Property(e => e.ApprovedAt).HasColumnType("datetime");
+            entity.Property(e => e.RejectedAt).HasColumnType("datetime");
+            entity.Property(e => e.ReturnCarrier).HasMaxLength(50);
+            entity.Property(e => e.ReturnTrackingCode).HasMaxLength(100);
+            entity.Property(e => e.ReturnShipmentNote).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.ReturnShippedAt).HasColumnType("datetime");
+            entity.Property(e => e.ReturnReceivedAt).HasColumnType("datetime");
+            entity.Property(e => e.RefundedAt).HasColumnType("datetime");
             entity.Property(e => e.Status).HasMaxLength(50);
 
             entity.HasOne(d => d.Order).WithMany(p => p.ReturnRequests)
                 .HasForeignKey(d => d.OrderId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__ReturnReq__Order__71D1E811");
+
+            entity.HasOne(d => d.ProcessedByAdmin).WithMany(p => p.ProcessedReturnRequests)
+                .HasForeignKey(d => d.ProcessedByAdminId)
+                .OnDelete(DeleteBehavior.NoAction)
+                .HasConstraintName("FK_ReturnRequests_ProcessedByAdmin");
 
             entity.HasOne(d => d.User).WithMany(p => p.ReturnRequests)
                 .HasForeignKey(d => d.UserId)
@@ -313,6 +402,9 @@ public partial class AdidasShoesStoreContext : DbContext
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
+
+            entity.Property(e => e.EditCount)
+                .HasDefaultValue(0);
 
             entity.HasOne(d => d.Product).WithMany(p => p.Reviews)
                 .HasForeignKey(d => d.ProductId)
@@ -341,7 +433,11 @@ public partial class AdidasShoesStoreContext : DbContext
             entity.HasIndex(e => e.OrderId, "UQ__Shipment__C3905BCEA0118E11").IsUnique();
 
             entity.Property(e => e.DeliveredAt).HasColumnType("datetime");
+            entity.Property(e => e.ExpectedDeliveryTime).HasColumnType("datetime");
+            entity.Property(e => e.GhnOrderCode).HasMaxLength(100);
+            entity.Property(e => e.RawGhnStatus).HasMaxLength(100);
             entity.Property(e => e.ShippedAt).HasColumnType("datetime");
+            entity.Property(e => e.ShippingFee).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.ShippingProvider).HasMaxLength(100);
             entity.Property(e => e.Status).HasMaxLength(50);
             entity.Property(e => e.TrackingCode).HasMaxLength(100);
@@ -370,6 +466,8 @@ public partial class AdidasShoesStoreContext : DbContext
             entity.Property(e => e.Phone).HasMaxLength(20);
             entity.Property(e => e.ResetPasswordOtp).HasMaxLength(6);
             entity.Property(e => e.ResetPasswordOtpExpiredAt).HasColumnType("datetime");
+            entity.Property(e => e.ResetPasswordOtpLastSentAt).HasColumnType("datetime");
+            entity.Property(e => e.ResetPasswordOtpFailedAttempts).HasDefaultValue(0);
             entity.Property(e => e.ResetPasswordToken).HasMaxLength(255);
             entity.Property(e => e.ResetPasswordTokenExpires).HasColumnType("datetime");
 
@@ -390,6 +488,7 @@ public partial class AdidasShoesStoreContext : DbContext
             entity.Property(e => e.Phone).HasMaxLength(20);
             entity.Property(e => e.ReceiverName).HasMaxLength(100);
             entity.Property(e => e.Ward).HasMaxLength(100);
+            entity.Property(e => e.WardCode).HasMaxLength(20);
 
             entity.HasOne(d => d.User).WithMany(p => p.UserAddresses)
                 .HasForeignKey(d => d.UserId)
@@ -410,10 +509,59 @@ public partial class AdidasShoesStoreContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__Wishlists__Produ__05D8E0BE");
 
+            entity.HasOne(d => d.Variant).WithMany(p => p.Wishlists)
+                .HasForeignKey(d => d.VariantId)
+                .OnDelete(DeleteBehavior.NoAction);
+
             entity.HasOne(d => d.User).WithMany(p => p.Wishlists)
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__Wishlists__UserI__04E4BC85");
+        });
+
+        modelBuilder.Entity<Notification>(entity =>
+        {
+            entity.HasKey(e => e.NotificationId);
+
+            entity.ToTable("Notifications");
+
+            entity.Property(e => e.Title).HasMaxLength(200);
+            entity.Property(e => e.Message).HasMaxLength(1000);
+            entity.Property(e => e.Type).HasMaxLength(100);
+            entity.Property(e => e.Role).HasMaxLength(50);
+            entity.Property(e => e.ActionUrl).HasMaxLength(500);
+            entity.Property(e => e.MetadataJson).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.IsRead).HasDefaultValue(false);
+            entity.Property(e => e.CreatedAt).HasColumnType("datetime2");
+            entity.Property(e => e.ReadAt).HasColumnType("datetime2");
+
+            entity.HasOne(d => d.User).WithMany()
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<NotificationRecipient>(entity =>
+        {
+            entity.HasKey(e => e.NotificationRecipientId);
+
+            entity.ToTable("NotificationRecipients");
+
+            entity.HasIndex(e => new { e.NotificationId, e.UserId }, "UX_NotificationRecipients_Notification_User")
+                .IsUnique();
+            entity.HasIndex(e => new { e.UserId, e.IsRead }, "IX_NotificationRecipients_UserId_IsRead");
+            entity.HasIndex(e => e.CreatedAt, "IX_NotificationRecipients_CreatedAt");
+
+            entity.Property(e => e.IsRead).HasDefaultValue(false);
+            entity.Property(e => e.CreatedAt).HasColumnType("datetime2");
+            entity.Property(e => e.ReadAt).HasColumnType("datetime2");
+
+            entity.HasOne(d => d.Notification).WithMany(p => p.Recipients)
+                .HasForeignKey(d => d.NotificationId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(d => d.User).WithMany(p => p.NotificationRecipients)
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         OnModelCreatingPartial(modelBuilder);

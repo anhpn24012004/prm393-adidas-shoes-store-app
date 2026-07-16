@@ -25,15 +25,21 @@ class CartItemModel {
 
   factory CartItemModel.fromJson(Map<String, dynamic> json) {
     return CartItemModel(
-      cartItemId: json['cartItemId'],
-      variantId: json['variantId'],
-      productId: json['productId'] ?? 0,
-      productName: json['productName'] ?? '',
-      size: json['size'] ?? '',
-      color: json['color'] ?? '',
+      cartItemId: _parseInt(json['cartItemId']),
+      variantId: _parseInt(json['variantId']),
+      productId: _parseInt(json['productId']),
+      productName: json['productName']?.toString() ?? '',
+      size: json['size']?.toString() ?? '',
+      color: json['color']?.toString() ?? '',
       price: (json['price'] as num?)?.toDouble() ?? 0,
-      imageUrl: json['imageUrl'],
-      quantity: json['quantity'] ?? 0,
+      imageUrl: json['imageUrl']?.toString(),
+      quantity: _parseInt(json['quantity']),
     );
+  }
+
+  static int _parseInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 }

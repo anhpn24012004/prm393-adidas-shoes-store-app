@@ -1,17 +1,37 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
-import '../config/app_config.dart';
 import '../models/wishlist_model.dart';
+import 'api_client.dart';
+import 'auth_storage.dart';
 
 class WishlistService {
-  final String baseUrl = '${AppConfig.apiBaseUrl}/wishlist';
+  String get baseUrl => '${ApiClient.baseUrl}/wishlist';
+  final AuthStorage _authStorage = AuthStorage();
 
-  Future<int> addWishlist({required int userId, required int productId}) async {
+  Future<Map<String, String>> _authHeaders({bool json = false}) async {
+    final token = await _authStorage.getToken();
+    if (token == null || token.isEmpty) {
+      throw Exception('Please sign in again.');
+    }
+
+    return {
+      if (json) 'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    };
+  }
+
+  Future<int> addWishlist({
+    required int productId,
+    int? variantId,
+  }) async {
     final response = await http.post(
       Uri.parse(baseUrl),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'userId': userId, 'productId': productId}),
+      headers: await _authHeaders(json: true),
+      body: jsonEncode({
+        'productId': productId,
+        'variantId': variantId,
+      }),
     );
 
     if (response.statusCode != 200 && response.statusCode != 201) {
@@ -22,8 +42,11 @@ class WishlistService {
     return data['totalItems'] ?? 0;
   }
 
-  Future<List<WishlistModel>> getWishlist(int userId) async {
-    final response = await http.get(Uri.parse('$baseUrl/user/$userId'));
+  Future<List<WishlistModel>> getWishlist() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/my'),
+      headers: await _authHeaders(),
+    );
 
     if (response.statusCode != 200) {
       throw Exception(response.body);
@@ -33,8 +56,11 @@ class WishlistService {
     return data.map((item) => WishlistModel.fromJson(item)).toList();
   }
 
-  Future<int> getWishlistCount(int userId) async {
-    final response = await http.get(Uri.parse('$baseUrl/user/$userId/count'));
+  Future<int> getWishlistCount() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/my/count'),
+      headers: await _authHeaders(),
+    );
 
     if (response.statusCode != 200) {
       throw Exception(response.body);
@@ -45,7 +71,10 @@ class WishlistService {
   }
 
   Future<int> deleteWishlist(int wishlistId) async {
-    final response = await http.delete(Uri.parse('$baseUrl/$wishlistId'));
+    final response = await http.delete(
+      Uri.parse('$baseUrl/$wishlistId'),
+      headers: await _authHeaders(),
+    );
 
     if (response.statusCode != 200 && response.statusCode != 204) {
       throw Exception(response.body);
@@ -59,8 +88,11 @@ class WishlistService {
     return data['totalItems'] ?? 0;
   }
 
-  Future<int> clearWishlist(int userId) async {
-    final response = await http.delete(Uri.parse('$baseUrl/user/$userId'));
+  Future<int> clearWishlist() async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/my'),
+      headers: await _authHeaders(),
+    );
 
     if (response.statusCode != 200 && response.statusCode != 204) {
       throw Exception(response.body);

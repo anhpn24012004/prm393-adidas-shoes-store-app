@@ -26,5 +26,12 @@ public class SaveUserAddressDto
     [MaxLength(100)]
     public string? City { get; set; }
 
+    public int? ProvinceId { get; set; }
+
+    public int? DistrictId { get; set; }
+
+    [MaxLength(20)]
+    public string? WardCode { get; set; }
+
     public bool IsDefault { get; set; }
 }

@@ -1,13 +1,16 @@
 using AdidasShoesStore.Api.Data;
 using AdidasShoesStore.Api.DTOs.Wishlists;
 using AdidasShoesStore.Api.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace AdidasShoesStore.Api.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
+[Authorize]
 public class WishlistController : ControllerBase
 {
     private readonly AdidasShoesStoreContext _context;
@@ -17,15 +20,22 @@ public class WishlistController : ControllerBase
         _context = context;
     }
 
-    // GET api/wishlist/user/1
-    [HttpGet("user/{userId}")]
-    public async Task<IActionResult> GetWishlistByUser(int userId)
+    // GET api/wishlist/my
+    [HttpGet("my")]
+    public async Task<IActionResult> GetMyWishlist()
     {
+        if (!TryGetUserId(out var userId))
+        {
+            return Unauthorized(new { message = "Invalid access token" });
+        }
+
         var items = await _context.Wishlists
             .AsNoTracking()
+            .AsSplitQuery()
             .Where(w => w.UserId == userId)
             .Include(w => w.Product)
                 .ThenInclude(p => p.ProductImages)
+            .Include(w => w.Variant)
             .OrderByDescending(w => w.CreatedAt)
             .Select(w => new WishlistItemDto
             {
@@ -33,10 +43,16 @@ public class WishlistController : ControllerBase
                 ProductId = w.ProductId,
                 ProductName = w.Product.ProductName,
                 BasePrice = w.Product.BasePrice,
-                ImageUrl = w.Product.ProductImages
+                ImageUrl = w.Variant != null && w.Variant.ImageUrl != null
+                    ? w.Variant.ImageUrl
+                    : w.Product.ProductImages
                     .Where(i => i.IsMain == true)
                     .Select(i => i.ImageUrl)
                     .FirstOrDefault(),
+                AverageRating = w.Product.Reviews.Any()
+                    ? w.Product.Reviews.Average(r => r.Rating)
+                    : 0,
+                ReviewCount = w.Product.Reviews.Count,
                 CreatedAt = w.CreatedAt
             })
             .ToListAsync();
@@ -44,10 +60,15 @@ public class WishlistController : ControllerBase
         return Ok(items);
     }
 
-    // GET api/wishlist/user/1/count
-    [HttpGet("user/{userId}/count")]
-    public async Task<IActionResult> GetWishlistCount(int userId)
+    // GET api/wishlist/my/count
+    [HttpGet("my/count")]
+    public async Task<IActionResult> GetMyWishlistCount()
     {
+        if (!TryGetUserId(out var userId))
+        {
+            return Unauthorized(new { message = "Invalid access token" });
+        }
+
         var count = await _context.Wishlists
             .CountAsync(w => w.UserId == userId);
 
@@ -58,21 +79,42 @@ public class WishlistController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> AddToWishlist(AddToWishlistDto request)
     {
+        if (!TryGetUserId(out var userId))
+        {
+            return Unauthorized(new { message = "Invalid access token" });
+        }
+
         var productExists = await _context.Products
             .AnyAsync(p => p.ProductId == request.ProductId && p.IsActive == true);
 
         if (!productExists)
             return NotFound(new { message = "Product not found" });
 
+        if (request.VariantId.HasValue)
+        {
+            var variantExists = await _context.ProductVariants.AnyAsync(v =>
+                v.VariantId == request.VariantId.Value &&
+                v.ProductId == request.ProductId &&
+                v.IsActive == true);
+            if (!variantExists)
+                return BadRequest(new { message = "Selected product variant is invalid" });
+        }
+
         var existing = await _context.Wishlists
             .FirstOrDefaultAsync(w =>
-                w.UserId == request.UserId &&
+                w.UserId == userId &&
                 w.ProductId == request.ProductId);
 
         if (existing != null)
         {
+            if (request.VariantId.HasValue)
+            {
+                existing.VariantId = request.VariantId;
+                await _context.SaveChangesAsync();
+            }
+
             var existingCount = await _context.Wishlists
-                .CountAsync(w => w.UserId == request.UserId);
+                .CountAsync(w => w.UserId == userId);
 
             return Ok(new
             {
@@ -83,15 +125,16 @@ public class WishlistController : ControllerBase
 
         _context.Wishlists.Add(new Wishlist
         {
-            UserId = request.UserId,
+            UserId = userId,
             ProductId = request.ProductId,
-            CreatedAt = DateTime.Now
+            VariantId = request.VariantId,
+            CreatedAt = DateTime.UtcNow
         });
 
         await _context.SaveChangesAsync();
 
         var totalItems = await _context.Wishlists
-            .CountAsync(w => w.UserId == request.UserId);
+            .CountAsync(w => w.UserId == userId);
 
         return Ok(new
         {
@@ -104,13 +147,16 @@ public class WishlistController : ControllerBase
     [HttpDelete("{wishlistId}")]
     public async Task<IActionResult> RemoveItem(int wishlistId)
     {
+        if (!TryGetUserId(out var userId))
+        {
+            return Unauthorized(new { message = "Invalid access token" });
+        }
+
         var item = await _context.Wishlists
-            .FirstOrDefaultAsync(w => w.WishlistId == wishlistId);
+            .FirstOrDefaultAsync(w => w.WishlistId == wishlistId && w.UserId == userId);
 
         if (item == null)
             return NotFound();
-
-        var userId = item.UserId;
 
         _context.Wishlists.Remove(item);
         await _context.SaveChangesAsync();
@@ -121,10 +167,15 @@ public class WishlistController : ControllerBase
         return Ok(new { totalItems });
     }
 
-    // DELETE api/wishlist/user/1
-    [HttpDelete("user/{userId}")]
-    public async Task<IActionResult> ClearWishlist(int userId)
+    // DELETE api/wishlist/my
+    [HttpDelete("my")]
+    public async Task<IActionResult> ClearMyWishlist()
     {
+        if (!TryGetUserId(out var userId))
+        {
+            return Unauthorized(new { message = "Invalid access token" });
+        }
+
         var items = await _context.Wishlists
             .Where(w => w.UserId == userId)
             .ToListAsync();
@@ -136,5 +187,11 @@ public class WishlistController : ControllerBase
         await _context.SaveChangesAsync();
 
         return Ok(new { totalItems = 0 });
+    }
+
+    private bool TryGetUserId(out int userId)
+    {
+        var value = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return int.TryParse(value, out userId);
     }
 }

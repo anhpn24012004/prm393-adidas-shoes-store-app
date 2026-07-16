@@ -33,7 +33,7 @@ class BadgeNotifier extends ChangeNotifier {
     try {
       final results = await Future.wait([
         _cartService.getCartCount(id),
-        _wishlistService.getWishlistCount(id),
+        _wishlistService.getWishlistCount(),
       ]);
 
       cartCount = results[0];

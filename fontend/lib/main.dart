@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'localization/app_localization.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
+import 'screens/auth/forbidden_screen.dart';
 import 'screens/auth/forgot_password_screen.dart';
 import 'screens/auth/reset_password_screen.dart';
 import 'screens/auth/change_password_screen.dart';
@@ -14,16 +15,22 @@ import 'screens/order/checkout_screen.dart';
 import 'screens/order/order_history_screen.dart';
 import 'screens/order/order_detail_screen.dart';
 import 'screens/order/payment_result_screen.dart';
+import 'screens/order/sepay_payment_screen.dart';
 import 'screens/order/user_shipment_tracking_screen.dart';
 import 'screens/refund/refund_request_screen.dart';
 import 'screens/refund/refund_status_screen.dart';
 import 'screens/ai/ai_assistant_screen.dart';
 import 'screens/category/category_list_screen.dart';
 import 'screens/profile/profile_screen.dart';
+import 'screens/profile/edit_profile_screen.dart';
+import 'screens/profile/help_support_screen.dart';
+import 'screens/profile/payment_methods_screen.dart';
 import 'screens/profile/address_list_screen.dart';
 import 'screens/profile/address_form_screen.dart';
 import 'screens/settings/settings_screen.dart';
 import 'screens/admin/admin_product_list_screen.dart';
+import 'screens/admin/admin_product_form_screen.dart';
+import 'screens/admin/admin_product_image_list_screen.dart';
 import 'screens/admin/admin_category_list_screen.dart';
 import 'screens/review/create_review_screen.dart';
 import 'screens/admin/admin_shipment_list_screen.dart';
@@ -31,20 +38,70 @@ import 'screens/admin/admin_shipment_detail_screen.dart';
 import 'screens/admin/admin_shipment_form_screen.dart';
 import 'screens/admin/admin_dashboard_screen.dart';
 import 'screens/admin/admin_order_list_screen.dart';
+import 'screens/admin/admin_refund_requests_screen.dart';
 import 'screens/admin/admin_returns_refunds_screen.dart';
+import 'screens/admin/admin_user_list_screen.dart';
+import 'screens/admin/admin_marketing_notification_screen.dart';
+import 'screens/notifications/notifications_screen.dart';
 import 'theme/app_theme.dart';
 import 'config/app_config.dart';
+import 'models/product_model.dart';
+import 'models/order_model.dart';
 import 'services/auth_storage.dart';
+import 'services/inventory_realtime_service.dart';
+import 'services/notification_realtime_service.dart';
+import 'widgets/admin_route_guard.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  AppConfig.currentUserId = await AuthStorage().getUserId() ?? 0;
-  await AppLocaleController.instance.load();
   runApp(const AdidasShoesStoreApp());
 }
 
-class AdidasShoesStoreApp extends StatelessWidget {
+Future<void> _initializeApp() async {
+  AppConfig.currentUserId = await AuthStorage().getUserId() ?? 0;
+  await AppLocaleController.instance.load();
+  await InventoryRealtimeService.instance.initialize();
+  await NotificationRealtimeService.instance.initialize();
+}
+
+class AdidasShoesStoreApp extends StatefulWidget {
   const AdidasShoesStoreApp({super.key});
+
+  @override
+  State<AdidasShoesStoreApp> createState() => _AdidasShoesStoreAppState();
+}
+
+class _AdidasShoesStoreAppState extends State<AdidasShoesStoreApp> {
+  late final Future<void> _initialization = _initializeApp();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<void>(
+      future: _initialization,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const MaterialApp(
+            debugShowCheckedModeBanner: false,
+            home: BrandingSplashScreen(),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            home: StartupErrorScreen(error: snapshot.error),
+          );
+        }
+
+        return const AppRoutes();
+      },
+    );
+  }
+}
+
+class AppRoutes extends StatelessWidget {
+  const AppRoutes({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -57,6 +114,7 @@ class AdidasShoesStoreApp extends StatelessWidget {
         routes: {
           '/login': (context) => const LoginScreen(),
           '/register': (context) => const RegisterScreen(),
+          '/forbidden': (context) => const ForbiddenScreen(),
           '/forgot-password': (context) => const ForgotPasswordScreen(),
           '/reset-password': (context) => const ResetPasswordScreen(),
           '/change-password': (context) => const ChangePasswordScreen(),
@@ -68,34 +126,224 @@ class AdidasShoesStoreApp extends StatelessWidget {
           '/checkout': (context) => const CheckoutScreen(),
           '/orders': (context) => const OrderHistoryScreen(),
           '/order-detail': (context) => const OrderDetailScreen(),
-          '/shipment-tracking': (context) =>
-              const UserShipmentTrackingScreen(),
+          '/shipment-tracking': (context) => const UserShipmentTrackingScreen(),
           '/payment-result': (context) {
             final argument = ModalRoute.of(context)?.settings.arguments;
-            final orderId = argument is int ? argument : 0;
+            final queryParameters = _paymentResultQueryParameters();
+            final queryOrderId = int.tryParse(
+              queryParameters['orderId'] ?? '',
+            );
+            final queryStatus = queryParameters['status'];
 
-            return PaymentResultScreen(orderId: orderId);
+            int orderId = queryOrderId ?? 0;
+            String? statusHint = queryStatus;
+
+            if (argument is int) {
+              orderId = argument;
+            } else if (argument is Map) {
+              orderId = argument['orderId'] as int? ?? orderId;
+              statusHint = argument['status'] as String? ?? statusHint;
+            }
+
+            return PaymentResultScreen(
+              orderId: orderId,
+              statusHint: statusHint,
+            );
+          },
+          '/sepay-payment': (context) {
+            final argument = ModalRoute.of(context)?.settings.arguments;
+            if (argument is SePayPaymentResponse) {
+              return SePayPaymentScreen(payment: argument);
+            }
+            throw ArgumentError('SePayPaymentResponse required');
           },
           '/refund-request': (context) => const RefundRequestScreen(),
           '/refund-status': (context) => const RefundStatusScreen(),
           '/ai-assistant': (context) => const AiAssistantScreen(),
           '/profile': (context) => const ProfileScreen(),
+          '/edit-profile': (context) => const EditProfileScreen(),
+          '/help-support': (context) => const HelpSupportScreen(),
+          '/payment-methods': (context) => const PaymentMethodsScreen(),
           '/addresses': (context) => const AddressListScreen(),
           '/address-form': (context) => const AddressFormScreen(),
           '/settings': (context) => const SettingsScreen(),
-          '/admin/products': (context) => const AdminProductListScreen(),
-          '/admin/dashboard': (context) => const AdminDashboardScreen(),
-          '/admin/orders': (context) => const AdminOrderListScreen(),
+          '/notifications': (context) => const NotificationsScreen(),
+          '/admin/products': (context) =>
+              AdminRouteGuard(builder: (_) => AdminProductListScreen()),
+          '/admin/dashboard': (context) =>
+              AdminRouteGuard(builder: (_) => AdminDashboardScreen()),
+          '/admin/products/create': (context) => AdminRouteGuard(
+            builder: (_) => AdminProductFormScreen(createMode: true),
+          ),
+          '/admin/products/edit': (context) {
+            return AdminRouteGuard(
+              builder: (guardContext) {
+                final argument = ModalRoute.of(
+                  guardContext,
+                )?.settings.arguments;
+                if (argument is ProductRouteArgs) {
+                  return AdminProductFormScreen(product: argument.product);
+                }
+                throw ArgumentError(
+                  'ProductRouteArgs required for edit product',
+                );
+              },
+            );
+          },
+          '/admin/products/images': (context) {
+            return AdminRouteGuard(
+              builder: (guardContext) {
+                final argument = ModalRoute.of(
+                  guardContext,
+                )?.settings.arguments;
+                if (argument is ProductRouteArgs) {
+                  return AdminProductImageListScreen(
+                    product: argument.product,
+                    fromCreateFlow: argument.fromCreateFlow,
+                  );
+                }
+                throw ArgumentError(
+                  'ProductRouteArgs required for product images',
+                );
+              },
+            );
+          },
+          '/admin/products/variants': (context) {
+            return AdminRouteGuard(
+              builder: (guardContext) {
+                final argument = ModalRoute.of(
+                  guardContext,
+                )?.settings.arguments;
+                if (argument is ProductRouteArgs) {
+                  return AdminProductFormScreen(product: argument.product);
+                }
+                throw ArgumentError(
+                  'ProductRouteArgs required for product variants',
+                );
+              },
+            );
+          },
+          '/admin/users': (context) =>
+              AdminRouteGuard(builder: (_) => AdminUserListScreen()),
+          '/admin/orders': (context) =>
+              AdminRouteGuard(builder: (_) => AdminOrderListScreen()),
+          '/admin/refund-requests': (context) =>
+              AdminRouteGuard(builder: (_) => AdminRefundRequestsScreen()),
           '/admin/returns-refunds': (context) =>
-              const AdminReturnsRefundsScreen(),
-          '/admin/categories': (context) => const AdminCategoryListScreen(),
+              AdminRouteGuard(builder: (_) => AdminReturnsRefundsScreen()),
+          '/admin/categories': (context) =>
+              AdminRouteGuard(builder: (_) => AdminCategoryListScreen()),
           '/create-review': (context) => const CreateReviewScreen(),
-          '/admin/shipments': (context) => const AdminShipmentListScreen(),
+          '/admin/shipments': (context) =>
+              AdminRouteGuard(builder: (_) => AdminShipmentListScreen()),
           '/admin/shipments/detail': (context) =>
-              const AdminShipmentDetailScreen(),
-          '/admin/shipments/create': (context) =>
-              const AdminShipmentFormScreen(createMode: true),
+              AdminRouteGuard(builder: (_) => AdminShipmentDetailScreen()),
+          '/admin/shipments/create': (context) => AdminRouteGuard(
+            builder: (_) => AdminShipmentFormScreen(createMode: true),
+          ),
+          '/admin/marketing-notifications': (context) => AdminRouteGuard(
+            builder: (_) => AdminMarketingNotificationScreen(),
+          ),
         },
+      ),
+    );
+  }
+}
+
+Map<String, String> _paymentResultQueryParameters() {
+  final uri = Uri.base;
+  if (uri.queryParameters.isNotEmpty) {
+    return uri.queryParameters;
+  }
+
+  final fragment = uri.fragment;
+  final queryStart = fragment.indexOf('?');
+  if (queryStart < 0 || queryStart == fragment.length - 1) {
+    return const {};
+  }
+
+  return Uri.splitQueryString(fragment.substring(queryStart + 1));
+}
+
+class BrandingSplashScreen extends StatelessWidget {
+  const BrandingSplashScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/branding/splash_bg.png'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset(
+                'assets/branding/splash_logo.png',
+                width: 160,
+                fit: BoxFit.contain,
+              ),
+              const SizedBox(height: 28),
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.black87),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class StartupErrorScreen extends StatelessWidget {
+  const StartupErrorScreen({super.key, required this.error});
+
+  final Object? error;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/branding/splash_bg.png'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Image.asset(
+                  'assets/branding/splash_logo.png',
+                  width: 140,
+                  fit: BoxFit.contain,
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'Unable to start the app. Please try again.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.black87,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -80,7 +80,7 @@ namespace AdidasShoesStore.Api.Migrations
                     b.HasIndex(new[] { "UserId" }, "UQ__Carts__1788CC4DD084CB69")
                         .IsUnique();
 
-                    b.ToTable("Carts");
+                    b.ToTable("Carts", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.CartItem", b =>
@@ -107,7 +107,7 @@ namespace AdidasShoesStore.Api.Migrations
 
                     b.HasIndex("VariantId");
 
-                    b.ToTable("CartItems");
+                    b.ToTable("CartItems", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.Category", b =>
@@ -130,7 +130,117 @@ namespace AdidasShoesStore.Api.Migrations
                     b.HasKey("CategoryId")
                         .HasName("PK__Categori__19093A0BC5FCE180");
 
-                    b.ToTable("Categories");
+                    b.ToTable("Categories", (string)null);
+                });
+
+            modelBuilder.Entity("AdidasShoesStore.Api.Models.Notification", b =>
+                {
+                    b.Property<int>("NotificationId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("NotificationId"));
+
+                    b.Property<string>("ActionUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsRead")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("RelatedOrderId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RelatedPaymentId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RelatedProductId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RelatedRefundRequestId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RelatedReturnRequestId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RelatedShipmentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Role")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("NotificationId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("Notifications", (string)null);
+                });
+
+            modelBuilder.Entity("AdidasShoesStore.Api.Models.NotificationRecipient", b =>
+                {
+                    b.Property<int>("NotificationRecipientId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("NotificationRecipientId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsRead")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("NotificationId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("NotificationRecipientId");
+
+                    b.HasIndex(new[] { "CreatedAt" }, "IX_NotificationRecipients_CreatedAt");
+
+                    b.HasIndex(new[] { "UserId", "IsRead" }, "IX_NotificationRecipients_UserId_IsRead");
+
+                    b.HasIndex(new[] { "NotificationId", "UserId" }, "UX_NotificationRecipients_Notification_User")
+                        .IsUnique();
+
+                    b.ToTable("NotificationRecipients", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.Order", b =>
@@ -188,6 +298,25 @@ namespace AdidasShoesStore.Api.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<int?>("ToDistrictId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ToDistrictName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ToProvinceName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ToWardCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("ToWardName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<decimal>("TotalAmount")
                         .HasColumnType("decimal(18, 2)");
 
@@ -202,7 +331,7 @@ namespace AdidasShoesStore.Api.Migrations
                     b.HasIndex(new[] { "OrderCode" }, "UQ__Orders__999B5229F20410BF")
                         .IsUnique();
 
-                    b.ToTable("Orders");
+                    b.ToTable("Orders", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.OrderItem", b =>
@@ -247,7 +376,7 @@ namespace AdidasShoesStore.Api.Migrations
 
                     b.HasIndex("VariantId");
 
-                    b.ToTable("OrderItems");
+                    b.ToTable("OrderItems", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.Payment", b =>
@@ -264,6 +393,9 @@ namespace AdidasShoesStore.Api.Migrations
                     b.Property<int>("OrderId")
                         .HasColumnType("int");
 
+                    b.Property<decimal?>("PaidAmount")
+                        .HasColumnType("decimal(18, 2)");
+
                     b.Property<DateTime?>("PaidAt")
                         .HasColumnType("datetime");
 
@@ -271,6 +403,17 @@ namespace AdidasShoesStore.Api.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("PaymentProvider")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("ProviderTransactionId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("RawWebhookData")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -281,13 +424,21 @@ namespace AdidasShoesStore.Api.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("TransferContent")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
                     b.HasKey("PaymentId")
                         .HasName("PK__Payments__9B556A38D879DA3F");
+
+                    b.HasIndex("ProviderTransactionId")
+                        .IsUnique()
+                        .HasFilter("[ProviderTransactionId] IS NOT NULL");
 
                     b.HasIndex(new[] { "OrderId" }, "UQ__Payments__C3905BCE48FC4ECF")
                         .IsUnique();
 
-                    b.ToTable("Payments");
+                    b.ToTable("Payments", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.Product", b =>
@@ -309,6 +460,9 @@ namespace AdidasShoesStore.Api.Migrations
 
                     b.Property<int>("CategoryId")
                         .HasColumnType("int");
+
+                    b.Property<string>("ClassificationGroupsJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -341,7 +495,7 @@ namespace AdidasShoesStore.Api.Migrations
 
                     b.HasIndex("CategoryId");
 
-                    b.ToTable("Products");
+                    b.ToTable("Products", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.ProductImage", b =>
@@ -370,7 +524,7 @@ namespace AdidasShoesStore.Api.Migrations
 
                     b.HasIndex("ProductId");
 
-                    b.ToTable("ProductImages");
+                    b.ToTable("ProductImages", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.ProductVariant", b =>
@@ -386,10 +540,17 @@ namespace AdidasShoesStore.Api.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<bool?>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
                         .HasDefaultValue(true);
+
+                    b.Property<string>("OptionValuesJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<decimal>("Price")
                         .HasColumnType("decimal(18, 2)");
@@ -417,11 +578,11 @@ namespace AdidasShoesStore.Api.Migrations
 
                     b.HasIndex("ProductId");
 
-                    b.HasIndex(new[] { "Sku" }, "UQ__ProductV__CA1ECF0D8EE27279")
+                    b.HasIndex(new[] { "Sku" }, "UX_ProductVariants_SKU_NotNull")
                         .IsUnique()
                         .HasFilter("[SKU] IS NOT NULL");
 
-                    b.ToTable("ProductVariants");
+                    b.ToTable("ProductVariants", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.Refund", b =>
@@ -465,7 +626,98 @@ namespace AdidasShoesStore.Api.Migrations
                     b.HasIndex(new[] { "ReturnRequestId" }, "UQ__Refunds__0CCD2598112CDBB9")
                         .IsUnique();
 
-                    b.ToTable("Refunds");
+                    b.ToTable("Refunds", (string)null);
+                });
+
+            modelBuilder.Entity("AdidasShoesStore.Api.Models.RefundRequest", b =>
+                {
+                    b.Property<int>("RefundRequestId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("RefundRequestId"));
+
+                    b.Property<string>("AdminNote")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("BankAccountName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("BankAccountNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("BankName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<string>("CustomerNote")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ProcessedByAdminId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ProofImageUrl")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RefundTransactionNote")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("RefundedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("RejectedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RequestCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal>("RequestedAmount")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("RefundRequestId")
+                        .HasName("PK__RefundReq__0CCD259900000001");
+
+                    b.HasIndex("ProcessedByAdminId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex(new[] { "OrderId", "Status" }, "IX_RefundRequests_OrderId_Status");
+
+                    b.HasIndex(new[] { "RequestCode" }, "UQ_RefundRequests_RequestCode")
+                        .IsUnique();
+
+                    b.ToTable("RefundRequests", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.ReturnItem", b =>
@@ -486,8 +738,14 @@ namespace AdidasShoesStore.Api.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
+                    b.Property<decimal>("RefundAmount")
+                        .HasColumnType("decimal(18, 2)");
+
                     b.Property<int>("ReturnRequestId")
                         .HasColumnType("int");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasColumnType("decimal(18, 2)");
 
                     b.HasKey("ReturnItemId")
                         .HasName("PK__ReturnIt__8D87CD3A9E325E86");
@@ -496,7 +754,7 @@ namespace AdidasShoesStore.Api.Migrations
 
                     b.HasIndex("ReturnRequestId");
 
-                    b.ToTable("ReturnItems");
+                    b.ToTable("ReturnItems", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.ReturnRequest", b =>
@@ -510,17 +768,84 @@ namespace AdidasShoesStore.Api.Migrations
                     b.Property<string>("AdminNote")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("datetime");
+
+                    b.Property<string>("BankAccountName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("BankAccountNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("BankName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("CustomerNote")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("InspectionNote")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool?>("IsRestockable")
+                        .HasColumnType("bit");
+
                     b.Property<int>("OrderId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ProcessedByAdminId")
                         .HasColumnType("int");
 
                     b.Property<string>("Reason")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("RefundTransactionNote")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("RefundedAt")
+                        .HasColumnType("datetime");
+
+                    b.Property<DateTime?>("RejectedAt")
+                        .HasColumnType("datetime");
+
+                    b.Property<string>("RequestCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal>("RequestedAmount")
+                        .HasColumnType("decimal(18, 2)");
+
                     b.Property<DateTime?>("RequestedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime")
                         .HasDefaultValueSql("(getdate())");
+
+                    b.Property<int?>("RestockQuantity")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ReturnCarrier")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("ReturnReceivedAt")
+                        .HasColumnType("datetime");
+
+                    b.Property<string>("ReturnShipmentNote")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ReturnShippedAt")
+                        .HasColumnType("datetime");
+
+                    b.Property<string>("ReturnTrackingCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -533,11 +858,16 @@ namespace AdidasShoesStore.Api.Migrations
                     b.HasKey("ReturnRequestId")
                         .HasName("PK__ReturnRe__0CCD2599808D7145");
 
-                    b.HasIndex("OrderId");
+                    b.HasIndex("ProcessedByAdminId");
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("ReturnRequests");
+                    b.HasIndex(new[] { "OrderId", "Status" }, "IX_ReturnRequests_OrderId_Status");
+
+                    b.HasIndex(new[] { "RequestCode" }, "UQ_ReturnRequests_RequestCode")
+                        .IsUnique();
+
+                    b.ToTable("ReturnRequests", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.Review", b =>
@@ -556,6 +886,11 @@ namespace AdidasShoesStore.Api.Migrations
                         .HasColumnType("datetime")
                         .HasDefaultValueSql("(getdate())");
 
+                    b.Property<int>("EditCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
                     b.Property<int>("ProductId")
                         .HasColumnType("int");
 
@@ -572,7 +907,7 @@ namespace AdidasShoesStore.Api.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Reviews");
+                    b.ToTable("Reviews", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.Role", b =>
@@ -594,7 +929,7 @@ namespace AdidasShoesStore.Api.Migrations
                     b.HasIndex(new[] { "RoleName" }, "UQ__Roles__8A2B616015CC2BBD")
                         .IsUnique();
 
-                    b.ToTable("Roles");
+                    b.ToTable("Roles", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.Shipment", b =>
@@ -608,11 +943,25 @@ namespace AdidasShoesStore.Api.Migrations
                     b.Property<DateTime?>("DeliveredAt")
                         .HasColumnType("datetime");
 
+                    b.Property<DateTime?>("ExpectedDeliveryTime")
+                        .HasColumnType("datetime");
+
+                    b.Property<string>("GhnOrderCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<int>("OrderId")
                         .HasColumnType("int");
 
+                    b.Property<string>("RawGhnStatus")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<DateTime?>("ShippedAt")
                         .HasColumnType("datetime");
+
+                    b.Property<decimal?>("ShippingFee")
+                        .HasColumnType("decimal(18, 2)");
 
                     b.Property<string>("ShippingProvider")
                         .HasMaxLength(100)
@@ -632,7 +981,7 @@ namespace AdidasShoesStore.Api.Migrations
                     b.HasIndex(new[] { "OrderId" }, "UQ__Shipment__C3905BCEA0118E11")
                         .IsUnique();
 
-                    b.ToTable("Shipments");
+                    b.ToTable("Shipments", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.User", b =>
@@ -708,7 +1057,7 @@ namespace AdidasShoesStore.Api.Migrations
                     b.HasIndex(new[] { "Email" }, "UQ__Users__A9D10534CD838107")
                         .IsUnique();
 
-                    b.ToTable("Users");
+                    b.ToTable("Users", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.UserAddress", b =>
@@ -732,6 +1081,9 @@ namespace AdidasShoesStore.Api.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<int?>("DistrictId")
+                        .HasColumnType("int");
+
                     b.Property<bool?>("IsDefault")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
@@ -741,6 +1093,9 @@ namespace AdidasShoesStore.Api.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
+
+                    b.Property<int?>("ProvinceId")
+                        .HasColumnType("int");
 
                     b.Property<string>("ReceiverName")
                         .IsRequired()
@@ -754,12 +1109,16 @@ namespace AdidasShoesStore.Api.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("WardCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.HasKey("AddressId")
                         .HasName("PK__UserAddr__091C2AFB003ECD84");
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("UserAddresses");
+                    b.ToTable("UserAddresses", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.Wishlist", b =>
@@ -781,6 +1140,9 @@ namespace AdidasShoesStore.Api.Migrations
                     b.Property<int>("UserId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("VariantId")
+                        .HasColumnType("int");
+
                     b.HasKey("WishlistId")
                         .HasName("PK__Wishlist__233189EBC573B413");
 
@@ -788,7 +1150,9 @@ namespace AdidasShoesStore.Api.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Wishlists");
+                    b.HasIndex("VariantId");
+
+                    b.ToTable("Wishlists", (string)null);
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.AirecommendationLog", b =>
@@ -829,6 +1193,35 @@ namespace AdidasShoesStore.Api.Migrations
                     b.Navigation("Cart");
 
                     b.Navigation("Variant");
+                });
+
+            modelBuilder.Entity("AdidasShoesStore.Api.Models.Notification", b =>
+                {
+                    b.HasOne("AdidasShoesStore.Api.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("AdidasShoesStore.Api.Models.NotificationRecipient", b =>
+                {
+                    b.HasOne("AdidasShoesStore.Api.Models.Notification", "Notification")
+                        .WithMany("Recipients")
+                        .HasForeignKey("NotificationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("AdidasShoesStore.Api.Models.User", "User")
+                        .WithMany("NotificationRecipients")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Notification");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.Order", b =>
@@ -924,6 +1317,33 @@ namespace AdidasShoesStore.Api.Migrations
                     b.Navigation("ReturnRequest");
                 });
 
+            modelBuilder.Entity("AdidasShoesStore.Api.Models.RefundRequest", b =>
+                {
+                    b.HasOne("AdidasShoesStore.Api.Models.Order", "Order")
+                        .WithMany("RefundRequests")
+                        .HasForeignKey("OrderId")
+                        .IsRequired()
+                        .HasConstraintName("FK_RefundRequests_Orders");
+
+                    b.HasOne("AdidasShoesStore.Api.Models.User", "ProcessedByAdmin")
+                        .WithMany("ProcessedRefundRequests")
+                        .HasForeignKey("ProcessedByAdminId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .HasConstraintName("FK_RefundRequests_ProcessedByAdmin");
+
+                    b.HasOne("AdidasShoesStore.Api.Models.User", "User")
+                        .WithMany("RefundRequests")
+                        .HasForeignKey("UserId")
+                        .IsRequired()
+                        .HasConstraintName("FK_RefundRequests_Users");
+
+                    b.Navigation("Order");
+
+                    b.Navigation("ProcessedByAdmin");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("AdidasShoesStore.Api.Models.ReturnItem", b =>
                 {
                     b.HasOne("AdidasShoesStore.Api.Models.OrderItem", "OrderItem")
@@ -951,6 +1371,12 @@ namespace AdidasShoesStore.Api.Migrations
                         .IsRequired()
                         .HasConstraintName("FK__ReturnReq__Order__71D1E811");
 
+                    b.HasOne("AdidasShoesStore.Api.Models.User", "ProcessedByAdmin")
+                        .WithMany("ProcessedReturnRequests")
+                        .HasForeignKey("ProcessedByAdminId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .HasConstraintName("FK_ReturnRequests_ProcessedByAdmin");
+
                     b.HasOne("AdidasShoesStore.Api.Models.User", "User")
                         .WithMany("ReturnRequests")
                         .HasForeignKey("UserId")
@@ -958,6 +1384,8 @@ namespace AdidasShoesStore.Api.Migrations
                         .HasConstraintName("FK__ReturnReq__UserI__72C60C4A");
 
                     b.Navigation("Order");
+
+                    b.Navigation("ProcessedByAdmin");
 
                     b.Navigation("User");
                 });
@@ -1028,9 +1456,16 @@ namespace AdidasShoesStore.Api.Migrations
                         .IsRequired()
                         .HasConstraintName("FK__Wishlists__UserI__04E4BC85");
 
+                    b.HasOne("AdidasShoesStore.Api.Models.ProductVariant", "Variant")
+                        .WithMany("Wishlists")
+                        .HasForeignKey("VariantId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.Navigation("Product");
 
                     b.Navigation("User");
+
+                    b.Navigation("Variant");
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.Cart", b =>
@@ -1043,11 +1478,18 @@ namespace AdidasShoesStore.Api.Migrations
                     b.Navigation("Products");
                 });
 
+            modelBuilder.Entity("AdidasShoesStore.Api.Models.Notification", b =>
+                {
+                    b.Navigation("Recipients");
+                });
+
             modelBuilder.Entity("AdidasShoesStore.Api.Models.Order", b =>
                 {
                     b.Navigation("OrderItems");
 
                     b.Navigation("Payment");
+
+                    b.Navigation("RefundRequests");
 
                     b.Navigation("Refunds");
 
@@ -1077,6 +1519,8 @@ namespace AdidasShoesStore.Api.Migrations
                     b.Navigation("CartItems");
 
                     b.Navigation("OrderItems");
+
+                    b.Navigation("Wishlists");
                 });
 
             modelBuilder.Entity("AdidasShoesStore.Api.Models.ReturnRequest", b =>
@@ -1097,7 +1541,15 @@ namespace AdidasShoesStore.Api.Migrations
 
                     b.Navigation("Cart");
 
+                    b.Navigation("NotificationRecipients");
+
                     b.Navigation("Orders");
+
+                    b.Navigation("ProcessedRefundRequests");
+
+                    b.Navigation("ProcessedReturnRequests");
+
+                    b.Navigation("RefundRequests");
 
                     b.Navigation("ReturnRequests");
 

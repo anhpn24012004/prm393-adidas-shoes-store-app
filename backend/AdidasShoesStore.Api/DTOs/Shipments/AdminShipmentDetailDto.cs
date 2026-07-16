@@ -30,6 +30,8 @@ namespace AdidasShoesStore.Api.DTOs.Shipments
 
         public string? TrackingNumber { get; set; }
 
+        public string? GhnOrderCode { get; set; }
+
         public string? ShipmentStatus { get; set; }
 
         public DateTime? EstimatedDeliveryDate { get; set; }
@@ -55,6 +57,8 @@ namespace AdidasShoesStore.Api.DTOs.Shipments
         public decimal DiscountAmount { get; set; }
 
         public decimal FinalAmount { get; set; }
+
+        public bool ManualOverrideEnabled { get; set; }
 
         public List<AdminShipmentOrderItemDto> OrderItems { get; set; } = new();
     }

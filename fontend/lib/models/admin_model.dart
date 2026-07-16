@@ -52,6 +52,10 @@ class AdminOrderSummary {
   final String status;
   final String? paymentMethod;
   final String? paymentStatus;
+  final int? latestRefundRequestId;
+  final String? latestRefundRequestStatus;
+  final double? latestRefundRequestAmount;
+  final String? latestRefundRequestReason;
   final DateTime? createdAt;
 
   const AdminOrderSummary({
@@ -65,6 +69,10 @@ class AdminOrderSummary {
     required this.status,
     this.paymentMethod,
     this.paymentStatus,
+    this.latestRefundRequestId,
+    this.latestRefundRequestStatus,
+    this.latestRefundRequestAmount,
+    this.latestRefundRequestReason,
     this.createdAt,
   });
 
@@ -80,6 +88,11 @@ class AdminOrderSummary {
       status: json['status'] ?? '',
       paymentMethod: json['paymentMethod'],
       paymentStatus: json['paymentStatus'],
+      latestRefundRequestId: json['latestRefundRequestId'],
+      latestRefundRequestStatus: json['latestRefundRequestStatus'],
+      latestRefundRequestAmount:
+          (json['latestRefundRequestAmount'] as num?)?.toDouble(),
+      latestRefundRequestReason: json['latestRefundRequestReason'],
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
     );
   }
@@ -89,12 +102,40 @@ class AdminOrderDetail {
   final AdminOrderSummary summary;
   final String shippingAddress;
   final String? note;
+  final int? shipmentId;
+  final String? shipmentStatus;
+  final String? shippingProvider;
+  final String? trackingCode;
+  final String? ghnOrderCode;
+  final DateTime? expectedDeliveryTime;
+  final DateTime? shippedAt;
+  final DateTime? deliveredAt;
+  final int? latestRefundRequestId;
+  final String? latestRefundRequestCode;
+  final String? latestRefundRequestStatus;
+  final double? latestRefundRequestAmount;
+  final String? latestRefundRequestReason;
+  final String? latestRefundRequestCustomerNote;
   final List<OrderItem> items;
 
   const AdminOrderDetail({
     required this.summary,
     required this.shippingAddress,
     this.note,
+    this.shipmentId,
+    this.shipmentStatus,
+    this.shippingProvider,
+    this.trackingCode,
+    this.ghnOrderCode,
+    this.expectedDeliveryTime,
+    this.shippedAt,
+    this.deliveredAt,
+    this.latestRefundRequestId,
+    this.latestRefundRequestCode,
+    this.latestRefundRequestStatus,
+    this.latestRefundRequestAmount,
+    this.latestRefundRequestReason,
+    this.latestRefundRequestCustomerNote,
     required this.items,
   });
 
@@ -103,9 +144,67 @@ class AdminOrderDetail {
       summary: AdminOrderSummary.fromJson(json),
       shippingAddress: json['shippingAddress'] ?? '',
       note: json['note'],
+      shipmentId: json['shipmentId'],
+      shipmentStatus: json['shipmentStatus'],
+      shippingProvider: json['shippingProvider'] ?? json['carrier'],
+      trackingCode: json['trackingCode'] ?? json['trackingNumber'],
+      ghnOrderCode: json['ghnOrderCode'],
+      expectedDeliveryTime: DateTime.tryParse(
+        json['expectedDeliveryTime']?.toString() ?? '',
+      ),
+      shippedAt: DateTime.tryParse(json['shippedAt']?.toString() ?? ''),
+      deliveredAt: DateTime.tryParse(json['deliveredAt']?.toString() ?? ''),
+      latestRefundRequestId: json['latestRefundRequestId'],
+      latestRefundRequestCode: json['latestRefundRequestCode'],
+      latestRefundRequestStatus: json['latestRefundRequestStatus'],
+      latestRefundRequestAmount:
+          (json['latestRefundRequestAmount'] as num?)?.toDouble(),
+      latestRefundRequestReason: json['latestRefundRequestReason'],
+      latestRefundRequestCustomerNote: json['latestRefundRequestCustomerNote'],
       items: (json['items'] as List? ?? [])
           .map((item) => OrderItem.fromJson(item))
           .toList(),
+    );
+  }
+}
+
+class AdminUserSummary {
+  final int userId;
+  final String fullName;
+  final String email;
+  final String? phone;
+  final String? gender;
+  final String roleName;
+  final bool isActive;
+  final DateTime? createdAt;
+  final int orderCount;
+  final int returnRequestCount;
+
+  const AdminUserSummary({
+    required this.userId,
+    required this.fullName,
+    required this.email,
+    this.phone,
+    this.gender,
+    required this.roleName,
+    required this.isActive,
+    this.createdAt,
+    required this.orderCount,
+    required this.returnRequestCount,
+  });
+
+  factory AdminUserSummary.fromJson(Map<String, dynamic> json) {
+    return AdminUserSummary(
+      userId: json['userId'] ?? 0,
+      fullName: json['fullName'] ?? '',
+      email: json['email'] ?? '',
+      phone: json['phone'],
+      gender: json['gender'],
+      roleName: json['roleName'] ?? '',
+      isActive: json['isActive'] ?? false,
+      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
+      orderCount: json['orderCount'] ?? 0,
+      returnRequestCount: json['returnRequestCount'] ?? 0,
     );
   }
 }

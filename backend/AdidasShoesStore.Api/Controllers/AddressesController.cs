@@ -42,6 +42,9 @@ public class AddressesController : ControllerBase
                 Ward = address.Ward,
                 District = address.District,
                 City = address.City,
+                ProvinceId = address.ProvinceId,
+                DistrictId = address.DistrictId,
+                WardCode = address.WardCode,
                 IsDefault = address.IsDefault == true
             })
             .ToListAsync();
@@ -75,6 +78,9 @@ public class AddressesController : ControllerBase
             Ward = Normalize(request.Ward),
             District = Normalize(request.District),
             City = Normalize(request.City),
+            ProvinceId = NormalizeId(request.ProvinceId),
+            DistrictId = NormalizeId(request.DistrictId),
+            WardCode = Normalize(request.WardCode),
             IsDefault = shouldBeDefault
         };
 
@@ -119,6 +125,9 @@ public class AddressesController : ControllerBase
         address.Ward = Normalize(request.Ward);
         address.District = Normalize(request.District);
         address.City = Normalize(request.City);
+        address.ProvinceId = NormalizeId(request.ProvinceId);
+        address.DistrictId = NormalizeId(request.DistrictId);
+        address.WardCode = Normalize(request.WardCode);
         address.IsDefault = request.IsDefault || address.IsDefault == true;
 
         await _context.SaveChangesAsync();
@@ -218,6 +227,9 @@ public class AddressesController : ControllerBase
             Ward = address.Ward,
             District = address.District,
             City = address.City,
+            ProvinceId = address.ProvinceId,
+            DistrictId = address.DistrictId,
+            WardCode = address.WardCode,
             IsDefault = address.IsDefault == true
         };
     }
@@ -225,6 +237,11 @@ public class AddressesController : ControllerBase
     private static string? Normalize(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static int? NormalizeId(int? value)
+    {
+        return value > 0 ? value : null;
     }
 
     private bool TryGetUserId(out int userId)

@@ -16,6 +16,8 @@ namespace AdidasShoesStore.Api.DTOs.Shipments
 
         public string? TrackingCode { get; set; }
 
+        public string? GhnOrderCode { get; set; }
+
         public string? ShipmentStatus { get; set; }
 
         public string OrderStatus { get; set; } = null!;

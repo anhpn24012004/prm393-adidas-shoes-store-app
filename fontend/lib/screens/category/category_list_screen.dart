@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../config/app_config.dart';
 import '../../models/category_model.dart';
 import '../../models/product_model.dart';
 import '../../localization/app_localization.dart';
 import '../../services/category_service.dart';
 import '../../services/product_service.dart';
+import '../../utils/currency_formatter.dart';
+import '../../widgets/product_rating.dart';
 import '../product/product_detail_screen.dart';
 
 class CategoryListScreen extends StatefulWidget {
@@ -32,7 +35,7 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
   }
 
   String formatPrice(double price) {
-    return '${price.toStringAsFixed(0)} VND';
+    return formatVnd(price);
   }
 
   void _loadProductsByCategory(CategoryModel category) {
@@ -65,7 +68,7 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
     }
 
     return Image.network(
-      imageUrl,
+      AppConfig.resolveImageUrl(imageUrl),
       width: 72,
       height: 72,
       fit: BoxFit.cover,
@@ -188,8 +191,16 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                subtitle: Text(
-                  '${formatPrice(product.basePrice)}\n${product.categoryName ?? ''}',
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(formatPrice(product.basePrice)),
+                    Text(product.categoryName ?? ''),
+                    ProductRating(
+                      averageRating: product.averageRating,
+                      reviewCount: product.reviewCount,
+                    ),
+                  ],
                 ),
                 isThreeLine: true,
                 onTap: () => _goToDetail(product),

@@ -1,11 +1,9 @@
 class CreateReviewRequest {
-  final int userId;
   final int productId;
   final int rating;
   final String comment;
 
   CreateReviewRequest({
-    required this.userId,
     required this.productId,
     required this.rating,
     required this.comment,
@@ -13,7 +11,6 @@ class CreateReviewRequest {
 
   Map<String, dynamic> toJson() {
     return {
-      'userId': userId,
       'productId': productId,
       'rating': rating,
       'comment': comment,
@@ -28,6 +25,8 @@ class ReviewResponse {
   final int rating;
   final String? comment;
   final String? createdAt;
+  final int editCount;
+  final bool canEdit;
 
   ReviewResponse({
     required this.reviewId,
@@ -36,6 +35,8 @@ class ReviewResponse {
     required this.rating,
     this.comment,
     this.createdAt,
+    required this.editCount,
+    required this.canEdit,
   });
 
   factory ReviewResponse.fromJson(Map<String, dynamic> json) {
@@ -46,6 +47,8 @@ class ReviewResponse {
       rating: json['rating'] ?? 0,
       comment: json['comment'],
       createdAt: json['createdAt'],
+      editCount: json['editCount'] ?? 0,
+      canEdit: json['canEdit'] ?? false,
     );
   }
 }
