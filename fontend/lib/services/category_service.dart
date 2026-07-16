@@ -1,12 +1,10 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
-import '../config/app_config.dart';
 import '../models/category_model.dart';
 import 'api_client.dart';
 
 class CategoryService {
-  String get baseUrl => AppConfig.apiBaseUrl;
   Future<List<CategoryModel>> getCategories() async {
     final response = await http.get(
       Uri.parse('${ApiClient.baseUrl}/categories'),

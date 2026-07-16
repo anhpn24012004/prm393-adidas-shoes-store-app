@@ -129,10 +129,11 @@ class AppRoutes extends StatelessWidget {
           '/shipment-tracking': (context) => const UserShipmentTrackingScreen(),
           '/payment-result': (context) {
             final argument = ModalRoute.of(context)?.settings.arguments;
+            final queryParameters = _paymentResultQueryParameters();
             final queryOrderId = int.tryParse(
-              Uri.base.queryParameters['orderId'] ?? '',
+              queryParameters['orderId'] ?? '',
             );
-            final queryStatus = Uri.base.queryParameters['status'];
+            final queryStatus = queryParameters['status'];
 
             int orderId = queryOrderId ?? 0;
             String? statusHint = queryStatus;
@@ -247,6 +248,21 @@ class AppRoutes extends StatelessWidget {
       ),
     );
   }
+}
+
+Map<String, String> _paymentResultQueryParameters() {
+  final uri = Uri.base;
+  if (uri.queryParameters.isNotEmpty) {
+    return uri.queryParameters;
+  }
+
+  final fragment = uri.fragment;
+  final queryStart = fragment.indexOf('?');
+  if (queryStart < 0 || queryStart == fragment.length - 1) {
+    return const {};
+  }
+
+  return Uri.splitQueryString(fragment.substring(queryStart + 1));
 }
 
 class BrandingSplashScreen extends StatelessWidget {

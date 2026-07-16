@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-import '../config/app_config.dart';
 import '../models/product_model.dart';
 import '../models/product_detail_model.dart';
 import 'api_client.dart';
@@ -10,8 +9,6 @@ import 'auth_storage.dart';
 
 class ProductService {
   final _authStorage = AuthStorage();
-
-  String get baseUrl => AppConfig.apiBaseUrl;
 
   // =========================
   // PRODUCT USER API

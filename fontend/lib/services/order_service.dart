@@ -147,12 +147,13 @@ class OrderService {
 
   String _frontendPaymentResultUrl() {
     if (kIsWeb && Uri.base.hasScheme && Uri.base.host.isNotEmpty) {
-      return Uri(
+      final origin = Uri(
         scheme: Uri.base.scheme,
         host: Uri.base.host,
         port: Uri.base.hasPort ? Uri.base.port : null,
-        path: '/payment-result',
       ).toString();
+
+      return '$origin#/payment-result';
     }
 
     return 'http://localhost:52095/payment-result';

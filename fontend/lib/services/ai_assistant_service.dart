@@ -2,15 +2,15 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import '../config/app_config.dart';
 import '../models/ai_recommendation_model.dart';
+import 'api_client.dart';
 
 class AiAssistantService {
   Future<AiRecommendationResponse> getRecommendation(
     AiRecommendationRequest request,
   ) async {
     final url = Uri.parse(
-      '${AppConfig.apiBaseUrl}/AiAssistant/shoe-recommendation',
+      '${ApiClient.baseUrl}/AiAssistant/shoe-recommendation',
     );
 
     final response = await http.post(

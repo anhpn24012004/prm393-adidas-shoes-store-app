@@ -1,36 +1,27 @@
-import 'package:flutter/foundation.dart';
-
 class AppConfig {
+  static const String _productionBackendBaseUrl =
+      'https://api-adidas.teaviafarm.io.vn';
   static const String _apiBaseUrlOverride = String.fromEnvironment(
     'API_BASE_URL',
   );
   static const String _signalRBaseUrlOverride = String.fromEnvironment(
     'SIGNALR_BASE_URL',
   );
-  static const String _serverPort = '5209';
-
-  static String get _serverHost {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      return '10.0.2.2';
-    }
-
-    return 'localhost';
-  }
 
   static String get apiBaseUrl {
     if (_apiBaseUrlOverride.isNotEmpty) {
-      return _apiBaseUrlOverride;
+      return _withApiPath(_apiBaseUrlOverride);
     }
 
-    return 'http://$_serverHost:$_serverPort/api';
+    return '$_productionBackendBaseUrl/api';
   }
 
   static String get signalRBaseUrl {
     if (_signalRBaseUrlOverride.isNotEmpty) {
-      return _signalRBaseUrlOverride;
+      return _trimTrailingSlash(_signalRBaseUrlOverride);
     }
 
-    return 'http://$_serverHost:$_serverPort';
+    return _productionBackendBaseUrl;
   }
 
   static String get staticBaseUrl {
@@ -39,6 +30,20 @@ class AppConfig {
     }
 
     return signalRBaseUrl;
+  }
+
+  static String _withApiPath(String baseUrl) {
+    final trimmed = _trimTrailingSlash(baseUrl);
+
+    if (trimmed.endsWith('/api')) {
+      return trimmed;
+    }
+
+    return '$trimmed/api';
+  }
+
+  static String _trimTrailingSlash(String value) {
+    return value.trim().replaceFirst(RegExp(r'/+$'), '');
   }
 
   static String resolveImageUrl(String imageUrl) {
