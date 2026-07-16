@@ -1,12 +1,12 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
-import '../config/app_config.dart';
 import '../models/wishlist_model.dart';
+import 'api_client.dart';
 import 'auth_storage.dart';
 
 class WishlistService {
-  final String baseUrl = '${AppConfig.apiBaseUrl}/wishlist';
+  String get baseUrl => '${ApiClient.baseUrl}/wishlist';
   final AuthStorage _authStorage = AuthStorage();
 
   Future<Map<String, String>> _authHeaders({bool json = false}) async {

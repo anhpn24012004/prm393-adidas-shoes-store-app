@@ -1,12 +1,12 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
-import '../config/app_config.dart';
 import '../models/cart_model.dart';
+import 'api_client.dart';
 import 'auth_storage.dart';
 
 class CartService {
-  final String baseUrl = '${AppConfig.apiBaseUrl}/cart';
+  String get baseUrl => '${ApiClient.baseUrl}/cart';
   final AuthStorage _authStorage = AuthStorage();
 
   Future<int> addToCart({
